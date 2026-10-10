@@ -16,6 +16,7 @@ function createPlugin(host) {
   let feedbackQueue = Promise.resolve();
   let cachedShots = null;
   let cachedAt = 0;
+  let cacheGeneration = 0;
 
   const json = (status, value) => ({status, headers: {"Content-Type": "application/json"}, body: JSON.stringify(value)});
   const html = (status, value) => ({status, headers: {"Content-Type": "text/html; charset=utf-8"}, body: value});
@@ -29,6 +30,16 @@ function createPlugin(host) {
   function value(value, fallback) { return value === undefined || value === null || value === "" ? fallback : value; }
   function numberOrNull(value) { return typeof value === "number" && Number.isFinite(value) ? value : null; }
   function textOrNull(value) { return typeof value === "string" && value.trim() ? value.trim() : null; }
+  function feedbackFromStorage(value) {
+    if (value == null) return Object.create(null);
+    if (typeof value !== "object" || Array.isArray(value)) return null;
+    const result = Object.create(null);
+    for (const key of Object.keys(value)) {
+      if (key.length > 256 || !value[key] || value[key].good !== true) continue;
+      result[key] = {good: true, notes: textOrNull(value[key].notes)?.slice(0, 512) || null, updatedAt: textOrNull(value[key].updatedAt)?.slice(0, 64) || null};
+    }
+    return result;
+  }
 
   function contextOf(shot, useSettings) {
     const workflow = shot?.workflow || {};
@@ -44,7 +55,7 @@ function createPlugin(host) {
       dose: numberOrNull(useSettings ? value(context.targetDoseWeight, numberOrNull(settings.Dose)) : context.targetDoseWeight),
       yield: numberOrNull(useSettings ? value(context.targetYield, numberOrNull(settings.Yield)) : context.targetYield),
       basket: textOrNull(useSettings ? value(extras.basket, settings.Basket) : extras.basket),
-      profile: textOrNull(useSettings ? value(profile.id, value(profile.title, settings.ProfileId)) : value(profile.id, profile.title)),
+      profile: textOrNull(useSettings ? (profile.steps || profile.settings ? JSON.stringify(profile) : value(profile.id, value(profile.title, settings.ProfileId))) : (profile.steps || profile.settings ? JSON.stringify(profile) : value(profile.id, profile.title))),
       grinderSetting: textOrNull(context.grinderSetting),
     };
   }
@@ -90,6 +101,7 @@ function createPlugin(host) {
   async function fetchShots() {
     if (cachedShots && Date.now() - cachedAt < 5000) return cachedShots;
     const result = [];
+    const requestGeneration = cacheGeneration;
     let truncated = true;
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const response = await fetch(`${API_BASE}/api/v1/shots?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}&order=desc`);
@@ -101,9 +113,10 @@ function createPlugin(host) {
       const total = !plainArray && Number.isFinite(Number(data.total)) ? Number(data.total) : null;
       if (items.length < PAGE_SIZE || (total !== null && result.length >= total)) { truncated = false; break; }
     }
-    cachedShots = {items: result, truncated};
+    const snapshot = {items: result, truncated};
+    if (requestGeneration === cacheGeneration) cachedShots = snapshot;
     cachedAt = Date.now();
-    return cachedShots;
+    return snapshot;
   }
 
   async function recommendation() {
@@ -147,18 +160,20 @@ function createPlugin(host) {
     id: ID,
     version: "0.1.0",
     onLoad(nextSettings) { settings = nextSettings || {}; startStorage(); },
-    onUnload() { cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); storageWriteWaiters = []; },
+    onUnload() { cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); storageWriteWaiters = []; },
     onEvent(event) {
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
         if (storageUnavailable) return;
-        feedback = event.payload.value && typeof event.payload.value === "object" ? event.payload.value : Object.create(null);
+        const restored = feedbackFromStorage(event.payload.value);
+        if (!restored) { storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); return; }
+        feedback = restored;
         storageReady = true; storageWaiters.splice(0).forEach((resolve) => resolve());
       }
       if (event.name === "storageWrite") storageReady = true;
       if (event.name === "storageWrite") { const waiter = storageWriteWaiters.shift(); if (waiter) waiter.resolve(); }
-      if (event.name === "shotStored" || event.name === "shotUpdated") cachedShots = null;
+      if (event.name === "shotStored" || event.name === "shotUpdated") { cacheGeneration += 1; cachedShots = null; }
     },
-    __httpRequestHandler: async (request) => {
+    handleHttpRequest: async (request) => {
       const endpoint = request.endpoint || "";
       try {
         if (endpoint === "ui" && request.method === "GET") return html(200, page);
@@ -168,11 +183,11 @@ function createPlugin(host) {
         if (endpoint === "feedback" && request.method === "POST") {
           const input = bodyOf(request);
           const shotId = textOrNull(input.shotId);
-          if (!shotId || typeof input.good !== "boolean") return json(400, {error: "shotId and boolean good are required"});
+          if (!shotId || shotId.length > 256 || typeof input.good !== "boolean") return json(400, {error: "shotId and boolean good are required"});
           await loadStorage();
           feedbackQueue = feedbackQueue.catch(() => {}).then(async () => {
             const previous = feedback[shotId];
-            if (input.good) feedback[shotId] = {good: true, notes: textOrNull(input.notes), updatedAt: new Date().toISOString()};
+            if (input.good) feedback[shotId] = {good: true, notes: textOrNull(input.notes)?.slice(0, 512) || null, updatedAt: new Date().toISOString()};
             else delete feedback[shotId];
             try { await persist(); } catch (error) { if (previous) feedback[shotId] = previous; else delete feedback[shotId]; throw error; }
           });
@@ -185,7 +200,5 @@ function createPlugin(host) {
         return json(503, {error: "Assisted dial-in unavailable", code: "request_failed"});
       }
     },
-    // The pinned host invokes __httpRequestHandler; this public alias helps direct consumers.
-    handleHttpRequest(request) { return this.__httpRequestHandler(request); },
   };
 }
