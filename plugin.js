@@ -78,9 +78,9 @@ function createPlugin(host) {
   async function loadStorage() {
     if (storageUnavailable) throw new Error("feedback storage unavailable");
     if (storageReady) return;
-    await new Promise((resolve) => {
-      const timer = setTimeout(() => { storageUnavailable = true; storageWaiters = storageWaiters.filter((entry) => entry !== waiter); resolve(); }, 5000);
-      const waiter = () => { clearTimeout(timer); resolve(); };
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { storageUnavailable = true; storageWaiters = storageWaiters.filter((entry) => entry !== waiter); reject(new Error("feedback storage timed out")); }, 5000);
+      const waiter = {resolve: () => { clearTimeout(timer); resolve(); }, reject: (error) => { clearTimeout(timer); reject(error); }};
       storageWaiters.push(waiter);
     });
     if (storageUnavailable) throw new Error("feedback storage unavailable");
@@ -96,10 +96,10 @@ function createPlugin(host) {
     });
   }
   function startStorage() {
-    try { host.storage({type: "read", key: STORAGE_KEY}); } catch (_) { storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); }
+    try { host.storage({type: "read", key: STORAGE_KEY}); } catch (_) { storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("feedback storage unavailable"))); }
   }
 
-  async function fetchShots() {
+  async function fetchShots(retry = 0) {
     if (cachedShots && Date.now() - cachedAt < 5000) return cachedShots;
     const result = [];
     const requestGeneration = cacheGeneration;
@@ -116,7 +116,7 @@ function createPlugin(host) {
     }
     const snapshot = {items: result, truncated};
     if (!active) throw new Error("plugin unloaded");
-    if (requestGeneration !== cacheGeneration) return fetchShots();
+    if (requestGeneration !== cacheGeneration && retry < 1) return fetchShots(1);
     if (requestGeneration === cacheGeneration) cachedShots = snapshot;
     cachedAt = Date.now();
     return snapshot;
@@ -125,6 +125,7 @@ function createPlugin(host) {
   async function recommendation() {
     await loadStorage();
     await feedbackQueue;
+    const requestEpoch = cacheGeneration;
     const history = await fetchShots();
     const shots = history.items;
     let current = contextOf({workflow: {context: settings, profile: {id: settings.ProfileId}}}, true);
@@ -135,6 +136,7 @@ function createPlugin(host) {
         if (workflow && workflow.profile && workflow.context) current = contextOf({workflow}, false);
       }
     } catch (_) { /* Settings remain an explicit current-setup fallback. */ }
+    if (requestEpoch !== cacheGeneration || !active) throw new Error("history changed during recommendation");
     const required = ["beanBatchId", "grinderId"];
     const missingCurrent = required.filter((key) => current[key] === null);
     if (missingCurrent.length) return {status: "abstain", reason: "Enter the current bean batch and grinder identity before comparing shots", missingData: missingCurrent};
@@ -164,20 +166,20 @@ function createPlugin(host) {
     };
   }
 
-  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assisted dial-in</title><style>body{font:16px system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem}input{font:inherit;padding:.5rem}output{display:block;margin-top:1rem;white-space:pre-wrap}</style><h1>Assisted dial-in</h1><p>This assistant only recommends a recorded setting from a comparable shot you marked good.</p><button id="recommend">Find recommendation</button><output id="result" aria-live="polite"></output><h2>Shot feedback</h2><form id="feedback"><label>Shot ID <input required name="shotId"></label><label>Notes <input name="notes"></label><button name="good" value="true">Mark good</button><button name="good" value="false">Remove good mark</button></form><script>const out=document.querySelector('output');document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';try{const r=await fetch('recommendation');out.textContent=JSON.stringify(await r.json(),null,2)}catch(e){out.textContent='Could not load recommendation. Try again.'}};document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:e.submitter.value==='true',notes:f.get('notes')})});out.textContent=JSON.stringify(await r.json(),null,2)};</script>`;
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assisted dial-in</title><style>body{font:16px system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem}input{font:inherit;padding:.5rem}output{display:block;margin-top:1rem;white-space:pre-wrap}</style><h1>Assisted dial-in</h1><p>This assistant only recommends a recorded setting from a comparable shot you marked good.</p><button id="recommend">Find recommendation</button><output id="result" aria-live="polite"></output><h2>Shot feedback</h2><form id="feedback"><label>Shot ID <input required name="shotId"></label><label>Notes <input name="notes"></label><button name="good" value="true">Mark good</button><button name="good" value="false">Remove good mark</button></form><script>const out=document.querySelector('output');document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';try{const r=await fetch('recommendation');out.textContent=JSON.stringify(await r.json(),null,2)}catch(e){out.textContent='Could not load recommendation. Try again.'}};document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:(e.submitter?.value || 'true')==='true',notes:f.get('notes')})});out.textContent=JSON.stringify(await r.json(),null,2)};</script>`;
 
   return {
     id: ID,
     version: "0.1.0",
     onLoad(nextSettings) { active = true; settings = nextSettings || {}; startStorage(); },
-    onUnload() { active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); storageWriteWaiters = []; },
+    onUnload() { active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); storageWriteWaiters = []; },
     onEvent(event) {
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
         if (storageUnavailable) return;
         const restored = feedbackFromStorage(event.payload.value);
-        if (!restored) { storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); return; }
+        if (!restored) { storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("feedback storage unavailable"))); return; }
         feedback = restored;
-        storageReady = true; storageWaiters.splice(0).forEach((resolve) => resolve());
+        storageReady = true; storageWaiters.splice(0).forEach((waiter) => waiter.resolve());
       }
       if (event.name === "storageWrite") storageReady = true;
       if (event.name === "storageWrite") { const waiter = storageWriteWaiters.shift(); if (waiter) waiter.resolve(); }
