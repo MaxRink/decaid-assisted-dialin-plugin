@@ -2,8 +2,8 @@
   "id": "assisted-dialin.reaplugin",
   "name": "Assisted dial-in",
   "author": "Maximilian Rink and Decaid contributors",
-  "description": "A local, read-only dial-in assistant using explicitly marked good shots.",
-  "version": "0.1.0",
+  "description": "Local assisted dial-in with bean context, post-brew flavour, brew metrics and recovered algorithm replay.",
+  "version": "0.2.0",
   "apiVersion": 1,
   "permissions": [
     "log",
@@ -52,6 +52,68 @@
       "type": "string",
       "label": "Basket",
       "description": "Optional basket identity."
+    },
+    "CurrentSetting": {
+      "type": "string",
+      "label": "Current grinder setting",
+      "description": "Recorded current setting used for suggestions; it is never written to a grinder."
+    },
+    "SettingUnit": {
+      "type": "string",
+      "label": "Setting unit",
+      "description": "Unit or coordinate system for the current setting, such as a dial mark or deci-micrometre."
+    },
+    "TargetTimeSec": {
+      "type": "number",
+      "default": 30,
+      "label": "Target brew time (seconds)",
+      "description": "Default target used by rich suggestions."
+    },
+    "TimeToleranceSec": {
+      "type": "number",
+      "default": 1,
+      "label": "Time tolerance (seconds)",
+      "description": "Deadband around the target brew time."
+    },
+    "EvidenceMaxAgeDays": {
+      "type": "number",
+      "default": 14,
+      "label": "Evidence age limit (days)",
+      "description": "Only recent marked-good shots within this age are used for rich suggestions."
+    },
+    "StepSize": {
+      "type": "number",
+      "default": 0,
+      "label": "Calibrated step size",
+      "description": "Owner-calibrated setting movement. Zero disables numeric proposals."
+    },
+    "NumericFinerDelta": {
+      "type": "number",
+      "default": 0,
+      "label": "Numeric finer direction",
+      "description": "Owner-confirmed numeric sign (-1 or +1). Zero disables numeric proposals."
+    },
+    "MinSetting": {
+      "type": "number",
+      "default": 0,
+      "label": "Minimum setting",
+      "description": "Optional calibrated lower bound. Equal minimum and maximum disable bounds."
+    },
+    "MaxSetting": {
+      "type": "number",
+      "default": 0,
+      "label": "Maximum setting",
+      "description": "Optional calibrated upper bound. Equal minimum and maximum disable bounds."
+    },
+    "BeanType": {
+      "type": "string",
+      "label": "BeanType",
+      "description": "Explicit current BeanType; historical shots require saved context or per-shot operator confirmation."
+    },
+    "RoastLevel": {
+      "type": "string",
+      "label": "RoastLevel",
+      "description": "Explicit current RoastLevel; historical shots require saved context or per-shot operator confirmation."
     }
   },
   "api": [
@@ -76,7 +138,27 @@
       "data": {}
     },
     {
+      "id": "suggestion",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "research",
+      "type": "http",
+      "data": {}
+    },
+    {
       "id": "settings",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "bean-context",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "analysis",
       "type": "http",
       "data": {}
     }

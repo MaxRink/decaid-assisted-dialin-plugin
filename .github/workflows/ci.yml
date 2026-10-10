@@ -31,13 +31,13 @@ jobs:
         shell: bash
         run: |
           expected=$'LICENSE\nNOTICE\nREADME.md\nmanifest.json\nplugin.js'
-          actual=$(unzip -Z1 dist/decaid-assisted-dialin-plugin-0.1.0.zip | sort)
+          actual=$(unzip -Z1 dist/decaid-assisted-dialin-plugin-0.2.0.zip | sort)
           test "$actual" = "$expected"
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.x'
         with:
           name: decaid-assisted-dialin-plugin-${{ github.sha }}
-          path: dist/decaid-assisted-dialin-plugin-0.1.0.zip
+          path: dist/decaid-assisted-dialin-plugin-0.2.0.zip
           if-no-files-found: error
 
   host-contract:
@@ -75,8 +75,19 @@ jobs:
           mkdir -p source-archive local-zip
           git archive --format=zip --prefix=decaid-assisted-dialin-plugin-main/ HEAD > /tmp/dialin-source.zip
           unzip -q /tmp/dialin-source.zip -d source-archive
-          unzip -q dist/decaid-assisted-dialin-plugin-0.1.0.zip -d local-zip
+          unzip -q dist/decaid-assisted-dialin-plugin-0.2.0.zip -d local-zip
       - run: cp ci/validate-host-contract.dart decaid-host/tool/validate-dialin-contract.dart
+      - name: Validate extended endpoint contract
+        run: |
+          node - <<'NODE'
+          const manifest = require('./manifest.json');
+          const byId = new Map(manifest.api.map((entry) => [entry.id, entry]));
+          for (const id of ['suggestion', 'research', 'bean-context', 'analysis']) {
+            if (!byId.has(id)) throw new Error(`missing ${id} endpoint`);
+            if (byId.get(id).type !== 'http') throw new Error(`${id} is not HTTP`);
+          }
+          if (manifest.api.length < 5) throw new Error('base endpoint contract is incomplete');
+          NODE
       - run: dart run tool/validate-dialin-contract.dart "$GITHUB_WORKSPACE/source-archive"
         working-directory: decaid-host
       - run: dart run tool/validate-dialin-contract.dart "$GITHUB_WORKSPACE/local-zip"

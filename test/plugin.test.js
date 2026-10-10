@@ -55,3 +55,11 @@ test('serves HTML and rejects malformed feedback', async () => {
   assert.match((await plugin.handleHttpRequest({endpoint: 'ui', method: 'GET'})).body, /Assisted dial-in/);
   assert.equal((await plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: '{}'})).status, 400);
 });
+
+test('numeric host settings strings can supply missing current dose and yield', async () => {
+  const {plugin} = load({shots: [shot('old', '2.0', {targetDoseWeight: 18, targetYield: 36})], stored: {old: {good: true}}, settings: {GrinderId: 'e64', GrinderModel: 'E64', BeanBatchId: 'batch-a', ProfileId: 'espresso', Dose: '18', Yield: '36'}});
+  const response = await plugin.handleHttpRequest({endpoint: 'recommendation', method: 'GET'});
+  const body = JSON.parse(response.body);
+  assert.equal(body.status, 'recommendation');
+  assert.deepEqual(body.comparison.userSuppliedCurrentFields.filter(key => key === 'dose' || key === 'yield').sort(), ['dose', 'yield']);
+});

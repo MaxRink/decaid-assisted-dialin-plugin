@@ -1,3 +1,12 @@
 This plugin is an independent community plugin for Decaid.
 Decaid is Copyright (C) Decent Espresso contributors and is distributed under
 the GNU General Public License. See https://github.com/decentespresso/decaid.
+
+The research-derived algorithm descriptions and evidence are attributed to
+MaxRink/mahlkoenig-e64ws-local-research:
+https://github.com/MaxRink/mahlkoenig-e64ws-local-research
+
+The plugin contains an independent implementation of documented normal
+finite-input behavior. No research source code or prose is redistributed here.
+The implementation is specific to the documented HEM-HSG-HMI-S01 V01.16-24
+static analysis and has no physical-hardware or vendor-source endorsement.

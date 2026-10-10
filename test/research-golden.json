@@ -1,0 +1,806 @@
+{
+  "provenance": {
+    "researchRepo": "MaxRink/mahlkoenig-e64ws-local-research",
+    "firmwareBuild": "HEM-HSG-HMI-S01 V01.16-24",
+    "status": "static instruction-cross-checked recovery; no live grinder validation",
+    "researchRevision": "efcf12fb5366d628468ce02117f5905c32474b41"
+  },
+  "manual": [
+    {
+      "name": "time-and-sensory-conflict",
+      "input": {
+        "profile": "df64_gen2",
+        "target_time_s": 30,
+        "actual_time_s": 24,
+        "flavor": "bitter",
+        "current_dial": 15,
+        "step_marks": 1,
+        "numeric_finer_delta": -1
+      },
+      "expected": {
+        "direction": "none",
+        "physicalTurn": null,
+        "confidence": 0.0,
+        "proposedDial": null,
+        "requiresConfirmation": true
+      }
+    },
+    {
+      "name": "df64-gen1-calibrated-finer",
+      "input": {
+        "profile": "df64_gen1",
+        "target_time_s": 30,
+        "actual_time_s": 24,
+        "flavor": "sour",
+        "current_dial": 15,
+        "step_marks": 1,
+        "numeric_finer_delta": -1
+      },
+      "expected": {
+        "direction": "finer",
+        "physicalTurn": "clockwise",
+        "confidence": 0.7000000000000001,
+        "proposedDial": 14.0,
+        "requiresConfirmation": true
+      }
+    },
+    {
+      "name": "within-time-deadband-no-signal",
+      "input": {
+        "profile": "df54",
+        "target_time_s": 30,
+        "actual_time_s": 30.5
+      },
+      "expected": {
+        "direction": "none",
+        "physicalTurn": null,
+        "confidence": 0.0,
+        "proposedDial": null,
+        "requiresConfirmation": true
+      }
+    }
+  ],
+  "algorithms": [
+    {
+      "name": "GbS1",
+      "calls": [
+        {
+          "actualBrewTimeMs": 35000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 32000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28500,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        }
+      ],
+      "expected": [
+        {
+          "centralSec": 35.0,
+          "correction": 5.0,
+          "state": 6.0,
+          "candidateDum": 60,
+          "returnedDum": 60,
+          "committed": true,
+          "withinErrorWindow": false
+        },
+        {
+          "centralSec": 35.0,
+          "correction": 5.0,
+          "state": 11.0,
+          "candidateDum": 110,
+          "returnedDum": 110,
+          "committed": true,
+          "withinErrorWindow": false
+        },
+        {
+          "centralSec": 33.5,
+          "correction": 5.0,
+          "state": 16.0,
+          "candidateDum": 160,
+          "returnedDum": 110,
+          "committed": false,
+          "withinErrorWindow": false
+        },
+        {
+          "centralSec": 30.25,
+          "correction": 5.0,
+          "state": 21.0,
+          "candidateDum": 210,
+          "returnedDum": 110,
+          "committed": false,
+          "withinErrorWindow": false
+        }
+      ]
+    },
+    {
+      "name": "GbS2",
+      "calls": [
+        {
+          "actualBrewTimeMs": 35000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 30000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 29000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        }
+      ],
+      "expected": [
+        {
+          "phase": "regression",
+          "candidateDum": 1032,
+          "returnedDum": 1032,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "regression",
+          "candidateDum": 1020,
+          "returnedDum": 1020,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "regression",
+          "candidateDum": 1015,
+          "returnedDum": 1015,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "regression",
+          "candidateDum": 1011,
+          "returnedDum": 1015,
+          "committed": false,
+          "locked": false
+        }
+      ]
+    },
+    {
+      "name": "GbS3",
+      "calls": [
+        {
+          "actualBrewTimeMs": 40000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 34000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 30000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28500,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        }
+      ],
+      "expected": [
+        {
+          "phase": "near",
+          "candidateDum": 1429,
+          "returnedDum": 1429,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "near",
+          "candidateDum": 1027,
+          "returnedDum": 1027,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "mid",
+          "candidateDum": 1108,
+          "returnedDum": 1108,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "near",
+          "candidateDum": 1015,
+          "returnedDum": 1108,
+          "committed": false,
+          "locked": false
+        },
+        {
+          "phase": "near",
+          "candidateDum": 1012,
+          "returnedDum": 1108,
+          "committed": false,
+          "locked": false
+        }
+      ]
+    },
+    {
+      "name": "GbS4",
+      "calls": [
+        {
+          "actualBrewTimeMs": 40000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 34000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 30000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28500,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        },
+        {
+          "actualBrewTimeMs": 28000,
+          "targetBrewTimeMs": 28000,
+          "estimatedDdDum": 1000,
+          "setpointDdDum": 1000,
+          "toleranceMs": 1000
+        }
+      ],
+      "expected": [
+        {
+          "phase": "near",
+          "candidateDum": 1429,
+          "returnedDum": 1429,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "near",
+          "candidateDum": 1027,
+          "returnedDum": 1027,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "mid",
+          "candidateDum": 1108,
+          "returnedDum": 1108,
+          "committed": true,
+          "locked": false
+        },
+        {
+          "phase": "near",
+          "candidateDum": 1108,
+          "returnedDum": 1108,
+          "committed": false,
+          "locked": true
+        },
+        {
+          "phase": "near",
+          "candidateDum": 1108,
+          "returnedDum": 1108,
+          "committed": false,
+          "locked": true
+        }
+      ]
+    }
+  ],
+  "inverseRegression": [
+    {
+      "name": "inverse-regression-one-point-fallback",
+      "points": [
+        {
+          "x": 100.0,
+          "y": 30.0
+        }
+      ],
+      "targetY": 28.0,
+      "expected": 101.0
+    },
+    {
+      "name": "inverse-regression-flat-variance-fallback",
+      "points": [
+        {
+          "x": 100.0,
+          "y": 30.0
+        },
+        {
+          "x": 100.0,
+          "y": 31.0
+        }
+      ],
+      "targetY": 28.0,
+      "expected": 101.25
+    },
+    {
+      "name": "inverse-regression-slope-clamp",
+      "points": [
+        {
+          "x": 100.0,
+          "y": 30.0
+        },
+        {
+          "x": 110.0,
+          "y": 30.1
+        }
+      ],
+      "targetY": 28.0,
+      "expected": 109.1
+    }
+  ],
+  "dialInRows": [
+    {
+      "modelEnum": 1,
+      "roastDegreeIndex": 0,
+      "weightMg": 0,
+      "expectedDum": -19
+    },
+    {
+      "modelEnum": 1,
+      "roastDegreeIndex": 1,
+      "weightMg": 18000,
+      "expectedDum": 63
+    },
+    {
+      "modelEnum": 1,
+      "roastDegreeIndex": 2,
+      "weightMg": 18000,
+      "expectedDum": 83
+    },
+    {
+      "modelEnum": 2,
+      "roastDegreeIndex": 0,
+      "weightMg": 18000,
+      "expectedDum": 52
+    },
+    {
+      "modelEnum": 2,
+      "roastDegreeIndex": 1,
+      "weightMg": 18000,
+      "expectedDum": 72
+    },
+    {
+      "modelEnum": 2,
+      "roastDegreeIndex": 2,
+      "weightMg": 18000,
+      "expectedDum": 92
+    },
+    {
+      "modelEnum": 3,
+      "roastDegreeIndex": 0,
+      "weightMg": 18000,
+      "expectedDum": 88
+    },
+    {
+      "modelEnum": 3,
+      "roastDegreeIndex": 1,
+      "weightMg": 18000,
+      "expectedDum": 108
+    },
+    {
+      "modelEnum": 3,
+      "roastDegreeIndex": 2,
+      "weightMg": 18000,
+      "expectedDum": 128
+    }
+  ],
+  "signedRounding": [
+    {
+      "value": 1.25,
+      "expected": 13
+    },
+    {
+      "value": -1.25,
+      "expected": -13
+    },
+    {
+      "value": 1.24,
+      "expected": 12
+    },
+    {
+      "value": -1.24,
+      "expected": -12
+    }
+  ],
+  "effectiveDd": [
+    {
+      "name": "unset-baseline-returns-input",
+      "state": null,
+      "input": {
+        "grindDdDum": 800,
+        "grindDurationMs": 1850
+      },
+      "expected": {
+        "resultDum": 800,
+        "residueUm": 80
+      }
+    },
+    {
+      "name": "explicit-baseline-equal-residue",
+      "state": {
+        "residue": 50
+      },
+      "input": {
+        "grindDdDum": 800,
+        "grindDurationMs": 1850,
+        "effectiveBaseline": 50
+      },
+      "expected": {
+        "resultDum": 584,
+        "residueUm": 65.0
+      }
+    },
+    {
+      "name": "explicit-baseline-lower",
+      "state": {
+        "residue": 50
+      },
+      "input": {
+        "grindDdDum": 800,
+        "grindDurationMs": 1850,
+        "effectiveBaseline": 40
+      },
+      "expected": {
+        "resultDum": 511,
+        "residueUm": 65.0
+      }
+    },
+    {
+      "name": "explicit-baseline-higher",
+      "state": {
+        "residue": 50
+      },
+      "input": {
+        "grindDdDum": 800,
+        "grindDurationMs": 1850,
+        "effectiveBaseline": 60
+      },
+      "expected": {
+        "resultDum": 656,
+        "residueUm": 65.0
+      }
+    },
+    {
+      "name": "zero-duration-keeps-residue",
+      "state": {
+        "residue": 50
+      },
+      "input": {
+        "grindDdDum": 800,
+        "grindDurationMs": 0,
+        "effectiveBaseline": 40
+      },
+      "expected": {
+        "resultDum": 400,
+        "residueUm": 50
+      }
+    }
+  ],
+  "phaseBoundaries": [
+    {
+      "name": "v3-near-inclusive",
+      "algorithm": "GbS3",
+      "state": {
+        "history": [
+          {
+            "x": 50,
+            "y": 20
+          },
+          {
+            "x": 51,
+            "y": 21
+          },
+          {
+            "x": 52,
+            "y": 22
+          }
+        ],
+        "holdCyclesRemaining": 0
+      },
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "near",
+        "locked": false,
+        "committed": true,
+        "historyLength": 4
+      }
+    },
+    {
+      "name": "v3-mid-inclusive-far",
+      "algorithm": "GbS3",
+      "state": {
+        "history": [],
+        "holdCyclesRemaining": 0
+      },
+      "input": {
+        "actualBrewTimeMs": 33000,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "mid",
+        "locked": false,
+        "committed": true,
+        "historyLength": 1
+      }
+    },
+    {
+      "name": "v3-far-exclusive",
+      "algorithm": "GbS3",
+      "state": {
+        "history": [],
+        "holdCyclesRemaining": 0
+      },
+      "input": {
+        "actualBrewTimeMs": 33001,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "far",
+        "locked": false,
+        "committed": true,
+        "historyLength": 0
+      }
+    },
+    {
+      "name": "v3-dd-exact-500",
+      "algorithm": "GbS3",
+      "state": {
+        "history": [],
+        "holdCyclesRemaining": 0,
+        "lastTargetDum": 1000,
+        "lastAdjustmentDum": 1100
+      },
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1500,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "mid",
+        "locked": false,
+        "committed": true,
+        "historyLength": 1
+      }
+    },
+    {
+      "name": "v3-dd-over-500",
+      "algorithm": "GbS3",
+      "state": {
+        "history": [],
+        "holdCyclesRemaining": 0,
+        "lastTargetDum": 1000,
+        "lastAdjustmentDum": 1100
+      },
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1501,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "cancel",
+        "locked": true,
+        "committed": false,
+        "historyLength": 0
+      }
+    },
+    {
+      "name": "v4-near-strict",
+      "algorithm": "GbS4",
+      "state": {
+        "history": [
+          {
+            "x": 50,
+            "y": 20
+          },
+          {
+            "x": 51,
+            "y": 21
+          },
+          {
+            "x": 52,
+            "y": 22
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "lastTargetDum": 1000,
+        "lastAdjustmentDum": 1100
+      },
+      "input": {
+        "actualBrewTimeMs": 30999,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "near",
+        "locked": true,
+        "committed": false,
+        "historyLength": 3
+      }
+    },
+    {
+      "name": "v4-near-equal-3",
+      "algorithm": "GbS4",
+      "state": {
+        "history": [
+          {
+            "x": 50,
+            "y": 20
+          },
+          {
+            "x": 51,
+            "y": 21
+          },
+          {
+            "x": 52,
+            "y": 22
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "lastTargetDum": 1000,
+        "lastAdjustmentDum": 1100
+      },
+      "input": {
+        "actualBrewTimeMs": 31000,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "mid",
+        "locked": false,
+        "committed": true,
+        "historyLength": 4
+      }
+    },
+    {
+      "name": "v4-mid-inclusive-5",
+      "algorithm": "GbS4",
+      "state": {
+        "history": [],
+        "holdCyclesRemaining": 0
+      },
+      "input": {
+        "actualBrewTimeMs": 33000,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "mid",
+        "locked": false,
+        "committed": true,
+        "historyLength": 1
+      }
+    },
+    {
+      "name": "v4-far-over-5",
+      "algorithm": "GbS4",
+      "state": {
+        "history": [],
+        "holdCyclesRemaining": 0
+      },
+      "input": {
+        "actualBrewTimeMs": 33001,
+        "targetBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "toleranceMs": 1000
+      },
+      "expected": {
+        "phase": "far",
+        "locked": false,
+        "committed": true,
+        "historyLength": 0
+      }
+    }
+  ],
+  "ddEff": {
+    "initialDdDum": 1000,
+    "calls": 18,
+    "expected": [
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      800,
+      800,
+      800,
+      800,
+      800,
+      800,
+      1200,
+      1200,
+      1200,
+      1200,
+      1200,
+      1200
+    ]
+  }
+}
