@@ -9,7 +9,7 @@ function load({shots = [], stored = null, settings = {GrinderId: 'e64', GrinderM
     log: (message) => events.push(message),
     storage: (command) => {
       if (command.type === 'read') setTimeout(() => plugin.onEvent({name: 'storageRead', payload: {key: command.key, value: stored}}), 0);
-      if (command.type === 'write') events.push({stored: command.data});
+      if (command.type === 'write') { events.push({stored: command.data}); setTimeout(() => plugin.onEvent({name: 'storageWrite', payload: command.data}), 0); }
     },
   };
   let plugin;
