@@ -53,6 +53,23 @@ void main() {
     expect(response['status'], 200); await manager.dispose(); manager = await load();
     response = await request(manager, manifest.id, 'reload-recommend', {'endpoint': 'recommendation', 'method': 'GET'});
     expect(jsonDecode(response['body'] as String)['status'], 'recommendation');
+    // Exercise concurrent requests through the actual unkeyed host acknowledgement bridge.
+    shots = [shot('older', '1.9'), shot('newer', '2.2')];
+    shots[0]['timestamp'] = '2026-10-10T02:00:00Z';
+    shots[1]['timestamp'] = '2026-10-10T03:00:00Z';
+    manager.dispatchEvent(manifest.id, 'shotStored', {'id': 'newer'});
+    final writes = await Future.wait([
+      request(manager, manifest.id, 'parallel-older', {'endpoint': 'feedback', 'method': 'POST', 'body': {'shotId': 'older', 'good': true}}),
+      request(manager, manifest.id, 'parallel-newer', {'endpoint': 'feedback', 'method': 'POST', 'body': {'shotId': 'newer', 'good': true}}),
+    ]);
+    expect(writes.map((value) => value['status']), everyElement(200));
+    await manager.dispose(); manager = await load();
+    response = await request(manager, manifest.id, 'parallel-reload', {'endpoint': 'recommendation', 'method': 'GET'});
+    result = jsonDecode(response['body'] as String) as Map<String, dynamic>;
+    expect(result['sourceShotId'], 'newer'); expect(result['grinderSetting'], '2.2');
+    (current['workflow'] as Map<String, dynamic>)['profile'] = {'title': 'espresso', 'steps': [{'temperature': 85, 'seconds': 10}]};
+    response = await request(manager, manifest.id, 'profile-mismatch', {'endpoint': 'recommendation', 'method': 'GET'});
+    expect(jsonDecode(response['body'] as String)['status'], 'abstain');
     current = shot('current', '2.1', bean: 'different-beans');
     response = await request(manager, manifest.id, 'mismatch', {'endpoint': 'recommendation', 'method': 'GET'});
     expect(jsonDecode(response['body'] as String)['status'], 'abstain');
