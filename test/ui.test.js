@@ -112,9 +112,8 @@ test('feedback mark and unmark submit through the public form', async () => {
 
 test('feedback network failure is surfaced without leaking notes', async () => {
   const ui = await uiFixture(async () => { throw new Error('private transport detail'); });
-  await assert.rejects(
-    ui.form.onsubmit({preventDefault() {}, target: ui.form, submitter: {value: 'true'}}),
-  );
+  await ui.form.onsubmit({preventDefault() {}, target: ui.form, submitter: {value: 'true'}});
+  assert.match(ui.output.textContent, /Could not save feedback/);
   assert.equal(ui.output.textContent.includes('private transport detail'), false);
 });
 

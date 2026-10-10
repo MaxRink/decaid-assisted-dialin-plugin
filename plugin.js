@@ -88,10 +88,11 @@ function createPlugin(host) {
   function persist() {
     return new Promise((resolve, reject) => {
       if (storageWriteBroken) { reject(new Error("feedback storage unavailable")); return; }
-      const waiter = {resolve};
+      const waiter = {resolve, reject};
       storageWriteWaiters.push(waiter);
       const timeout = setTimeout(() => { storageWriteBroken = true; storageWriteWaiters = storageWriteWaiters.filter((entry) => entry !== waiter); reject(new Error("feedback storage timed out")); }, 5000);
       waiter.resolve = () => { clearTimeout(timeout); resolve(); };
+      waiter.reject = (error) => { clearTimeout(timeout); reject(error); };
       try { host.storage({type: "write", key: STORAGE_KEY, data: feedback}); } catch (error) { clearTimeout(timeout); storageWriteWaiters = storageWriteWaiters.filter((entry) => entry !== waiter); reject(new Error("feedback storage unavailable")); }
     });
   }
@@ -166,13 +167,13 @@ function createPlugin(host) {
     };
   }
 
-  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assisted dial-in</title><style>body{font:16px system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem}input{font:inherit;padding:.5rem}output{display:block;margin-top:1rem;white-space:pre-wrap}</style><h1>Assisted dial-in</h1><p>This assistant only recommends a recorded setting from a comparable shot you marked good.</p><button id="recommend">Find recommendation</button><output id="result" aria-live="polite"></output><h2>Shot feedback</h2><form id="feedback"><label>Shot ID <input required name="shotId"></label><label>Notes <input name="notes"></label><button name="good" value="true">Mark good</button><button name="good" value="false">Remove good mark</button></form><script>const out=document.querySelector('output');document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';try{const r=await fetch('recommendation');out.textContent=JSON.stringify(await r.json(),null,2)}catch(e){out.textContent='Could not load recommendation. Try again.'}};document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:(e.submitter?.value || 'true')==='true',notes:f.get('notes')})});out.textContent=JSON.stringify(await r.json(),null,2)};</script>`;
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assisted dial-in</title><style>body{font:16px system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem}input{font:inherit;padding:.5rem}output{display:block;margin-top:1rem;white-space:pre-wrap}</style><h1>Assisted dial-in</h1><p>This assistant only recommends a recorded setting from a comparable shot you marked good.</p><button id="recommend">Find recommendation</button><output id="result" aria-live="polite"></output><h2>Shot feedback</h2><form id="feedback"><label>Shot ID <input required name="shotId"></label><label>Notes <input name="notes"></label><button name="good" value="true">Mark good</button><button name="good" value="false">Remove good mark</button></form><script>const out=document.querySelector('output');document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';try{const r=await fetch('recommendation');out.textContent=JSON.stringify(await r.json(),null,2)}catch(e){out.textContent='Could not load recommendation. Try again.'}};document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);out.textContent='Saving...';try{const r=await fetch('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:(e.submitter?.value || 'true')==='true',notes:f.get('notes')})});out.textContent=JSON.stringify(await r.json(),null,2)}catch(e){out.textContent='Could not save feedback. Try again.'}};</script>`;
 
   return {
     id: ID,
     version: "0.1.0",
     onLoad(nextSettings) { active = true; settings = nextSettings || {}; startStorage(); },
-    onUnload() { active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); storageWriteWaiters = []; },
+    onUnload() { active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); storageWriteWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); },
     onEvent(event) {
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
         if (storageUnavailable) return;
