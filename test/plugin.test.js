@@ -28,9 +28,9 @@ const shot = (id, setting, extra = {}) => ({id, timestamp: id === 'new' ? '2026-
 test('marks feedback and recommends newest comparable shot', async () => {
   const {plugin, events} = load({shots: [shot('old', '2.0'), shot('new', '2.2')]});
   await new Promise((resolve) => setTimeout(resolve, 2));
-  assert.equal((await plugin.__httpRequestHandler({endpoint: 'feedback', method: 'POST', body: {shotId: 'old', good: true, notes: 'sweet'}})).status, 200);
-  assert.equal((await plugin.__httpRequestHandler({endpoint: 'feedback', method: 'POST', body: {shotId: 'new', good: true}})).status, 200);
-  const response = await plugin.__httpRequestHandler({endpoint: 'recommendation', method: 'GET'});
+  assert.equal((await plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: {shotId: 'old', good: true, notes: 'sweet'}})).status, 200);
+  assert.equal((await plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: {shotId: 'new', good: true}})).status, 200);
+  const response = await plugin.handleHttpRequest({endpoint: 'recommendation', method: 'GET'});
   const result = JSON.parse(response.body);
   assert.equal(result.status, 'recommendation');
   assert.equal(result.sourceShotId, 'new');
@@ -40,16 +40,16 @@ test('marks feedback and recommends newest comparable shot', async () => {
 test('abstains when current identity is incomplete or shot data differs', async () => {
   const incomplete = load({shots: [shot('old', '2.0')], settings: {BeanBatchId: 'batch-a'}});
   await new Promise((resolve) => setTimeout(resolve, 2));
-  await incomplete.plugin.__httpRequestHandler({endpoint: 'feedback', method: 'POST', body: {shotId: 'old', good: true}});
-  assert.equal(JSON.parse((await incomplete.plugin.__httpRequestHandler({endpoint: 'recommendation', method: 'GET'})).body).status, 'abstain');
+  await incomplete.plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: {shotId: 'old', good: true}});
+  assert.equal(JSON.parse((await incomplete.plugin.handleHttpRequest({endpoint: 'recommendation', method: 'GET'})).body).status, 'abstain');
   const changed = load({shots: [shot('old', '2.0', {beanBatchId: 'other'})]});
   await new Promise((resolve) => setTimeout(resolve, 2));
-  await changed.plugin.__httpRequestHandler({endpoint: 'feedback', method: 'POST', body: {shotId: 'old', good: true}});
-  assert.equal(JSON.parse((await changed.plugin.__httpRequestHandler({endpoint: 'recommendation', method: 'GET'})).body).status, 'abstain');
+  await changed.plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: {shotId: 'old', good: true}});
+  assert.equal(JSON.parse((await changed.plugin.handleHttpRequest({endpoint: 'recommendation', method: 'GET'})).body).status, 'abstain');
 });
 
 test('serves HTML and rejects malformed feedback', async () => {
   const {plugin} = load();
-  assert.match((await plugin.__httpRequestHandler({endpoint: 'ui', method: 'GET'})).body, /Assisted dial-in/);
-  assert.equal((await plugin.__httpRequestHandler({endpoint: 'feedback', method: 'POST', body: '{}'})).status, 400);
+  assert.match((await plugin.handleHttpRequest({endpoint: 'ui', method: 'GET'})).body, /Assisted dial-in/);
+  assert.equal((await plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: '{}'})).status, 400);
 });

@@ -9,6 +9,7 @@ function createPlugin(host) {
   let feedback = Object.create(null);
   let settings = {};
   let storageReady = false;
+  let storageUnavailable = false;
   let storageWaiters = [];
   let storageWriteWaiters = [];
   let storageWriteBroken = false;
@@ -63,12 +64,14 @@ function createPlugin(host) {
   }
 
   async function loadStorage() {
+    if (storageUnavailable) throw new Error("feedback storage unavailable");
     if (storageReady) return;
     await new Promise((resolve) => {
-      const timer = setTimeout(() => { storageReady = true; storageWaiters = storageWaiters.filter((entry) => entry !== waiter); resolve(); }, 5000);
+      const timer = setTimeout(() => { storageUnavailable = true; storageWaiters = storageWaiters.filter((entry) => entry !== waiter); resolve(); }, 5000);
       const waiter = () => { clearTimeout(timer); resolve(); };
       storageWaiters.push(waiter);
     });
+    if (storageUnavailable) throw new Error("feedback storage unavailable");
   }
   function persist() {
     return new Promise((resolve, reject) => {
@@ -81,7 +84,7 @@ function createPlugin(host) {
     });
   }
   function startStorage() {
-    try { host.storage({type: "read", key: STORAGE_KEY}); } catch (_) { storageReady = true; storageWaiters.splice(0).forEach((resolve) => resolve()); }
+    try { host.storage({type: "read", key: STORAGE_KEY}); } catch (_) { storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); }
   }
 
   async function fetchShots() {
@@ -105,6 +108,7 @@ function createPlugin(host) {
 
   async function recommendation() {
     await loadStorage();
+    await feedbackQueue;
     const history = await fetchShots();
     const shots = history.items;
     const current = contextOf({workflow: {context: settings, profile: {id: settings.ProfileId}}}, true);
@@ -143,9 +147,10 @@ function createPlugin(host) {
     id: ID,
     version: "0.1.0",
     onLoad(nextSettings) { settings = nextSettings || {}; startStorage(); },
-    onUnload() { cachedShots = null; },
+    onUnload() { cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); storageWriteWaiters = []; },
     onEvent(event) {
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
+        if (storageUnavailable) return;
         feedback = event.payload.value && typeof event.payload.value === "object" ? event.payload.value : Object.create(null);
         storageReady = true; storageWaiters.splice(0).forEach((resolve) => resolve());
       }
@@ -176,11 +181,11 @@ function createPlugin(host) {
         }
         return json(404, {error: "unknown endpoint or method"});
       } catch (error) {
-        log(`request failed: ${error.message}`);
-        return json(503, {error: "Assisted dial-in unavailable", detail: String(error.message)});
+        log("request failed");
+        return json(503, {error: "Assisted dial-in unavailable", code: "request_failed"});
       }
     },
-    // Kept as an alias for hosts that use the newer public handler name.
+    // The pinned host invokes __httpRequestHandler; this public alias helps direct consumers.
     handleHttpRequest(request) { return this.__httpRequestHandler(request); },
   };
 }

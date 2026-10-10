@@ -85,6 +85,7 @@ jobs:
         working-directory: decaid-host
         run: flutter test test/plugins/plugin_package_test.dart test/plugins/plugin_manifest_permissions_test.dart
       - run: cp ci/host_runtime_test.dart decaid-host/test/plugins/dialin_external_runtime_test.dart
+      - run: cp ci/plugin_test_helpers.dart decaid-host/test/plugins/plugin_test_helpers.dart
       - name: Real host runtime/storage/API fixture
         working-directory: decaid-host
         env:
