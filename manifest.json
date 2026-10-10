@@ -1,0 +1,27 @@
+{
+  "id": "assisted-dialin.reaplugin",
+  "name": "Assisted dial-in",
+  "author": "Maximilian Rink and Decaid contributors",
+  "description": "A local, read-only dial-in assistant using explicitly marked good shots.",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "permissions": ["log", "api", "pluginStorage", "events.shots"],
+  "settings": {
+    "GrinderId": {"type": "string", "label": "Grinder identity", "description": "Stable grinder identity used for comparisons; enter it when the shot does not record one."},
+    "GrinderModel": {"type": "string", "label": "Grinder model", "description": "Optional grinder model used for comparisons."},
+    "BurrIdentity": {"type": "string", "label": "Burr identity", "description": "Optional burr identity or replacement epoch."},
+    "CalibrationEpoch": {"type": "string", "label": "Calibration epoch", "description": "Optional user managed calibration label; it is never inferred."},
+    "BeanBatchId": {"type": "string", "label": "Bean batch", "description": "Optional current bean batch identifier."},
+    "Dose": {"type": "number", "label": "Dose", "description": "Optional current dose in grams."},
+    "Yield": {"type": "number", "label": "Yield", "description": "Optional current yield in grams."},
+    "Basket": {"type": "string", "label": "Basket", "description": "Optional basket identity."},
+    "ProfileId": {"type": "string", "label": "Profile identity", "description": "Optional profile content identity or title."}
+  },
+  "api": [
+    {"id": "ui", "type": "http", "data": {}},
+    {"id": "shots", "type": "http", "data": {}},
+    {"id": "feedback", "type": "http", "data": {}},
+    {"id": "recommendation", "type": "http", "data": {}},
+    {"id": "settings", "type": "http", "data": {}}
+  ]
+}

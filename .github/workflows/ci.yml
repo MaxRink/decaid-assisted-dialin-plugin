@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  javascript:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.x, 24.x, 26.x]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: node --check plugin.js
+      - run: npm test
+      - run: npm run package
+      - name: Check package root
+        shell: bash
+        run: |
+          expected=$'LICENSE\nNOTICE\nREADME.md\nmanifest.json\nplugin.js'
+          actual=$(unzip -Z1 dist/decaid-assisted-dialin-plugin-0.1.0.zip | sort)
+          test "$actual" = "$expected"
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == '24.x'
+        with:
+          name: decaid-assisted-dialin-plugin-${{ github.sha }}
+          path: dist/decaid-assisted-dialin-plugin-0.1.0.zip
+          if-no-files-found: error
+
+  host-contract:
+    name: Pinned Decaid QuickJS and API/storage contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: decentespresso/decaid
+          ref: af4e99524ad7731dbdb7db4540cd272bc91da038
+          path: decaid-host
+          fetch-depth: 1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.2
+          cache: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.x
+          cache: npm
+      - name: Install host dependencies
+        working-directory: decaid-host
+        run: flutter pub get
+      - name: Stub host bundled assets
+        working-directory: decaid-host
+        run: |
+          mkdir -p assets/bundled_skins
+          printf '["stub-skin"]\n' > assets/bundled_skins/manifest.json
+          : > assets/bundled_skins/stub-skin.zip
+      - name: Build package and stage archives
+        run: |
+          npm ci && npm run package
+          mkdir -p source-archive local-zip
+          git archive --format=zip --prefix=decaid-assisted-dialin-plugin-main/ HEAD > /tmp/dialin-source.zip
+          unzip -q /tmp/dialin-source.zip -d source-archive
+          unzip -q dist/decaid-assisted-dialin-plugin-0.1.0.zip -d local-zip
+      - run: cp ci/validate-host-contract.dart decaid-host/tool/validate-dialin-contract.dart
+      - run: dart run tool/validate-dialin-contract.dart "$GITHUB_WORKSPACE/source-archive"
+        working-directory: decaid-host
+      - run: dart run tool/validate-dialin-contract.dart "$GITHUB_WORKSPACE/local-zip"
+        working-directory: decaid-host
+      - name: Host package boundary tests
+        working-directory: decaid-host
+        run: flutter test test/plugins/plugin_package_test.dart test/plugins/plugin_manifest_permissions_test.dart
+      - run: cp ci/host_runtime_test.dart decaid-host/test/plugins/dialin_external_runtime_test.dart
+      - name: Real host runtime/storage/API fixture
+        working-directory: decaid-host
+        env:
+          DIALIN_PLUGIN_ROOT: ${{ github.workspace }}
+        run: |
+          QUICKJS_LIB_DIR=$(find "${PUB_CACHE:-$HOME/.pub-cache}/git" -path '*dart_js*/linux/shared' -type d -print -quit)
+          test -n "$QUICKJS_LIB_DIR"
+          export LD_LIBRARY_PATH="$QUICKJS_LIB_DIR:${LD_LIBRARY_PATH:-}"
+          flutter test --no-pub test/plugins/dialin_external_runtime_test.dart --reporter expanded
