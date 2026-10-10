@@ -36,7 +36,7 @@ jobs:
           expected=$'LICENSE\nNOTICE\nREADME.md\nmanifest.json\nplugin.js'
           actual=$(unzip -Z1 dist/decaid-assisted-dialin-plugin-0.3.0.zip | awk 'index($0, "/") == 0' | sort)
           test "$actual" = "$expected"
-          unzip -Z1 dist/decaid-assisted-dialin-plugin-0.3.0.zip | rg '^docs/GBS_GUIDE.md$'
+          python3 -c "import zipfile; z = zipfile.ZipFile('dist/decaid-assisted-dialin-plugin-0.3.0.zip'); assert 'docs/GBS_GUIDE.md' in z.namelist(); assert z.testzip() is None"
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.x'
         with:
