@@ -12,6 +12,7 @@ function createPlugin(host) {
   let storageWaiters = [];
   let storageWriteWaiters = [];
   let storageWriteBroken = false;
+  let feedbackQueue = Promise.resolve();
   let cachedShots = null;
   let cachedAt = 0;
 
@@ -136,7 +137,7 @@ function createPlugin(host) {
     };
   }
 
-  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assisted dial-in</title><style>body{font:16px system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem}output{display:block;margin-top:1rem;white-space:pre-wrap}</style><h1>Assisted dial-in</h1><p>This assistant only recommends a recorded setting from a comparable shot you marked good.</p><button id="recommend">Find recommendation</button><output id="result" aria-live="polite"></output><h2>Mark a shot good</h2><form id="feedback"><input required name="shotId" placeholder="Shot ID"><input name="notes" placeholder="Notes"><button>Save feedback</button></form><script>const out=document.querySelector('output');document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';const r=await fetch('recommendation');out.textContent=JSON.stringify(await r.json(),null,2)};document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:true,notes:f.get('notes')})});out.textContent=JSON.stringify(await r.json(),null,2)};</script>`;
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assisted dial-in</title><style>body{font:16px system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem}input{font:inherit;padding:.5rem}output{display:block;margin-top:1rem;white-space:pre-wrap}</style><h1>Assisted dial-in</h1><p>This assistant only recommends a recorded setting from a comparable shot you marked good.</p><button id="recommend">Find recommendation</button><output id="result" aria-live="polite"></output><h2>Shot feedback</h2><form id="feedback"><label>Shot ID <input required name="shotId"></label><label>Notes <input name="notes"></label><button name="good" value="true">Mark good</button><button name="good" value="false">Remove good mark</button></form><script>const out=document.querySelector('output');document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';try{const r=await fetch('recommendation');out.textContent=JSON.stringify(await r.json(),null,2)}catch(e){out.textContent='Could not load recommendation. Try again.'}};document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:e.submitter.value==='true',notes:f.get('notes')})});out.textContent=JSON.stringify(await r.json(),null,2)};</script>`;
 
   return {
     id: ID,
@@ -162,10 +163,15 @@ function createPlugin(host) {
         if (endpoint === "feedback" && request.method === "POST") {
           const input = bodyOf(request);
           const shotId = textOrNull(input.shotId);
-          if (!shotId || input.good !== true) return json(400, {error: "shotId and good:true are required"});
+          if (!shotId || typeof input.good !== "boolean") return json(400, {error: "shotId and boolean good are required"});
           await loadStorage();
-          feedback[shotId] = {good: true, notes: textOrNull(input.notes), updatedAt: new Date().toISOString()};
-          await persist();
+          feedbackQueue = feedbackQueue.catch(() => {}).then(async () => {
+            const previous = feedback[shotId];
+            if (input.good) feedback[shotId] = {good: true, notes: textOrNull(input.notes), updatedAt: new Date().toISOString()};
+            else delete feedback[shotId];
+            try { await persist(); } catch (error) { if (previous) feedback[shotId] = previous; else delete feedback[shotId]; throw error; }
+          });
+          await feedbackQueue;
           return json(200, {saved: true, shotId});
         }
         return json(404, {error: "unknown endpoint or method"});
