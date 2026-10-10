@@ -14,7 +14,8 @@ function createPlugin(host) {
   let storageWriteWaiters = [];
   let storageWriteBroken = false;
   let feedbackQueue = Promise.resolve();
-  let active = true;
+  let active = false;
+  let sessionEpoch = 0;
   let cachedShots = null;
   let cachedAt = 0;
   let cacheGeneration = 0;
@@ -36,10 +37,27 @@ function createPlugin(host) {
     if (typeof value !== "object" || Array.isArray(value)) return null;
     const result = Object.create(null);
     for (const key of Object.keys(value)) {
-      if (key.length > 256 || !value[key] || value[key].good !== true) continue;
+      if (!key || key.length > 256 || !value[key] || typeof value[key] !== "object" || Array.isArray(value[key]) || value[key].good !== true) return null;
       result[key] = {good: true, notes: textOrNull(value[key].notes)?.slice(0, 512) || null, updatedAt: textOrNull(value[key].updatedAt)?.slice(0, 64) || null};
     }
     return result;
+  }
+
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object") {
+      const result = Object.create(null);
+      Object.keys(value).sort().forEach((key) => { result[key] = canonical(value[key]); });
+      return result;
+    }
+    return value;
+  }
+  function profileContent(profile) {
+    if (!profile || !Array.isArray(profile.steps) || profile.steps.length === 0) return null;
+    const fields = ["beverage_type", "steps", "tank_temperature", "target_weight", "target_volume", "target_volume_count_start", "legacy_profile_type", "type", "version"];
+    const content = Object.create(null);
+    fields.forEach((key) => { if (profile[key] !== undefined) content[key] = profile[key]; });
+    return JSON.stringify(canonical(content));
   }
 
   function contextOf(shot, useSettings) {
@@ -56,7 +74,7 @@ function createPlugin(host) {
       dose: numberOrNull(useSettings ? value(context.targetDoseWeight, numberOrNull(settings.Dose)) : context.targetDoseWeight),
       yield: numberOrNull(useSettings ? value(context.targetYield, numberOrNull(settings.Yield)) : context.targetYield),
       basket: textOrNull(useSettings ? value(extras.basket, settings.Basket) : extras.basket),
-      profile: textOrNull(useSettings ? (profile.steps || profile.settings ? JSON.stringify(profile) : value(profile.id, value(profile.title, settings.ProfileId))) : (profile.steps || profile.settings ? JSON.stringify(profile) : value(profile.id, profile.title))),
+      profile: profileContent(profile),
       grinderSetting: textOrNull(context.grinderSetting),
     };
   }
@@ -76,18 +94,18 @@ function createPlugin(host) {
   }
 
   async function loadStorage() {
-    if (storageUnavailable) throw new Error("feedback storage unavailable");
+    if (!active || storageUnavailable) throw new Error("feedback storage unavailable");
     if (storageReady) return;
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => { storageUnavailable = true; storageWaiters = storageWaiters.filter((entry) => entry !== waiter); reject(new Error("feedback storage timed out")); }, 5000);
       const waiter = {resolve: () => { clearTimeout(timer); resolve(); }, reject: (error) => { clearTimeout(timer); reject(error); }};
       storageWaiters.push(waiter);
     });
-    if (storageUnavailable) throw new Error("feedback storage unavailable");
+    if (!active || storageUnavailable) throw new Error("feedback storage unavailable");
   }
   function persist() {
     return new Promise((resolve, reject) => {
-      if (storageWriteBroken) { reject(new Error("feedback storage unavailable")); return; }
+      if (!active || storageWriteBroken) { reject(new Error("feedback storage unavailable")); return; }
       const waiter = {resolve, reject};
       storageWriteWaiters.push(waiter);
       const timeout = setTimeout(() => { storageWriteBroken = true; storageWriteWaiters = storageWriteWaiters.filter((entry) => entry !== waiter); reject(new Error("feedback storage timed out")); }, 5000);
@@ -100,7 +118,7 @@ function createPlugin(host) {
     try { host.storage({type: "read", key: STORAGE_KEY}); } catch (_) { storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("feedback storage unavailable"))); }
   }
 
-  async function fetchShots(retry = 0) {
+  async function fetchShots() {
     if (cachedShots && Date.now() - cachedAt < 5000) return cachedShots;
     const result = [];
     const requestGeneration = cacheGeneration;
@@ -110,49 +128,48 @@ function createPlugin(host) {
       if (!response.ok) throw new Error(`Shot history unavailable (HTTP ${response.status})`);
       const data = await response.json();
       const plainArray = Array.isArray(data);
-      const items = plainArray ? data : (Array.isArray(data.items) ? data.items : []);
+      if (!plainArray && (!data || !Array.isArray(data.items))) throw new Error("invalid shot history");
+      const items = plainArray ? data : data.items;
+      if (items.length > PAGE_SIZE) throw new Error("shot page exceeds limit");
       result.push(...items);
       const total = !plainArray && Number.isFinite(Number(data.total)) ? Number(data.total) : null;
       if (items.length < PAGE_SIZE || (total !== null && result.length >= total)) { truncated = false; break; }
     }
     const snapshot = {items: result, truncated};
     if (!active) throw new Error("plugin unloaded");
-    if (requestGeneration !== cacheGeneration && retry < 1) return fetchShots(1);
+    if (requestGeneration !== cacheGeneration) throw new Error("shot history changed");
     if (requestGeneration === cacheGeneration) cachedShots = snapshot;
     cachedAt = Date.now();
     return snapshot;
   }
 
   async function recommendation() {
+    const requestEpoch = cacheGeneration;
     await loadStorage();
     await feedbackQueue;
-    const requestEpoch = cacheGeneration;
     const history = await fetchShots();
     const shots = history.items;
-    let current = contextOf({workflow: {context: settings, profile: {id: settings.ProfileId}}}, true);
-    try {
-      const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow`);
-      if (!workflowResponse.ok) throw new Error("workflow unavailable");
-      const workflow = await workflowResponse.json();
-      if (workflow && workflow.profile && workflow.context) current = contextOf({workflow}, false);
-      else if (!workflow || !workflow.items) throw new Error("workflow unavailable");
-    } catch (error) {
-      throw error;
-    }
+    const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow`);
+    if (!workflowResponse.ok) throw new Error("workflow unavailable");
+    const workflow = await workflowResponse.json();
+    if (!workflow || typeof workflow !== "object" || !workflow.profile || !workflow.context) throw new Error("invalid workflow");
+    const recordedCurrent = contextOf({workflow}, false);
+    const current = contextOf({workflow}, true);
+    const userSuppliedCurrentFields = Object.keys(current).filter((key) => recordedCurrent[key] === null && current[key] !== null);
     if (requestEpoch !== cacheGeneration || !active) throw new Error("history changed during recommendation");
-    const required = ["beanBatchId", "grinderId"];
-    const missingCurrent = required.filter((key) => current[key] === null);
-    if (missingCurrent.length) return {status: "abstain", reason: "Enter the current bean batch and grinder identity before comparing shots", missingData: missingCurrent};
+    const missingCurrent = ["beanBatchId", "grinderId", "profile"].filter((key) => current[key] === null);
+    if (missingCurrent.length) return {status: "abstain", reason: "Current bean batch, grinder identity and profile execution content are required", missingData: missingCurrent, historyTruncated: history.truncated};
     const considered = [];
     const abstentions = [];
     for (const shot of shots) {
       const mark = feedback[String(shot.id)];
       if (!mark?.good) continue;
       const candidate = contextOf(shot, false);
+      if (!candidate.profile) { abstentions.push({shotId: shot.id, missing: ["profile"]}); continue; }
       if (!candidate.grinderSetting) { abstentions.push({shotId: shot.id, reason: "good shot has no recorded grinder setting"}); continue; }
       const result = compare(current, candidate);
       if (result.ok) considered.push({shot, candidate, mark, unavailable: result.unavailable});
-      else if (result.missing.length) abstentions.push({shotId: shot.id, missing: result.missing});
+      else abstentions.push({shotId: shot.id, missing: result.missing, mismatched: result.mismatched});
     }
     considered.sort((a, b) => String(b.shot.timestamp || "").localeCompare(String(a.shot.timestamp || "")));
     if (!considered.length) return {status: "abstain", reason: history.truncated ? "Bounded history scan reached its limit; no safe recommendation can be claimed" : "No comparable marked-good shot found", missingData: abstentions.slice(0, 10), historyTruncated: history.truncated};
@@ -162,6 +179,13 @@ function createPlugin(host) {
       sourceShotId: selected.shot.id,
       grinderSetting: selected.candidate.grinderSetting,
       recordedValue: true,
+      comparison: {
+        beanBatchId: current.beanBatchId, grinderId: current.grinderId,
+        grinderModel: current.grinderModel, burrIdentity: current.burrIdentity,
+        calibrationEpoch: current.calibrationEpoch, dose: current.dose,
+        yield: current.yield, basket: current.basket,
+        profile: "matching execution content", userSuppliedCurrentFields,
+      },
       provenance: "user-marked-good local shot; workflow setting is intended, not verified hardware state",
       notes: selected.mark.notes || null,
       timestamp: selected.shot.timestamp || null,
@@ -174,45 +198,50 @@ function createPlugin(host) {
   return {
     id: ID,
     version: "0.1.0",
-    onLoad(nextSettings) { active = true; settings = nextSettings || {}; startStorage(); },
-    onUnload() { active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); storageWriteWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); },
+    onLoad(nextSettings) { sessionEpoch += 1; cacheGeneration += 1; active = true; settings = nextSettings || {}; startStorage(); },
+    onUnload() { sessionEpoch += 1; active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); storageWriteWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded"))); },
     onEvent(event) {
+      if (!active) return;
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
-        if (storageUnavailable) return;
+        if (storageUnavailable || storageReady) return;
         const restored = feedbackFromStorage(event.payload.value);
         if (!restored) { storageUnavailable = true; storageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("feedback storage unavailable"))); return; }
         feedback = restored;
         storageReady = true; storageWaiters.splice(0).forEach((waiter) => waiter.resolve());
       }
-      if (event.name === "storageWrite") storageReady = true;
-      if (event.name === "storageWrite") { const waiter = storageWriteWaiters.shift(); if (waiter) waiter.resolve(); }
-      if (event.name === "shotStored" || event.name === "shotUpdated") { cacheGeneration += 1; cachedShots = null; }
+      if (event.name === "storageWrite" && !storageWriteBroken) { const waiter = storageWriteWaiters.shift(); if (waiter) waiter.resolve(); }
+      if (event.name === "shotStored" || event.name === "shotUpdated" || event.name === "workflowUpdated") { cacheGeneration += 1; cachedShots = null; }
     },
     handleHttpRequest: async (request) => {
       const endpoint = request.endpoint || "";
+      const requestSession = sessionEpoch;
       try {
+        if (!active) throw new Error("plugin unloaded");
         if (endpoint === "ui" && request.method === "GET") return html(200, page);
         if (endpoint === "settings" && request.method === "GET") return json(200, settings);
         if (endpoint === "shots" && request.method === "GET") return json(200, {...await fetchShots(), maxPages: MAX_PAGES});
         if (endpoint === "recommendation" && request.method === "GET") return json(200, await recommendation());
         if (endpoint === "feedback" && request.method === "POST") {
           const input = bodyOf(request);
+          if (!input || typeof input !== "object" || Array.isArray(input)) return json(400, {error: "feedback must be an object"});
           const shotId = textOrNull(input.shotId);
           if (!shotId || shotId.length > 256 || typeof input.good !== "boolean") return json(400, {error: "shotId and boolean good are required"});
           await loadStorage();
           feedbackQueue = feedbackQueue.catch(() => {}).then(async () => {
+            if (!active || requestSession !== sessionEpoch) throw new Error("plugin unloaded");
             const previous = feedback[shotId];
             if (input.good) feedback[shotId] = {good: true, notes: textOrNull(input.notes)?.slice(0, 512) || null, updatedAt: new Date().toISOString()};
             else delete feedback[shotId];
             try { await persist(); } catch (error) { if (previous) feedback[shotId] = previous; else delete feedback[shotId]; throw error; }
           });
           await feedbackQueue;
+          if (!active || requestSession !== sessionEpoch) throw new Error("plugin unloaded");
           return json(200, {saved: true, shotId});
         }
         return json(404, {error: "unknown endpoint or method"});
       } catch (error) {
         log("request failed");
-        return json(503, {error: "Assisted dial-in unavailable", code: "request_failed"});
+        return json(503, {error: "Assisted dial-in unavailable", code: "request_failed", ...(active && (storageUnavailable || storageWriteBroken) ? {recovery: "Reload the plugin to recover feedback storage before saving or recommending again"} : {})});
       }
     },
   };

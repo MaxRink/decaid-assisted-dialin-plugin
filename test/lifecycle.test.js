@@ -56,12 +56,6 @@ test('an in-flight recommendation is rejected when shot history changes', async 
   const first = await nextRequest(pending);
   plugin.onEvent({name: 'shotUpdated', payload: {id: 'new-shot'}});
   first.resolve(response([]));
-  await new Promise(setImmediate);
-  assert.equal(pending.length, 2, 'generation change should not expose the old snapshot');
-  pending[1].resolve(response([]));
-  await new Promise(setImmediate);
-  assert.equal(pending.length, 3, 'recommendation should read the current workflow after refreshing history');
-  pending[2].resolve(response({}));
   const result = await request;
   assert.equal(result.status, 503);
   assert.deepEqual(JSON.parse(result.body), {error: 'Assisted dial-in unavailable', code: 'request_failed'});

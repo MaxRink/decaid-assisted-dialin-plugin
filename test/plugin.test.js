@@ -14,7 +14,9 @@ function load({shots = [], stored = null, settings = {GrinderId: 'e64', GrinderM
   };
   let plugin;
   const source = fs.readFileSync('plugin.js', 'utf8');
-  const fetchStub = async (url) => ({ok: true, status: 200, json: async () => ({items: shots, total: shots.length})});
+  const fetchStub = async (url) => url.includes('/workflow')
+    ? {ok: true, status: 200, json: async () => ({context: {beanBatchId: settings.BeanBatchId, grinderId: settings.GrinderId, grinderModel: settings.GrinderModel}, profile: {title: settings.ProfileId, steps: [{pump: 'pressure', pressure: 9}]}})}
+    : {ok: true, status: 200, json: async () => ({items: shots, total: shots.length})};
   const context = {console, setTimeout, clearTimeout, Date, JSON, Math, Promise, URLSearchParams, fetch: fetchStub, btoa: (s) => Buffer.from(s).toString('base64')};
   vm.createContext(context);
   vm.runInContext(`${source}\nthis.createPlugin = createPlugin;`, context);
@@ -23,7 +25,7 @@ function load({shots = [], stored = null, settings = {GrinderId: 'e64', GrinderM
   return {plugin, events};
 }
 
-const shot = (id, setting, extra = {}) => ({id, timestamp: id === 'new' ? '2026-10-10T02:00:00Z' : '2026-10-10T01:00:00Z', workflow: {context: {beanBatchId: 'batch-a', grinderId: 'e64', grinderModel: 'E64', grinderSetting: setting, ...extra}, profile: {title: 'espresso'}}});
+const shot = (id, setting, extra = {}) => ({id, timestamp: id === 'new' ? '2026-10-10T02:00:00Z' : '2026-10-10T01:00:00Z', workflow: {context: {beanBatchId: 'batch-a', grinderId: 'e64', grinderModel: 'E64', grinderSetting: setting, ...extra}, profile: {title: 'espresso', steps: [{pump: 'pressure', pressure: 9}]}}});
 
 test('marks feedback and recommends newest comparable shot', async () => {
   const {plugin, events} = load({shots: [shot('old', '2.0'), shot('new', '2.2')]});

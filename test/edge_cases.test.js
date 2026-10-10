@@ -20,12 +20,12 @@ function shot(id, setting, extra = {}) {
         beanBatchId: 'batch-a', grinderId: 'e64', grinderModel: 'E64',
         grinderSetting: setting, ...extra,
       },
-      profile: {title: 'espresso'},
+      profile: {title: 'espresso', steps: [{pump: 'pressure', pressure: 9}]},
     },
   };
 }
 
-function load({shots = [], stored = null, settings = {
+function load({shots = [], stored = null, workflow, settings = {
   GrinderId: 'e64', GrinderModel: 'E64', BeanBatchId: 'batch-a',
   ProfileId: 'espresso',
 }} = {}) {
@@ -46,6 +46,8 @@ function load({shots = [], stored = null, settings = {
   };
   const fetchStub = (url) => {
     fetchCalls.push(url);
+    if (url.includes('/workflow') && workflow !== undefined) return typeof workflow === 'function' ? workflow() : Promise.resolve(response(workflow));
+    if (url.includes('/workflow')) return Promise.resolve(response({context: {beanBatchId: settings.BeanBatchId, grinderId: settings.GrinderId, grinderModel: settings.GrinderModel}, profile: {title: 'espresso', steps: [{pump: 'pressure', pressure: 9}]}}));
     if (typeof shots === 'function') return shots(url, pendingFetches);
     return Promise.resolve(response({items: shots, total: shots.length}));
   };
@@ -133,7 +135,7 @@ test('failed feedback persistence rolls back the in-memory mark', async () => {
 test('historical missing identity is not backfilled from current settings', async () => {
   const h = load({shots: [{...shot('old', '2.0'), workflow: {context: {
     beanBatchId: 'batch-a', grinderModel: 'E64', grinderSetting: '2.0',
-  }, profile: {title: 'espresso'}}}]});
+  }, profile: {title: 'espresso', steps: [{pump: 'pressure', pressure: 9}]}}}]});
   h.resolveRead({old: {good: true}});
   const result = await call(h.plugin, 'recommendation', 'GET');
   assert.equal(result.status, 200);
@@ -206,9 +208,105 @@ test('shot update invalidates an in-flight history result before caching', async
   assert.equal(typeof resolveFetch, 'function');
   h.plugin.onEvent({name: 'shotUpdated', payload: {id: 'old'}});
   resolveFetch(response({items: [shot('old', '2.0')], total: 1}));
-  await pending;
-  assert.equal(h.fetchCalls.length, 3);
+  assert.equal((await pending).status, 503);
+  assert.equal(h.fetchCalls.length, 1);
   await call(h.plugin, 'recommendation', 'GET');
-  assert.equal(h.fetchCalls.length, 4);
+  assert.equal(h.fetchCalls.length, 3);
 });
 
+
+
+test('profile execution content matches despite key order and presentation changes', async () => {
+  const candidate = shot('old', '2.0');
+  candidate.workflow.profile = {title: 'Saved title', author: 'old', steps: [{pressure: 9, pump: 'pressure'}]};
+  const h = load({shots: [candidate], workflow: {context: candidate.workflow.context, profile: {title: 'Renamed', notes: 'new note', steps: [{pump: 'pressure', pressure: 9}]}}});
+  h.resolveRead({old: {good: true}});
+  const result = await call(h.plugin, 'recommendation', 'GET');
+  assert.equal(JSON.parse(result.body).status, 'recommendation');
+});
+
+test('a title-only current or historical profile cannot produce a suggestion', async () => {
+  const candidate = shot('old', '2.0');
+  for (const missingCurrent of [true, false]) {
+    const workflow = {context: candidate.workflow.context, profile: {title: 'espresso', steps: [{pump: 'pressure', pressure: 9}]}};
+    const historical = JSON.parse(JSON.stringify(candidate));
+    if (missingCurrent) delete workflow.profile.steps;
+    else delete historical.workflow.profile.steps;
+    const h = load({shots: [historical], workflow});
+    h.resolveRead({old: {good: true}});
+    const result = await call(h.plugin, 'recommendation', 'GET');
+    assert.equal(JSON.parse(result.body).status, 'abstain');
+  }
+});
+
+test('workflow network, malformed JSON and wrong schema failures cannot use settings fallback', async () => {
+  for (const workflow of [
+    () => Promise.reject(new Error('secret address')),
+    () => Promise.resolve({ok: true, json: async () => {throw new Error('secret token');}}),
+    {items: []},
+  ]) {
+    const h = load({shots: [shot('old', '2.0')], workflow});
+    h.resolveRead({old: {good: true}});
+    const result = await call(h.plugin, 'recommendation', 'GET');
+    assert.equal(result.status, 503);
+    assert.equal(result.body.includes('secret'), false);
+  }
+});
+
+test('malformed feedback entries are not replaced by a new empty store', async () => {
+  for (const value of [[], {old: null}, {old: {good: 'yes'}}]) {
+    const h = load();
+    h.resolveRead(value);
+    const result = await call(h.plugin, 'feedback', 'POST', {shotId: 'new', good: true});
+    assert.equal(result.status, 503);
+    assert.equal(h.writes.length, 0);
+  }
+});
+
+test('feedback writes are globally acknowledged FIFO', async () => {
+  const h = load();
+  h.resolveRead({});
+  const first = call(h.plugin, 'feedback', 'POST', {shotId: 'one', good: true});
+  const second = call(h.plugin, 'feedback', 'POST', {shotId: 'two', good: true});
+  await flush();
+  assert.equal(h.writes.length, 1);
+  h.ackWrite({one: {good: true}});
+  assert.equal((await first).status, 200);
+  await flush();
+  assert.equal(h.writes.length, 2);
+  h.ackWrite({one: {good: true}, two: {good: true}});
+  assert.equal((await second).status, 200);
+});
+
+test('unload cancels active and queued saves without waiting for acknowledgement', async () => {
+  const h = load();
+  h.resolveRead({});
+  const first = call(h.plugin, 'feedback', 'POST', {shotId: 'one', good: true});
+  const second = call(h.plugin, 'feedback', 'POST', {shotId: 'two', good: true});
+  await flush();
+  assert.equal(h.writes.length, 1);
+  h.plugin.onUnload();
+  assert.equal((await first).status, 503);
+  assert.equal((await second).status, 503);
+  assert.equal(h.writes.length, 1);
+  h.ackWrite({one: {good: true}});
+});
+
+
+test('workflow changes fence a pending current-workflow read', async () => {
+  let resolveWorkflow;
+  const h = load({shots: [shot('old', '2.0')], workflow: () => new Promise((resolve) => {resolveWorkflow = resolve;})});
+  h.resolveRead({old: {good: true}});
+  const pending = call(h.plugin, 'recommendation', 'GET');
+  await flush();
+  assert.equal(typeof resolveWorkflow, 'function');
+  h.plugin.onEvent({name: 'workflowUpdated', payload: {}});
+  resolveWorkflow(response(shot('current', '2.1').workflow));
+  assert.equal((await pending).status, 503);
+});
+
+test('malformed shot envelope cannot claim a complete empty history', async () => {
+  const h = load({shots: () => Promise.resolve(response({error: 'hidden server error'}))});
+  h.resolveRead({});
+  assert.equal((await call(h.plugin, 'shots', 'GET')).status, 503);
+});
