@@ -135,9 +135,9 @@ function createPlugin(host) {
       if (!workflowResponse.ok) throw new Error("workflow unavailable");
       const workflow = await workflowResponse.json();
       if (workflow && workflow.profile && workflow.context) current = contextOf({workflow}, false);
+      else if (!workflow || !workflow.items) throw new Error("workflow unavailable");
     } catch (error) {
-      if (String(error.message) === "workflow unavailable") throw error;
-      /* Settings remain an explicit current-setup fallback when this optional read cannot be parsed. */
+      throw error;
     }
     if (requestEpoch !== cacheGeneration || !active) throw new Error("history changed during recommendation");
     const required = ["beanBatchId", "grinderId"];
