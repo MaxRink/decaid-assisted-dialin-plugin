@@ -207,8 +207,8 @@ test('shot update invalidates an in-flight history result before caching', async
   h.plugin.onEvent({name: 'shotUpdated', payload: {id: 'old'}});
   resolveFetch(response({items: [shot('old', '2.0')], total: 1}));
   await pending;
-  assert.equal(h.fetchCalls.length, 1);
+  assert.equal(h.fetchCalls.length, 3);
   await call(h.plugin, 'recommendation', 'GET');
-  assert.equal(h.fetchCalls.length, 2);
+  assert.equal(h.fetchCalls.length, 4);
 });
 

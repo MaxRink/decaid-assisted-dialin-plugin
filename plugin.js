@@ -14,6 +14,7 @@ function createPlugin(host) {
   let storageWriteWaiters = [];
   let storageWriteBroken = false;
   let feedbackQueue = Promise.resolve();
+  let active = true;
   let cachedShots = null;
   let cachedAt = 0;
   let cacheGeneration = 0;
@@ -114,6 +115,8 @@ function createPlugin(host) {
       if (items.length < PAGE_SIZE || (total !== null && result.length >= total)) { truncated = false; break; }
     }
     const snapshot = {items: result, truncated};
+    if (!active) throw new Error("plugin unloaded");
+    if (requestGeneration !== cacheGeneration) return fetchShots();
     if (requestGeneration === cacheGeneration) cachedShots = snapshot;
     cachedAt = Date.now();
     return snapshot;
@@ -124,7 +127,14 @@ function createPlugin(host) {
     await feedbackQueue;
     const history = await fetchShots();
     const shots = history.items;
-    const current = contextOf({workflow: {context: settings, profile: {id: settings.ProfileId}}}, true);
+    let current = contextOf({workflow: {context: settings, profile: {id: settings.ProfileId}}}, true);
+    try {
+      const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow`);
+      if (workflowResponse.ok) {
+        const workflow = await workflowResponse.json();
+        if (workflow && workflow.profile && workflow.context) current = contextOf({workflow}, false);
+      }
+    } catch (_) { /* Settings remain an explicit current-setup fallback. */ }
     const required = ["beanBatchId", "grinderId"];
     const missingCurrent = required.filter((key) => current[key] === null);
     if (missingCurrent.length) return {status: "abstain", reason: "Enter the current bean batch and grinder identity before comparing shots", missingData: missingCurrent};
@@ -159,8 +169,8 @@ function createPlugin(host) {
   return {
     id: ID,
     version: "0.1.0",
-    onLoad(nextSettings) { settings = nextSettings || {}; startStorage(); },
-    onUnload() { cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); storageWriteWaiters = []; },
+    onLoad(nextSettings) { active = true; settings = nextSettings || {}; startStorage(); },
+    onUnload() { active = false; cacheGeneration += 1; cachedShots = null; storageUnavailable = true; storageWaiters.splice(0).forEach((resolve) => resolve()); storageWriteWaiters = []; },
     onEvent(event) {
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
         if (storageUnavailable) return;
