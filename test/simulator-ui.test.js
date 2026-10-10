@@ -41,9 +41,9 @@ class Element {
   focus() {}
 }
 
-function uiFixture() {
+function uiFixture(catalog = { schemaVersion: 1, sources: [] }) {
   const ids = [
-    "notice", "theme", "algorithm", "grinder", "burrs", "bean", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "export", "import", "catalog-status", "catalog-search", "catalog",
+    "notice", "theme", "algorithm", "grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "export", "import", "catalog-status", "catalog-search", "catalog",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
@@ -111,7 +111,7 @@ function uiFixture() {
     setTimeout,
     clearTimeout,
     queueMicrotask,
-    fetch: async () => ({ ok: true, json: async () => ({ schemaVersion: 1, sources: [] }) }),
+    fetch: async () => ({ ok: true, json: async () => catalog }),
     Blob: BlobFixture,
     FileReader: FileReaderFixture,
   };
@@ -244,4 +244,40 @@ test("simulator import rejects unknown fields, numeric strings, and oversized fi
   ui.elements.get("import").dispatch("change", { target: { files: [{ size: 256 * 1024 + 1, text: "{}" }] } });
   assert.match(ui.elements.get("notice").textContent, /too large/i);
   assert.equal(ui.elements.get("shots").textContent, before);
+});
+
+
+test("reviewed recipe adoption keeps ranges explicit and filter recipes informational", async () => {
+  const catalog = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/reference-catalog.json"), "utf8"));
+  const ui = uiFixture(catalog);
+  await new Promise(setImmediate);
+  assert.equal(ui.elements.get("catalog").children.length, catalog.sources.length);
+  const cards = ui.elements.get("catalog").children;
+  const filter = cards.find(card => card.textContent.includes("Pour-over guide"));
+  assert.equal(filter.children.some(child => child.tagName === "BUTTON"), false);
+  const recipe = cards.find(card => card.textContent.includes("How we make espresso"));
+  assert.match(recipe.textContent, /19–20 g/);
+  recipe.children.find(child => child.tagName === "BUTTON").click();
+  assert.equal(Number(ui.elements.get("dose").value), 19.5);
+  assert.equal(Number(ui.elements.get("yield").value), 43.5);
+  assert.equal(Number(ui.elements.get("target").value), 30);
+  assert.equal(ui.elements.get("roaster").value, "Tim Wendelboe");
+  assert.match(ui.elements.get("notice").textContent, /midpoint/);
+});
+
+test("bean-specific roaster references reach actual first-shot suggestion provenance", async () => {
+  const catalog = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/reference-catalog.json"), "utf8"));
+  const ui = uiFixture(catalog);
+  await new Promise(setImmediate);
+  const recipe = ui.elements.get("catalog").children.find(card => card.textContent.includes("Red Brick espresso recipe"));
+  recipe.children.find(child => child.tagName === "BUTTON").click();
+  ui.elements.get("next").click();
+  const time = ui.elements.get("shots").children[0].children[2].children[0];
+  time.value = 24; time.dispatch("change");
+  ui.elements.get("assist-taste").value = "sour";
+  ui.elements.get("assist-taste").dispatch("change");
+  await ui.elements.get("assist").click();
+  assert.match(ui.elements.get("assist-result").textContent, /provisional/);
+  assert.match(ui.elements.get("assist-result").textContent, /Red Brick espresso recipe/);
+  assert.match(ui.elements.get("assist-result").textContent, /finer/);
 });
