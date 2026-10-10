@@ -132,11 +132,13 @@ function createPlugin(host) {
     let current = contextOf({workflow: {context: settings, profile: {id: settings.ProfileId}}}, true);
     try {
       const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow`);
-      if (workflowResponse.ok) {
-        const workflow = await workflowResponse.json();
-        if (workflow && workflow.profile && workflow.context) current = contextOf({workflow}, false);
-      }
-    } catch (_) { /* Settings remain an explicit current-setup fallback. */ }
+      if (!workflowResponse.ok) throw new Error("workflow unavailable");
+      const workflow = await workflowResponse.json();
+      if (workflow && workflow.profile && workflow.context) current = contextOf({workflow}, false);
+    } catch (error) {
+      if (String(error.message) === "workflow unavailable") throw error;
+      /* Settings remain an explicit current-setup fallback when this optional read cannot be parsed. */
+    }
     if (requestEpoch !== cacheGeneration || !active) throw new Error("history changed during recommendation");
     const required = ["beanBatchId", "grinderId"];
     const missingCurrent = required.filter((key) => current[key] === null);
