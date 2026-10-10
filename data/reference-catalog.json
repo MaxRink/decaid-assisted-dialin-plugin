@@ -1,0 +1,1005 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-11",
+  "sources": [
+    {
+      "id": "squaremile-red-brick",
+      "title": "Red Brick espresso recipe",
+      "url": "https://shop.squaremilecoffee.com/products/red-brick",
+      "publisher": "Square Mile Coffee Roasters",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "coffee": "Red Brick",
+        "equipment": "VA388 Black Eagle; VST 20g basket",
+        "applicability": "bean-specific starting recipe"
+      },
+      "facts": {
+        "doseG": 19,
+        "brewTimeSec": {
+          "min": 28,
+          "max": 32,
+          "unit": "s"
+        },
+        "temperatureC": {
+          "min": 94,
+          "max": 94.5,
+          "unit": "C"
+        },
+        "brewRatio": "1:2",
+        "components": [
+          {
+            "name": "Altamira de Chirripó",
+            "origin": "Costa Rica",
+            "process": "white honey",
+            "variety": "Catuaí",
+            "roastLevel": "medium"
+          },
+          {
+            "name": "El Meridiano",
+            "origin": "Colombia",
+            "process": "washed",
+            "variety": [
+              "Caturra",
+              "Colombia",
+              "Typica"
+            ],
+            "roastLevel": "medium"
+          }
+        ],
+        "tastingNotes": [
+          "red apple",
+          "toffee",
+          "chocolate",
+          "hazelnut"
+        ]
+      },
+      "notes": [
+        "The page says this is a starting point and machine-dependent; component percentages can change."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "tim-wendelboe-espresso",
+      "title": "How we make espresso",
+      "url": "https://timwendelboe.no/pages/how-we-make-espresso-espresso-tips",
+      "publisher": "Tim Wendelboe",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "equipment": "VST 20g basket",
+        "applicability": "roaster generic starting recipe"
+      },
+      "facts": {
+        "doseG": {
+          "min": 19,
+          "max": 20,
+          "unit": "g"
+        },
+        "yieldG": {
+          "min": 42,
+          "max": 45,
+          "unit": "g"
+        },
+        "brewTimeSec": {
+          "min": 25,
+          "max": 35,
+          "unit": "s"
+        },
+        "temperatureC": {
+          "min": 93,
+          "max": 94,
+          "unit": "C"
+        }
+      },
+      "notes": [
+        "The page allows up to 50g for a more diluted cup and recommends drinking below 60C."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "counter-culture-espresso",
+      "title": "Guide to espresso",
+      "url": "https://counterculturecoffee.com/blogs/counter-culture-coffee/guide-to-espresso",
+      "publisher": "Counter Culture Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "roaster generic baseline"
+      },
+      "facts": {
+        "doseG": 18,
+        "yieldG": 36,
+        "brewTimeSec": 28,
+        "brewRatio": "1:2"
+      },
+      "notes": [
+        "A general baseline; no temperature or grinder coordinate is prescribed."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "counter-culture-quick-espresso",
+      "title": "Quick and easy espresso",
+      "url": "https://counterculturecoffee.com/pages/quick-easy-espresso",
+      "publisher": "Counter Culture Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "roaster generic adjustment guide"
+      },
+      "facts": {
+        "doseG": 18,
+        "yieldG": 36,
+        "brewTimeSec": {
+          "min": 25,
+          "max": 35,
+          "unit": "s"
+        },
+        "brewRatio": {
+          "min": 1.5,
+          "max": 2.5,
+          "unit": "ratio"
+        }
+      },
+      "notes": [
+        "The page suggests finer below 25s and coarser above 35s as a starting adjustment; taste can override time."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "blue-bottle-long-pull",
+      "title": "Single origin long-pull espresso",
+      "url": "https://bluebottlecoffee.com/us/eng/brew-guides/single-origin-espresso",
+      "publisher": "Blue Bottle Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "coffee": "single origin",
+        "applicability": "method-specific starting recipe"
+      },
+      "facts": {
+        "doseG": 20,
+        "yieldG": 40,
+        "brewTimeSec": {
+          "min": 28,
+          "max": 32,
+          "unit": "s"
+        },
+        "grindDescription": "extra-fine"
+      },
+      "notes": [
+        "No temperature is specified on the reviewed page."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "blue-bottle-pourover",
+      "title": "Pour-over guide",
+      "url": "https://bluebottlecoffee.com/us/eng/brew-guides/pour-over",
+      "publisher": "Blue Bottle Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "pour-over",
+        "applicability": "roaster generic method"
+      },
+      "facts": {
+        "doseG": {
+          "min": 20,
+          "max": 27,
+          "unit": "g"
+        },
+        "waterG": 350,
+        "brewTimeSec": {
+          "min": 150,
+          "max": 210,
+          "unit": "s"
+        },
+        "temperatureC": {
+          "min": 90.6,
+          "max": 96.1,
+          "unit": "C"
+        }
+      },
+      "notes": [
+        "The page says darker roasts suit the cooler end and lighter roasts the hotter end; it gives no grinder coordinate."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "blue-bottle-moccamaster",
+      "title": "Technivorm Moccamaster guide",
+      "url": "https://bluebottlecoffee.com/us/eng/brew-guides/coffee-maker",
+      "publisher": "Blue Bottle Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "automatic filter",
+        "equipment": "Technivorm Moccamaster KBGV",
+        "applicability": "equipment-specific batch recipe"
+      },
+      "facts": {
+        "doseG": 59,
+        "waterAmount": "6 cups (half pot)",
+        "brewTimeSec": {
+          "min": 240,
+          "max": 360,
+          "unit": "s"
+        },
+        "grindDescription": "medium-coarse"
+      },
+      "notes": [
+        "The source describes a half-pot/6-cup dose. It also mentions 98g for a full pot with 10 cups; no gram-to-cup conversion is inferred."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "lacabra-espresso",
+      "title": "Brew guides",
+      "url": "https://lacabra.com/pages/brewing",
+      "publisher": "La Cabra",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "roaster generic starting recipe"
+      },
+      "facts": {
+        "doseG": 18,
+        "yieldG": 50,
+        "brewTimeSec": {
+          "min": 18,
+          "max": 22,
+          "unit": "s"
+        }
+      },
+      "notes": [
+        "The page explicitly says its outline need not be followed exactly and discusses water chemistry."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "lacabra-v60",
+      "title": "Brew guides V60",
+      "url": "https://lacabra.com/pages/brewing",
+      "publisher": "La Cabra",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "V60",
+        "applicability": "roaster generic method"
+      },
+      "facts": {
+        "doseG": 15,
+        "waterG": 250,
+        "pourScheduleSec": [
+          0,
+          45,
+          90
+        ]
+      },
+      "notes": [
+        "The source does not prescribe a total brew time for this V60 outline."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "prolog-espresso",
+      "title": "Brew guides",
+      "url": "https://www.prologcoffee.com/pages/brew-guides",
+      "publisher": "Prolog Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "roaster generic starting recipe"
+      },
+      "facts": {
+        "doseG": 18.5,
+        "yieldG": {
+          "min": 40,
+          "max": 45,
+          "unit": "g"
+        },
+        "brewTimeSec": {
+          "min": 12,
+          "max": 23,
+          "unit": "s"
+        },
+        "temperatureC": 93
+      },
+      "notes": [
+        "The source says its bar often uses 12–14s and equipment/water/technique can make a slower shot better."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "prolog-v60",
+      "title": "Brew guides V60",
+      "url": "https://www.prologcoffee.com/pages/brew-guides",
+      "publisher": "Prolog Coffee",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "V60",
+        "applicability": "roaster generic starting recipe"
+      },
+      "facts": {
+        "doseG": 15,
+        "yieldG": 250,
+        "brewTimeSec": 150,
+        "temperatureC": 100
+      },
+      "notes": [
+        "The page calls this a starting point and says taste and coffee may require adjustment."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onyx-nestor-lasso",
+      "title": "Nestor Lasso Ombligon extraction guide",
+      "url": "https://onyxcoffeelab.com/products/colombia-nestor-lasso-ombligon-26",
+      "publisher": "Onyx Coffee Lab",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "coffee": "Colombia Nestor Lasso Ombligon",
+        "applicability": "bean-specific recipe"
+      },
+      "facts": {
+        "doseG": 19,
+        "yieldG": 43,
+        "brewTimeSec": 24,
+        "origin": "Colombia",
+        "producer": "Nestor Lasso",
+        "farm": "Finca El Diviso",
+        "variety": "Ombligon",
+        "tastingNotes": [
+          "ripe raspberry",
+          "red cherry",
+          "boysenberry ice cream"
+        ]
+      },
+      "notes": [
+        "The page also publishes a separate 20g/280g Origami recipe; this entry is espresso only. Roast level is not inferred."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onyx-benjamin-paz",
+      "title": "Benjamin Paz SL28 extraction guide",
+      "url": "https://onyxcoffeelab.com/en-int/products/honduras-benjamin-paz-sl28-26",
+      "publisher": "Onyx Coffee Lab",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "coffee": "Honduras Benjamin Paz SL28",
+        "applicability": "bean-specific recipe"
+      },
+      "facts": {
+        "doseG": 19,
+        "yieldG": 45,
+        "brewTimeSec": 25,
+        "origin": "Honduras",
+        "producer": "Benjamin Paz",
+        "variety": "SL28"
+      },
+      "notes": [
+        "The page's espresso recipe is listed separately from the filter recipe. Processing, roast level and tasting notes are not inferred when not explicit in the reviewed extract."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onyx-el-jardin",
+      "title": "El Jardin Gesha extraction guide",
+      "url": "https://onyxcoffeelab.com/products/colombia-el-jardin-gesha",
+      "publisher": "Onyx Coffee Lab",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "coffee": "Colombia El Jardin Gesha",
+        "applicability": "bean-specific recipe"
+      },
+      "facts": {
+        "doseG": 19,
+        "yieldG": 50,
+        "brewTimeSec": 23,
+        "origin": "Colombia",
+        "variety": "Gesha"
+      },
+      "notes": [
+        "The same page provides a separate 15g/240g filter recipe. Roast level, process and tasting notes are not inferred from the product title."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onyx-las-lajas",
+      "title": "Las Lajas Natural extraction guide",
+      "url": "https://onyxcoffeelab.com/products/costa-rica-las-lajas-natural-25",
+      "publisher": "Onyx Coffee Lab",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "espresso",
+        "coffee": "Costa Rica Las Lajas Natural",
+        "applicability": "bean-specific recipe"
+      },
+      "facts": {
+        "doseG": 18,
+        "yieldG": 42,
+        "brewTimeSec": 22,
+        "origin": "Costa Rica",
+        "process": "natural",
+        "variety": "Catuai",
+        "tastingNotes": [
+          "grape",
+          "semi-sweet dark chocolate",
+          "fresh berries",
+          "vanilla",
+          "rich chocolate"
+        ]
+      },
+      "notes": [
+        "The espresso recipe is accompanied by a distinct filter recipe; the product page describes the lot as naturally processed."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "mahlkoenig-e64-manual",
+      "title": "E64 WS Espresso Home software manual",
+      "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Software_Manual.pdf",
+      "publisher": "Mahlkönig",
+      "kind": "manufacturer",
+      "scope": {
+        "brewMethod": "espresso",
+        "grinderModel": "E64 WS",
+        "applicability": "model-specific guided workflow"
+      },
+      "facts": {
+        "workflow": "guided roast, dose, beverage-weight, brew-time and initial-grind-degree screens"
+      },
+      "notes": [
+        "The reviewed PDF was not reachable during the independent audit; no numeric example values are treated as verified facts here. The workflow description is retained for context only and does not expose a calibration equation."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "df64-clive",
+      "title": "DF64 Single Dose user manual",
+      "url": "https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual",
+      "publisher": "Clive Coffee",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "DF64",
+        "applicability": "model/generation-dependent mechanical guidance"
+      },
+      "facts": {
+        "dialDirection": "clockwise=finer; counter-clockwise=coarser"
+      },
+      "notes": [
+        "The page says the collar is sensitive and that the stock sticker may be inaccurate after SSP burr installation."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "baratza-encore-esp",
+      "title": "Encore ESP specifications",
+      "url": "https://www.baratza.com/en-dk/product/zcg495",
+      "publisher": "Baratza",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "Encore ESP",
+        "burrSKU": "M2 conical steel",
+        "applicability": "model-specific mechanical specification"
+      },
+      "facts": {
+        "burrDiameterMm": 40,
+        "rpm": 550,
+        "espressoSettingRange": {
+          "min": 1,
+          "max": 20
+        },
+        "filterSettingRange": {
+          "min": 21,
+          "max": 40
+        }
+      },
+      "notes": [
+        "Settings are dial coordinates, not micrometres or particle-size guarantees."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "timemore-sculptor",
+      "title": "Sculptor series and burrs",
+      "url": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
+      "publisher": "Timemore",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "Sculptor 064S/078S",
+        "applicability": "model and burr-variant specification"
+      },
+      "facts": {
+        "burrVariants": [
+          "064S flat",
+          "078S flat",
+          "078 turbo"
+        ],
+        "rpmControl": "variable",
+        "064SUse": "pour-over and espresso",
+        "078SUse": "pour-over and espresso",
+        "078TurboUse": "pour-over focused"
+      },
+      "notes": [
+        "The current product pages describe these three relevant variants; they do not support treating them as four equivalent interchangeable configurations and do not give a universal dial-to-particle-size conversion."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "niche-zero-calibration",
+      "title": "Niche Zero calibration",
+      "url": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-calibrate-your-grinder-for-optimum-performance",
+      "publisher": "Niche Coffee",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "Niche Zero",
+        "burrSKU": "63mm conical",
+        "applicability": "model-specific zero procedure"
+      },
+      "facts": {
+        "burrZero": "burr touch",
+        "postCleaningPurgeG": 18
+      },
+      "notes": [
+        "The source recommends recalibration after disassembly/cleaning; purge amount is a preparation step, not a dial conversion."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "option-o-lagom-01",
+      "title": "LAGOM 01 guide and competition specification",
+      "url": "https://www.option-o.com/wbrc",
+      "publisher": "Option-O",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "LAGOM 01",
+        "burrSKU": "Mizen 102OM flat in competition configuration",
+        "applicability": "configuration-specific mechanical specification"
+      },
+      "facts": {
+        "burrTravelMicrometresPerClick": 7.5,
+        "zeroToleranceMicroTicks": 2,
+        "rpmRange": {
+          "min": 200,
+          "max": 1700
+        }
+      },
+      "notes": [
+        "Burr-gap movement is not particle size or a cross-model conversion."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "fiorenzato-adapt",
+      "title": "ADAPT connection system",
+      "url": "https://www.fiorenzato.com/en/adapt/",
+      "publisher": "Fiorenzato",
+      "kind": "manufacturer",
+      "scope": {
+        "system": "ADAPT",
+        "applicability": "manufacturer product behavior claim"
+      },
+      "facts": {
+        "missesBeforeSuggestion": 3
+      },
+      "notes": [
+        "The manufacturer describes a wired flow-meter connection and a suggestion after three extractions miss the recipe; coefficients are not published."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "maro-model-1",
+      "title": "MARO Model 1 product features",
+      "url": "https://maro.coffee/en/products/maro-model-1",
+      "publisher": "MARO Coffee Engineering",
+      "kind": "manufacturer",
+      "scope": {
+        "system": "MARO Model 1",
+        "applicability": "manufacturer product feature claim"
+      },
+      "facts": {
+        "features": [
+          "Smart Profiler",
+          "Grind Analyzer",
+          "Coffee Diary"
+        ]
+      },
+      "notes": [
+        "The reviewed product page does not publish a Brew Companion feature, recommendation equations, grinder calibration units or an API. MARO HOME is catalogued separately only when a directly verified source supports a feature."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-physics-uneven",
+      "title": "Uneven Extraction in Coffee Brewing",
+      "url": "https://arxiv.org/abs/2206.12373",
+      "publisher": "arXiv research preprint",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "physical model and experiment context"
+      },
+      "facts": {
+        "finding": "below a critical grind size, extraction can decrease as grind becomes finer"
+      },
+      "notes": [
+        "Supports a non-monotonic caution; not a grinder calibration dataset. License/reuse terms must be checked at the repository before redistribution."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-physics-flow-temperature",
+      "title": "Influence of flow rate, particle size, and temperature on espresso extraction kinetics",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10418593/",
+      "publisher": "Peer-reviewed open-access research",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "controlled experimental evidence"
+      },
+      "facts": {
+        "finding": "flow influence is stronger at finer grind and higher temperature",
+        "license": "CC BY 4.0"
+      },
+      "notes": [
+        "Particle size distribution and flow must remain context variables; source is not a dial-coordinate lookup."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-physics-psd-compression",
+      "title": "Influence of particle size distribution on espresso extraction via packed bed compression",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0260877422003557",
+      "publisher": "Journal of Food Engineering",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "peer-reviewed packed-bed model and experiment"
+      },
+      "facts": {
+        "finding": "particle-size distribution affects bed compression, porosity and permeability"
+      },
+      "notes": [
+        "Abstract-level source review; full-text reuse rights were not established."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-physics-psd-nonmonotonic",
+      "title": "Espresso coffee design based on non-monotonic granulometric distribution of aromatic profile",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31285015/",
+      "publisher": "Food Research International",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "peer-reviewed particle-distribution evidence"
+      },
+      "facts": {
+        "finding": "particle-size distribution changes espresso aromatic profile non-monotonically"
+      },
+      "notes": [
+        "Use as a caution against assuming a single monotone grind-response curve; full-text reuse rights were not established."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-physics-particle-size",
+      "title": "Optimization of espresso extraction through variation of particle sizes",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31982858/",
+      "publisher": "Food Chemistry",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "peer-reviewed particle-size and basket experiment"
+      },
+      "facts": {
+        "finding": "particle size and filter basket design affect extraction chemistry"
+      },
+      "notes": [
+        "The source does not provide a grinder dial conversion; full-text reuse rights were not established."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onezpresso-xpro",
+      "title": "X-Pro user manual",
+      "url": "https://1zpresso.coffee/manual-xpro-en/",
+      "publisher": "1Zpresso",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "X-Pro",
+        "applicability": "model-specific mechanical travel"
+      },
+      "facts": {
+        "clicksPerRotation": 60,
+        "burrTravelMicrometresPerClick": 12.5
+      },
+      "notes": [
+        "This is burr movement from the manufacturer manual, not particle size or an extraction response."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onezpresso-jmax",
+      "title": "J-Max user manual",
+      "url": "https://1zpresso.coffee/wp-content/uploads/2021/08/J-Max-User-Manual-20210819.pdf",
+      "publisher": "1Zpresso",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "J-Max",
+        "applicability": "model-specific mechanical travel"
+      },
+      "facts": {
+        "burrTravelMicrometresPerClick": 8.8
+      },
+      "notes": [
+        "The manual's click travel is mechanical burr spacing; it is not a particle-size claim."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onezpresso-k-series",
+      "title": "K series specifications",
+      "url": "https://1zpresso.coffee/k/",
+      "publisher": "1Zpresso",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "K series",
+        "applicability": "model-specific mechanical travel"
+      },
+      "facts": {
+        "clicksPerRotation": 90,
+        "burrTravelMicrometresPerClick": 22
+      },
+      "notes": [
+        "The published click value is mechanical movement, not particle size."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "ssp-64-hu-mp-df",
+      "title": "64mm SSP Red Speed burrs",
+      "url": "https://dfgrinders.ca/products/64mm-ssp-red-speed-burrs",
+      "publisher": "DF Grinders",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "64mm flat-burr grinders including DF64",
+        "burrSKU": "SSP HU/MP",
+        "applicability": "vendor brew-intent description"
+      },
+      "facts": {
+        "HUUse": "espresso-focused",
+        "MPUse": "pour-over first; also espresso, French press and AeroPress"
+      },
+      "notes": [
+        "Vendor descriptions do not provide a DF64 dial offset, particle distribution or zero compatibility table."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "ssp-64-mp-ode",
+      "title": "SSP 64mm MP brew burrs",
+      "url": "https://fellowproducts.com/products/ssp-red-speed-coated-64mm-flat-brew-burrs",
+      "publisher": "Fellow",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "Fellow Ode Brew Grinder",
+        "burrSKU": "SSP Red Speed 64mm MP",
+        "applicability": "Ode-specific comparison"
+      },
+      "facts": {
+        "relativeParticleSizeMicrometresVsStockOde": -200
+      },
+      "notes": [
+        "The comparison is for referenced Ode drip settings and must not be applied to DF64 collar readings."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "option-o-p64-calibration",
+      "title": "LAGOM P64 zero and burr calibration guide",
+      "url": "https://www.option-o.com/lagomp64userguide",
+      "publisher": "Option-O",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "LAGOM P64",
+        "applicability": "generation and burr-swap calibration"
+      },
+      "facts": {
+        "recalibrateAfterBurrReplacement": true
+      },
+      "notes": [
+        "The guide distinguishes routine cleaning from zero calibration and says production-period calibration differs."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "df64-running-adjustment",
+      "title": "DF64 adjustment FAQ",
+      "url": "https://df64grinders.com/faqs",
+      "publisher": "DF Grinders",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "DF64",
+        "applicability": "model-specific operating guidance"
+      },
+      "facts": {
+        "adjustWhileBurrsSpinning": true
+      },
+      "notes": [
+        "The FAQ recommends incremental adjustment while running; purge/settling behavior is plugin policy, not a published numeric constant."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "df64-gen2-manual",
+      "title": "DF64 Gen 2 instruction manual",
+      "url": "https://manuals.plus/asin/B0DPRWGP6L.pdf",
+      "publisher": "Turin/DF64 manual mirror",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "DF64 Gen 2",
+        "applicability": "generation-specific maintenance"
+      },
+      "facts": {
+        "burrDiameterMm": 64,
+        "burrReplacementAccess": "remove collar to access top burr"
+      },
+      "notes": [
+        "The reviewed manual does not publish collar pitch or travel per mark."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-ad-astra-psd-tool",
+      "title": "Application to measure grind size distribution",
+      "url": "https://github.com/jgagneastro/coffeegrindsize",
+      "publisher": "Coffee Ad Astra / Jonathan Gagné",
+      "kind": "research",
+      "scope": {
+        "tool": "image-based PSD analyzer",
+        "applicability": "measurement workflow, not calibration constants"
+      },
+      "facts": {
+        "measurement": "image-based particle-size distribution",
+        "platforms": [
+          "macOS",
+          "Unix",
+          "Windows"
+        ]
+      },
+      "notes": [
+        "Use as a measurement aid; do not copy code or graphics into the plugin without checking repository license."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "coffee-ad-astra-300-psd",
+      "title": "What I learned from analyzing 300 particle size distributions",
+      "url": "https://coffeeadastra.com/2023/09/21/what-i-learned-from-analyzing-300-particle-size-distributions-for-24-espresso-grinders/",
+      "publisher": "Coffee Ad Astra",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "espresso",
+        "applicability": "published empirical PSD observations"
+      },
+      "facts": {
+        "sampleCount": 300,
+        "grinderCount": 24
+      },
+      "notes": [
+        "Empirical PSD observations are not a universal dial or extraction model; reuse is limited to linked factual summary."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "barista-hustle-coffee-compass",
+      "title": "Coffee Compass",
+      "url": "https://www.baristahustle.com/coffee-compass/",
+      "publisher": "Barista Hustle",
+      "kind": "research",
+      "scope": {
+        "brewMethod": "filter coffee",
+        "applicability": "taste-guidance workflow"
+      },
+      "facts": {
+        "guidance": [
+          "extract more: finer and/or longer",
+          "extract less: coarser and/or shorter",
+          "change ratio for strength"
+        ]
+      },
+      "notes": [
+        "The publisher explicitly scopes it to filter percolation and immersion, not espresso."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "beanconqueror-open-source",
+      "title": "Beanconqueror coffee logging and device integrations",
+      "url": "https://github.com/graphefruit/Beanconqueror",
+      "publisher": "Beanconqueror",
+      "kind": "research",
+      "scope": {
+        "tool": "open-source brew logbook",
+        "applicability": "data model and integration precedent"
+      },
+      "facts": {
+        "license": "GPL-3.0",
+        "integrations": [
+          "Decent Scale",
+          "Acaia",
+          "Felicita",
+          "Hiroia Jimmy",
+          "Eureka Precisa",
+          "Skale2",
+          "Smart Espresso Profiler",
+          "Pressensor"
+        ],
+        "trackedFields": [
+          "grind size",
+          "grind amount",
+          "brew time",
+          "first drip"
+        ]
+      },
+      "notes": [
+        "Use as an integration/data-model reference; no recommendation coefficients are imported."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "lacabra-water-resting",
+      "title": "Water and coffee: resting and water guidance",
+      "url": "https://us.lacabra.com/pages/water",
+      "publisher": "La Cabra",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "coffee brewing; contextual guidance",
+        "applicability": "roaster guidance, not grinder calibration"
+      },
+      "facts": {
+        "minimumRestDays": 10,
+        "wellRestedBeyondWeeks": 6,
+        "freshCoffeeGuidance": "lower temperature and shorter contact time",
+        "wellRestedGuidance": "higher temperature and longer contact can be tolerated"
+      },
+      "notes": [
+        "The source discusses lightly roasted dense coffees, degassing and water chemistry; it does not specify a universal espresso setting."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "onyx-brew-guides-index",
+      "title": "Brew guides index with origin/process/roast filters",
+      "url": "https://onyxcoffeelab.com/pages/brew-guides",
+      "publisher": "Onyx Coffee Lab",
+      "kind": "roaster",
+      "scope": {
+        "brewMethod": "filter and espresso",
+        "applicability": "roaster's coffee-specific guide index"
+      },
+      "facts": {
+        "filters": [
+          "coffee name",
+          "origin",
+          "process",
+          "roast level"
+        ],
+        "exampleEspresso": {
+          "doseG": 19,
+          "yieldG": 47,
+          "brewTimeSec": 23
+        }
+      },
+      "notes": [
+        "The index demonstrates that Onyx scopes recipes to named coffees and roast/process metadata; the example is not a universal target."
+      ],
+      "reuse": "linked factual summary; no copied proprietary datasets"
+    }
+  ]
+}

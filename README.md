@@ -30,29 +30,56 @@ workflow, profile or grinder command is sent.
 Install a ZIP artifact from a green GitHub Actions run, or enter this repository URL
 in Decaid's plugin installer. Enable the plugin, review its current-setup settings,
 and open `http://127.0.0.1:8080/api/v1/plugins/assisted-dialin.reaplugin/ui`.
-Use the `shots` JSON endpoint alongside the host history view to find shot IDs;
-the HTML form records a good mark and optional note for a shot ID. Enter submits
+Use **Load recent shots** to choose a saved brew. The HTML form records a good
+mark, taste feedback and optional notes. Enter submits
 "Mark good"; the second button removes a mark. The recommendation button displays
 a source shot, recorded setting, comparison warnings or an explicit abstention.
-No plugin launcher tile is provided yet; upstream Streamline #99 tracks navigation.
+The accompanying Streamline integration adds history actions for analysis and
+feedback, current coffee-batch selection through Decaid's beans API, and explicit
+auxiliary bean-scale capture. Until that Streamline change is merged, open the
+plugin through the existing Extensions settings or its `ui` URL.
 
-This plugin uses the host API at loopback port 8080. Custom API ports,
-physical hardware and a native/browser UI smoke are not validated by this suite.
+Streamline can pass a selected `shotId`, `action=analyze|feedback`, and a
+same-host, same-protocol `return` URL. The UI also accepts `returnTo` for the
+generic launcher proposal in Streamline #99. It fetches and analyses the saved
+shot; current catalog data never silently fills historical context.
+
+An optional `measuredBeanDose` feedback record contains an explicitly confirmed
+auxiliary scale observation: device ID, role, purpose, grams and timestamps.
+This is client-reported evidence, not a host-attested measurement. The UI asks
+you to confirm that the weighing belongs to the selected shot. It preserves
+recipe dose separately and displays measured beverage-to-bean ratio only when
+both measured masses are available. It does not rewrite the original shot.
+
+This plugin uses the host API at loopback port 8080. Custom API ports and
+physical hardware remain unvalidated. Browser checks use synthetic local records;
+the real QuickJS fixtures verify the host/API/storage boundary.
 Missing historic bean/grinder/calibration information cannot be reconstructed by
 entering today's settings. RPM or observed configuration is not added to shots.
 
 ## Rich suggestions
 
 `GET /api/v1/plugins/assisted-dialin.reaplugin/suggestion` evaluates a small,
-bounded evidence set. It requires a complete current comparison context, uses
-up to six recent shots with saved feedback no older than `EvidenceMaxAgeDays` (14 by
-default), and abstains when the context, setting unit, calibration epoch or
-time/taste evidence is missing or contradictory. An explicitly supplied operator `brewTimeSec` takes precedence; otherwise the plugin fetches the full shot and derives elapsed time from saved machine timestamps. Each source is disclosed. Suggestions report the matched evidence, direction,
-confidence, reasons and whether a numeric proposal was withheld.
+bounded evidence set. An established suggestion uses at least three recent,
+comparable shots; for a new bean, one or two fully comparable shots can yield a
+clearly labelled provisional first-shot direction. The provisional path never
+claims a learned slope and requires current bean catalog context. The endpoint
+uses up to six recent shots with saved feedback no older than
+`EvidenceMaxAgeDays` (14 by default), and abstains when the context, setting
+unit, calibration epoch or time/taste evidence is missing or contradictory. An
+explicitly supplied operator `brewTimeSec` takes precedence; otherwise the
+plugin fetches the full shot and derives elapsed time from saved machine
+timestamps. Each source is disclosed. Suggestions also expose matched reviewed
+reference facts and URLs as contextual provenance only; those references never
+alter the direction or numeric proposal. Suggestions report the matched
+evidence, direction, confidence, reasons and whether a numeric proposal was
+withheld.
 
 Numeric proposals require `CurrentSetting`, `SettingUnit`, a positive
 `StepSize`, and an owner-confirmed `NumericFinerDelta` of `-1` or `+1`.
 `MinSetting` and `MaxSetting` are applied only when they differ and are valid.
+Provisional numeric suggestions additionally require explicit ordered bounds;
+without them, the first-shot result can offer a direction but withholds a number.
 The result remains an operator-confirmation prompt and never becomes a device
 command. `confirmedContext` is an explicit per-shot historical confirmation. It only fills fields missing from that saved shot, after fetching and checking the full record; any conflict is rejected. Current plugin settings never fill historical fields.
 
@@ -88,6 +115,38 @@ Example feedback body:
 Tracking errors are descriptive evidence. The plugin does not claim pressure/flow curves alone prove channeling, extraction chemistry or an optimal grind. Missing metrics remain unavailable and do not become fabricated readings.
 
 ## Research replay
+
+### Try the interactive simulator
+
+Open the [Dial-in lab](https://maxrink.github.io/decaid-assisted-dialin-plugin/simulator/)
+to plan shots, compare the shipped algorithms, inspect their memory, and save
+or import an experiment. It loads this repository's actual `plugin.js`; the
+research equations and assisted suggestion policy are not separately reimplemented.
+The brew model is deliberately synthetic. A simulated bean name or grinder
+label does not establish a real grind setting or a measured extraction curve.
+
+The [reviewed reference catalog](docs/REFERENCE_SOURCES.md) records source links,
+review dates, recipes, bean descriptors, burr specifications, calibration
+instructions, and research findings. The simulator lets you inspect those facts
+and explicitly adopt an espresso recipe as a starting point. Filter recipes
+remain available for reference and do not become espresso targets. Published
+roaster tasting notes describe the coffee; your post-brew extraction assessment
+remains separate. Missing data stays unknown.
+
+Run `python3 scripts/build-simulator.py` to stage the static site in `.site`.
+Serve that directory with a local HTTP server to preview it. GitHub Pages deploys
+only after the full CI run succeeds for the current main commit.
+
+For a plain-language comparison of GBS1–GBS4, DdEff, effective-DD and
+grind-time helpers, the E64/E65/E80 wizard boundary, and the separate manual
+DF54/DF64 heuristics, see the [GBS algorithm guide](docs/GBS_GUIDE.md).
+
+Start with the guide's everyday explanations, then view the
+[algorithm graphs and pass-by-pass examples](docs/algorithm-plots/README.md).
+The examples run the actual plugin calculations with clearly labeled synthetic
+inputs. The [grinder and burr research](docs/GRINDER_RESEARCH.md) separates
+published calibration facts from missing measurements and compares MARO and
+other assisted dial-in systems. These guides and graphs are included in the ZIP.
 
 `POST /api/v1/plugins/assisted-dialin.reaplugin/research` is an offline replay
 boundary for the algorithms recovered in
@@ -155,6 +214,8 @@ npm test
 npm run package
 ```
 
+CI also regenerates graph data from the actual implementation, compares every
+committed pass with the replay, renders Matplotlib figures, and uploads them.
 CI runs Node 22/24/26 behavioral and controlled HTML script tests, syntax and ZIP
 layout checks, the actual host manifest/package parser, and a real QuickJS
 PluginManager fixture with loopback API, feedback writes, reload persistence,

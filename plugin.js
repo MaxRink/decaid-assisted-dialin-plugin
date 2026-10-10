@@ -1017,8 +1017,49 @@ function createResearchAlgorithms() {
     },
   };
 }
-function createPlugin(host) {
+/* GENERATED REFERENCE CATALOG START */
+function createReferenceCatalog() {
   "use strict";
+  const catalog = {"reviewedAt":"2026-10-11","schemaVersion":1,"sources":[{"facts":{"brewRatio":"1:2","brewTimeSec":{"max":32,"min":28,"unit":"s"},"components":[{"name":"Altamira de Chirripó","origin":"Costa Rica","process":"white honey","roastLevel":"medium","variety":"Catuaí"},{"name":"El Meridiano","origin":"Colombia","process":"washed","roastLevel":"medium","variety":["Caturra","Colombia","Typica"]}],"doseG":19,"tastingNotes":["red apple","toffee","chocolate","hazelnut"],"temperatureC":{"max":94.5,"min":94,"unit":"C"}},"id":"squaremile-red-brick","kind":"roaster","notes":["The page says this is a starting point and machine-dependent; component percentages can change."],"publisher":"Square Mile Coffee Roasters","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"bean-specific starting recipe","brewMethod":"espresso","coffee":"Red Brick","equipment":"VA388 Black Eagle; VST 20g basket"},"title":"Red Brick espresso recipe","url":"https://shop.squaremilecoffee.com/products/red-brick"},{"facts":{"brewTimeSec":{"max":35,"min":25,"unit":"s"},"doseG":{"max":20,"min":19,"unit":"g"},"temperatureC":{"max":94,"min":93,"unit":"C"},"yieldG":{"max":45,"min":42,"unit":"g"}},"id":"tim-wendelboe-espresso","kind":"roaster","notes":["The page allows up to 50g for a more diluted cup and recommends drinking below 60C."],"publisher":"Tim Wendelboe","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic starting recipe","brewMethod":"espresso","equipment":"VST 20g basket"},"title":"How we make espresso","url":"https://timwendelboe.no/pages/how-we-make-espresso-espresso-tips"},{"facts":{"brewRatio":"1:2","brewTimeSec":28,"doseG":18,"yieldG":36},"id":"counter-culture-espresso","kind":"roaster","notes":["A general baseline; no temperature or grinder coordinate is prescribed."],"publisher":"Counter Culture Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic baseline","brewMethod":"espresso"},"title":"Guide to espresso","url":"https://counterculturecoffee.com/blogs/counter-culture-coffee/guide-to-espresso"},{"facts":{"brewRatio":{"max":2.5,"min":1.5,"unit":"ratio"},"brewTimeSec":{"max":35,"min":25,"unit":"s"},"doseG":18,"yieldG":36},"id":"counter-culture-quick-espresso","kind":"roaster","notes":["The page suggests finer below 25s and coarser above 35s as a starting adjustment; taste can override time."],"publisher":"Counter Culture Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic adjustment guide","brewMethod":"espresso"},"title":"Quick and easy espresso","url":"https://counterculturecoffee.com/pages/quick-easy-espresso"},{"facts":{"brewTimeSec":{"max":32,"min":28,"unit":"s"},"doseG":20,"grindDescription":"extra-fine","yieldG":40},"id":"blue-bottle-long-pull","kind":"roaster","notes":["No temperature is specified on the reviewed page."],"publisher":"Blue Bottle Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"method-specific starting recipe","brewMethod":"espresso","coffee":"single origin"},"title":"Single origin long-pull espresso","url":"https://bluebottlecoffee.com/us/eng/brew-guides/single-origin-espresso"},{"facts":{"brewTimeSec":{"max":210,"min":150,"unit":"s"},"doseG":{"max":27,"min":20,"unit":"g"},"temperatureC":{"max":96.1,"min":90.6,"unit":"C"},"waterG":350},"id":"blue-bottle-pourover","kind":"roaster","notes":["The page says darker roasts suit the cooler end and lighter roasts the hotter end; it gives no grinder coordinate."],"publisher":"Blue Bottle Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic method","brewMethod":"pour-over"},"title":"Pour-over guide","url":"https://bluebottlecoffee.com/us/eng/brew-guides/pour-over"},{"facts":{"brewTimeSec":{"max":360,"min":240,"unit":"s"},"doseG":59,"grindDescription":"medium-coarse","waterAmount":"6 cups (half pot)"},"id":"blue-bottle-moccamaster","kind":"roaster","notes":["The source describes a half-pot/6-cup dose. It also mentions 98g for a full pot with 10 cups; no gram-to-cup conversion is inferred."],"publisher":"Blue Bottle Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"equipment-specific batch recipe","brewMethod":"automatic filter","equipment":"Technivorm Moccamaster KBGV"},"title":"Technivorm Moccamaster guide","url":"https://bluebottlecoffee.com/us/eng/brew-guides/coffee-maker"},{"facts":{"brewTimeSec":{"max":22,"min":18,"unit":"s"},"doseG":18,"yieldG":50},"id":"lacabra-espresso","kind":"roaster","notes":["The page explicitly says its outline need not be followed exactly and discusses water chemistry."],"publisher":"La Cabra","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic starting recipe","brewMethod":"espresso"},"title":"Brew guides","url":"https://lacabra.com/pages/brewing"},{"facts":{"doseG":15,"pourScheduleSec":[0,45,90],"waterG":250},"id":"lacabra-v60","kind":"roaster","notes":["The source does not prescribe a total brew time for this V60 outline."],"publisher":"La Cabra","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic method","brewMethod":"V60"},"title":"Brew guides V60","url":"https://lacabra.com/pages/brewing"},{"facts":{"brewTimeSec":{"max":23,"min":12,"unit":"s"},"doseG":18.5,"temperatureC":93,"yieldG":{"max":45,"min":40,"unit":"g"}},"id":"prolog-espresso","kind":"roaster","notes":["The source says its bar often uses 12–14s and equipment/water/technique can make a slower shot better."],"publisher":"Prolog Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic starting recipe","brewMethod":"espresso"},"title":"Brew guides","url":"https://www.prologcoffee.com/pages/brew-guides"},{"facts":{"brewTimeSec":150,"doseG":15,"temperatureC":100,"yieldG":250},"id":"prolog-v60","kind":"roaster","notes":["The page calls this a starting point and says taste and coffee may require adjustment."],"publisher":"Prolog Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster generic starting recipe","brewMethod":"V60"},"title":"Brew guides V60","url":"https://www.prologcoffee.com/pages/brew-guides"},{"facts":{"brewTimeSec":24,"doseG":19,"farm":"Finca El Diviso","origin":"Colombia","producer":"Nestor Lasso","tastingNotes":["ripe raspberry","red cherry","boysenberry ice cream"],"variety":"Ombligon","yieldG":43},"id":"onyx-nestor-lasso","kind":"roaster","notes":["The page also publishes a separate 20g/280g Origami recipe; this entry is espresso only. Roast level is not inferred."],"publisher":"Onyx Coffee Lab","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"bean-specific recipe","brewMethod":"espresso","coffee":"Colombia Nestor Lasso Ombligon"},"title":"Nestor Lasso Ombligon extraction guide","url":"https://onyxcoffeelab.com/products/colombia-nestor-lasso-ombligon-26"},{"facts":{"brewTimeSec":25,"doseG":19,"origin":"Honduras","producer":"Benjamin Paz","variety":"SL28","yieldG":45},"id":"onyx-benjamin-paz","kind":"roaster","notes":["The page's espresso recipe is listed separately from the filter recipe. Processing, roast level and tasting notes are not inferred when not explicit in the reviewed extract."],"publisher":"Onyx Coffee Lab","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"bean-specific recipe","brewMethod":"espresso","coffee":"Honduras Benjamin Paz SL28"},"title":"Benjamin Paz SL28 extraction guide","url":"https://onyxcoffeelab.com/en-int/products/honduras-benjamin-paz-sl28-26"},{"facts":{"brewTimeSec":23,"doseG":19,"origin":"Colombia","variety":"Gesha","yieldG":50},"id":"onyx-el-jardin","kind":"roaster","notes":["The same page provides a separate 15g/240g filter recipe. Roast level, process and tasting notes are not inferred from the product title."],"publisher":"Onyx Coffee Lab","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"bean-specific recipe","brewMethod":"espresso","coffee":"Colombia El Jardin Gesha"},"title":"El Jardin Gesha extraction guide","url":"https://onyxcoffeelab.com/products/colombia-el-jardin-gesha"},{"facts":{"brewTimeSec":22,"doseG":18,"origin":"Costa Rica","process":"natural","tastingNotes":["grape","semi-sweet dark chocolate","fresh berries","vanilla","rich chocolate"],"variety":"Catuai","yieldG":42},"id":"onyx-las-lajas","kind":"roaster","notes":["The espresso recipe is accompanied by a distinct filter recipe; the product page describes the lot as naturally processed."],"publisher":"Onyx Coffee Lab","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"bean-specific recipe","brewMethod":"espresso","coffee":"Costa Rica Las Lajas Natural"},"title":"Las Lajas Natural extraction guide","url":"https://onyxcoffeelab.com/products/costa-rica-las-lajas-natural-25"},{"facts":{"workflow":"guided roast, dose, beverage-weight, brew-time and initial-grind-degree screens"},"id":"mahlkoenig-e64-manual","kind":"manufacturer","notes":["The reviewed PDF was not reachable during the independent audit; no numeric example values are treated as verified facts here. The workflow description is retained for context only and does not expose a calibration equation."],"publisher":"Mahlkönig","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific guided workflow","brewMethod":"espresso","grinderModel":"E64 WS"},"title":"E64 WS Espresso Home software manual","url":"https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Software_Manual.pdf"},{"facts":{"dialDirection":"clockwise=finer; counter-clockwise=coarser"},"id":"df64-clive","kind":"manufacturer","notes":["The page says the collar is sensitive and that the stock sticker may be inaccurate after SSP burr installation."],"publisher":"Clive Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model/generation-dependent mechanical guidance","grinderModel":"DF64"},"title":"DF64 Single Dose user manual","url":"https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual"},{"facts":{"burrDiameterMm":40,"espressoSettingRange":{"max":20,"min":1},"filterSettingRange":{"max":40,"min":21},"rpm":550},"id":"baratza-encore-esp","kind":"manufacturer","notes":["Settings are dial coordinates, not micrometres or particle-size guarantees."],"publisher":"Baratza","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific mechanical specification","burrSKU":"M2 conical steel","grinderModel":"Encore ESP"},"title":"Encore ESP specifications","url":"https://www.baratza.com/en-dk/product/zcg495"},{"facts":{"064SUse":"pour-over and espresso","078SUse":"pour-over and espresso","078TurboUse":"pour-over focused","burrVariants":["064S flat","078S flat","078 turbo"],"rpmControl":"variable"},"id":"timemore-sculptor","kind":"manufacturer","notes":["The current product pages describe these three relevant variants; they do not support treating them as four equivalent interchangeable configurations and do not give a universal dial-to-particle-size conversion."],"publisher":"Timemore","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model and burr-variant specification","grinderModel":"Sculptor 064S/078S"},"title":"Sculptor series and burrs","url":"https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series"},{"facts":{"burrZero":"burr touch","postCleaningPurgeG":18},"id":"niche-zero-calibration","kind":"manufacturer","notes":["The source recommends recalibration after disassembly/cleaning; purge amount is a preparation step, not a dial conversion."],"publisher":"Niche Coffee","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific zero procedure","burrSKU":"63mm conical","grinderModel":"Niche Zero"},"title":"Niche Zero calibration","url":"https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-calibrate-your-grinder-for-optimum-performance"},{"facts":{"burrTravelMicrometresPerClick":7.5,"rpmRange":{"max":1700,"min":200},"zeroToleranceMicroTicks":2},"id":"option-o-lagom-01","kind":"manufacturer","notes":["Burr-gap movement is not particle size or a cross-model conversion."],"publisher":"Option-O","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"configuration-specific mechanical specification","burrSKU":"Mizen 102OM flat in competition configuration","grinderModel":"LAGOM 01"},"title":"LAGOM 01 guide and competition specification","url":"https://www.option-o.com/wbrc"},{"facts":{"missesBeforeSuggestion":3},"id":"fiorenzato-adapt","kind":"manufacturer","notes":["The manufacturer describes a wired flow-meter connection and a suggestion after three extractions miss the recipe; coefficients are not published."],"publisher":"Fiorenzato","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"manufacturer product behavior claim","system":"ADAPT"},"title":"ADAPT connection system","url":"https://www.fiorenzato.com/en/adapt/"},{"facts":{"features":["Smart Profiler","Grind Analyzer","Coffee Diary"]},"id":"maro-model-1","kind":"manufacturer","notes":["The reviewed product page does not publish a Brew Companion feature, recommendation equations, grinder calibration units or an API. MARO HOME is catalogued separately only when a directly verified source supports a feature."],"publisher":"MARO Coffee Engineering","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"manufacturer product feature claim","system":"MARO Model 1"},"title":"MARO Model 1 product features","url":"https://maro.coffee/en/products/maro-model-1"},{"facts":{"finding":"below a critical grind size, extraction can decrease as grind becomes finer"},"id":"coffee-physics-uneven","kind":"research","notes":["Supports a non-monotonic caution; not a grinder calibration dataset. License/reuse terms must be checked at the repository before redistribution."],"publisher":"arXiv research preprint","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"physical model and experiment context","brewMethod":"espresso"},"title":"Uneven Extraction in Coffee Brewing","url":"https://arxiv.org/abs/2206.12373"},{"facts":{"finding":"flow influence is stronger at finer grind and higher temperature","license":"CC BY 4.0"},"id":"coffee-physics-flow-temperature","kind":"research","notes":["Particle size distribution and flow must remain context variables; source is not a dial-coordinate lookup."],"publisher":"Peer-reviewed open-access research","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"controlled experimental evidence","brewMethod":"espresso"},"title":"Influence of flow rate, particle size, and temperature on espresso extraction kinetics","url":"https://pmc.ncbi.nlm.nih.gov/articles/PMC10418593/"},{"facts":{"finding":"particle-size distribution affects bed compression, porosity and permeability"},"id":"coffee-physics-psd-compression","kind":"research","notes":["Abstract-level source review; full-text reuse rights were not established."],"publisher":"Journal of Food Engineering","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"peer-reviewed packed-bed model and experiment","brewMethod":"espresso"},"title":"Influence of particle size distribution on espresso extraction via packed bed compression","url":"https://www.sciencedirect.com/science/article/abs/pii/S0260877422003557"},{"facts":{"finding":"particle-size distribution changes espresso aromatic profile non-monotonically"},"id":"coffee-physics-psd-nonmonotonic","kind":"research","notes":["Use as a caution against assuming a single monotone grind-response curve; full-text reuse rights were not established."],"publisher":"Food Research International","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"peer-reviewed particle-distribution evidence","brewMethod":"espresso"},"title":"Espresso coffee design based on non-monotonic granulometric distribution of aromatic profile","url":"https://pubmed.ncbi.nlm.nih.gov/31285015/"},{"facts":{"finding":"particle size and filter basket design affect extraction chemistry"},"id":"coffee-physics-particle-size","kind":"research","notes":["The source does not provide a grinder dial conversion; full-text reuse rights were not established."],"publisher":"Food Chemistry","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"peer-reviewed particle-size and basket experiment","brewMethod":"espresso"},"title":"Optimization of espresso extraction through variation of particle sizes","url":"https://pubmed.ncbi.nlm.nih.gov/31982858/"},{"facts":{"burrTravelMicrometresPerClick":12.5,"clicksPerRotation":60},"id":"onezpresso-xpro","kind":"manufacturer","notes":["This is burr movement from the manufacturer manual, not particle size or an extraction response."],"publisher":"1Zpresso","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific mechanical travel","grinderModel":"X-Pro"},"title":"X-Pro user manual","url":"https://1zpresso.coffee/manual-xpro-en/"},{"facts":{"burrTravelMicrometresPerClick":8.8},"id":"onezpresso-jmax","kind":"manufacturer","notes":["The manual's click travel is mechanical burr spacing; it is not a particle-size claim."],"publisher":"1Zpresso","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific mechanical travel","grinderModel":"J-Max"},"title":"J-Max user manual","url":"https://1zpresso.coffee/wp-content/uploads/2021/08/J-Max-User-Manual-20210819.pdf"},{"facts":{"burrTravelMicrometresPerClick":22,"clicksPerRotation":90},"id":"onezpresso-k-series","kind":"manufacturer","notes":["The published click value is mechanical movement, not particle size."],"publisher":"1Zpresso","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific mechanical travel","grinderModel":"K series"},"title":"K series specifications","url":"https://1zpresso.coffee/k/"},{"facts":{"HUUse":"espresso-focused","MPUse":"pour-over first; also espresso, French press and AeroPress"},"id":"ssp-64-hu-mp-df","kind":"manufacturer","notes":["Vendor descriptions do not provide a DF64 dial offset, particle distribution or zero compatibility table."],"publisher":"DF Grinders","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"vendor brew-intent description","burrSKU":"SSP HU/MP","grinderModel":"64mm flat-burr grinders including DF64"},"title":"64mm SSP Red Speed burrs","url":"https://dfgrinders.ca/products/64mm-ssp-red-speed-burrs"},{"facts":{"relativeParticleSizeMicrometresVsStockOde":-200},"id":"ssp-64-mp-ode","kind":"manufacturer","notes":["The comparison is for referenced Ode drip settings and must not be applied to DF64 collar readings."],"publisher":"Fellow","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"Ode-specific comparison","burrSKU":"SSP Red Speed 64mm MP","grinderModel":"Fellow Ode Brew Grinder"},"title":"SSP 64mm MP brew burrs","url":"https://fellowproducts.com/products/ssp-red-speed-coated-64mm-flat-brew-burrs"},{"facts":{"recalibrateAfterBurrReplacement":true},"id":"option-o-p64-calibration","kind":"manufacturer","notes":["The guide distinguishes routine cleaning from zero calibration and says production-period calibration differs."],"publisher":"Option-O","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"generation and burr-swap calibration","grinderModel":"LAGOM P64"},"title":"LAGOM P64 zero and burr calibration guide","url":"https://www.option-o.com/lagomp64userguide"},{"facts":{"adjustWhileBurrsSpinning":true},"id":"df64-running-adjustment","kind":"manufacturer","notes":["The FAQ recommends incremental adjustment while running; purge/settling behavior is plugin policy, not a published numeric constant."],"publisher":"DF Grinders","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"model-specific operating guidance","grinderModel":"DF64"},"title":"DF64 adjustment FAQ","url":"https://df64grinders.com/faqs"},{"facts":{"burrDiameterMm":64,"burrReplacementAccess":"remove collar to access top burr"},"id":"df64-gen2-manual","kind":"manufacturer","notes":["The reviewed manual does not publish collar pitch or travel per mark."],"publisher":"Turin/DF64 manual mirror","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"generation-specific maintenance","grinderModel":"DF64 Gen 2"},"title":"DF64 Gen 2 instruction manual","url":"https://manuals.plus/asin/B0DPRWGP6L.pdf"},{"facts":{"measurement":"image-based particle-size distribution","platforms":["macOS","Unix","Windows"]},"id":"coffee-ad-astra-psd-tool","kind":"research","notes":["Use as a measurement aid; do not copy code or graphics into the plugin without checking repository license."],"publisher":"Coffee Ad Astra / Jonathan Gagné","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"measurement workflow, not calibration constants","tool":"image-based PSD analyzer"},"title":"Application to measure grind size distribution","url":"https://github.com/jgagneastro/coffeegrindsize"},{"facts":{"grinderCount":24,"sampleCount":300},"id":"coffee-ad-astra-300-psd","kind":"research","notes":["Empirical PSD observations are not a universal dial or extraction model; reuse is limited to linked factual summary."],"publisher":"Coffee Ad Astra","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"published empirical PSD observations","brewMethod":"espresso"},"title":"What I learned from analyzing 300 particle size distributions","url":"https://coffeeadastra.com/2023/09/21/what-i-learned-from-analyzing-300-particle-size-distributions-for-24-espresso-grinders/"},{"facts":{"guidance":["extract more: finer and/or longer","extract less: coarser and/or shorter","change ratio for strength"]},"id":"barista-hustle-coffee-compass","kind":"research","notes":["The publisher explicitly scopes it to filter percolation and immersion, not espresso."],"publisher":"Barista Hustle","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"taste-guidance workflow","brewMethod":"filter coffee"},"title":"Coffee Compass","url":"https://www.baristahustle.com/coffee-compass/"},{"facts":{"integrations":["Decent Scale","Acaia","Felicita","Hiroia Jimmy","Eureka Precisa","Skale2","Smart Espresso Profiler","Pressensor"],"license":"GPL-3.0","trackedFields":["grind size","grind amount","brew time","first drip"]},"id":"beanconqueror-open-source","kind":"research","notes":["Use as an integration/data-model reference; no recommendation coefficients are imported."],"publisher":"Beanconqueror","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"data model and integration precedent","tool":"open-source brew logbook"},"title":"Beanconqueror coffee logging and device integrations","url":"https://github.com/graphefruit/Beanconqueror"},{"facts":{"freshCoffeeGuidance":"lower temperature and shorter contact time","minimumRestDays":10,"wellRestedBeyondWeeks":6,"wellRestedGuidance":"higher temperature and longer contact can be tolerated"},"id":"lacabra-water-resting","kind":"roaster","notes":["The source discusses lightly roasted dense coffees, degassing and water chemistry; it does not specify a universal espresso setting."],"publisher":"La Cabra","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster guidance, not grinder calibration","brewMethod":"coffee brewing; contextual guidance"},"title":"Water and coffee: resting and water guidance","url":"https://us.lacabra.com/pages/water"},{"facts":{"exampleEspresso":{"brewTimeSec":23,"doseG":19,"yieldG":47},"filters":["coffee name","origin","process","roast level"]},"id":"onyx-brew-guides-index","kind":"roaster","notes":["The index demonstrates that Onyx scopes recipes to named coffees and roast/process metadata; the example is not a universal target."],"publisher":"Onyx Coffee Lab","reuse":"linked factual summary; no copied proprietary datasets","scope":{"applicability":"roaster's coffee-specific guide index","brewMethod":"filter and espresso"},"title":"Brew guides index with origin/process/roast filters","url":"https://onyxcoffeelab.com/pages/brew-guides"}]};
+  const normalize = (value) => typeof value === "string"
+    ? value.trim().toLocaleLowerCase().replace(/[\s_-]+/g, " ")
+    : null;
+  const matches = (source, query) => {
+    const scope = source.scope || {};
+    if (source.kind === "roaster" && normalize(scope.brewMethod) !== "espresso") return false;
+    const model = normalize(query.grinderModel);
+    const burr = normalize(query.burrIdentity);
+    const bean = query.bean && typeof query.bean === "object" ? query.bean : null;
+    const roaster = normalize(bean && bean.roaster);
+    const beanName = normalize(bean && bean.name);
+    if (!model && !burr && !roaster && !beanName) return false;
+    if (burr && !model) return false;
+    const exact = (actual, wanted) => wanted == null || (typeof actual === "string" && normalize(actual) === normalize(wanted));
+    if (model && !exact(scope.grinderModel, query.grinderModel)) return false;
+    if (model && !burr && scope.burrSKU) return false;
+    if (burr && !exact(scope.burrSKU, query.burrIdentity)) return false;
+    if (bean && beanName && !roaster) return false;
+    if (roaster && !exact(source.publisher, bean.roaster)) return false;
+    if (beanName && scope.coffee && !exact(scope.coffee, bean.name)) return false;
+    return true;
+  };
+  return {
+    schemaVersion: catalog.schemaVersion,
+    reviewedAt: catalog.reviewedAt,
+    sources: catalog.sources,
+    matchReferences(query = {}) {
+      if (!query || typeof query !== "object" || Array.isArray(query)) return [];
+      return catalog.sources.filter((source) => matches(source, query));
+    },
+  };
+}
+/* GENERATED REFERENCE CATALOG END */
+
+function createPlugin(host, services) {
+  "use strict";
+  services = services || {};
+  // The simulator supplies an in-memory API; the host uses its normal fetch.
+  const apiRequest = services.fetch || fetch;
 
   const ID = "assisted-dialin.reaplugin";
   const API_BASE = "http://127.0.0.1:8080";
@@ -1146,6 +1187,84 @@ function createPlugin(host) {
     }
     return result;
   }
+  function validateMeasuredBeanDose(input) {
+    if (input == null) return null;
+    if (typeof input !== "object" || Array.isArray(input))
+      throw new Error("measuredBeanDose must be an object");
+    const allowed = new Set([
+      "deviceId",
+      "connectionRole",
+      "purpose",
+      "weightG",
+      "units",
+      "capturedAt",
+      "sampleTimestamp",
+      "userConfirmed",
+    ]);
+    const unknown = Object.keys(input).find((key) => !allowed.has(key));
+    if (unknown)
+      throw new Error(`measuredBeanDose has unsupported field: ${unknown}`);
+    const deviceId = textOrNull(input.deviceId);
+    if (!deviceId || deviceId.length > 256)
+      throw new Error("measuredBeanDose.deviceId must be a non-empty ID");
+    if (input.connectionRole !== "auxiliary")
+      throw new Error("measuredBeanDose.connectionRole must be auxiliary");
+    if (input.purpose !== "beans")
+      throw new Error("measuredBeanDose.purpose must be beans");
+    if (!(typeof input.weightG === "number" && Number.isFinite(input.weightG) && input.weightG > 0))
+      throw new Error("measuredBeanDose.weightG must be a finite positive number");
+    if (input.units !== "g")
+      throw new Error("measuredBeanDose.units must be g");
+    const iso = (value, key, nullable) => {
+      if (nullable && value === null) return null;
+      const match =
+        typeof value === "string" &&
+        value.match(
+          /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/,
+        );
+      const year = match ? Number(match[1]) : NaN;
+      const month = match ? Number(match[2]) : NaN;
+      const day = match ? Number(match[3]) : NaN;
+      const hour = match ? Number(match[4]) : NaN;
+      const minute = match ? Number(match[5]) : NaN;
+      const second = match ? Number(match[6]) : NaN;
+      const timezone = match?.[7];
+      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      const offsetMatch = timezone && timezone.match(/^[+-](\d{2}):(\d{2})$/);
+      const offsetHour = offsetMatch ? Number(offsetMatch[1]) : 0;
+      const offsetMinute = offsetMatch ? Number(offsetMatch[2]) : 0;
+      if (
+        !match ||
+        month < 1 ||
+        month > 12 ||
+        day < 1 ||
+        day > daysInMonth[month - 1] ||
+        hour > 23 ||
+        minute > 59 ||
+        second > 59 ||
+        offsetHour > 14 ||
+        (offsetHour === 14 && offsetMinute !== 0) ||
+        offsetMinute > 59 ||
+        !Number.isFinite(Date.parse(value))
+      )
+        throw new Error(`measuredBeanDose.${key} must be an ISO datetime${nullable ? " or null" : ""}`);
+      return value;
+    };
+    if (input.userConfirmed !== true)
+      throw new Error("measuredBeanDose.userConfirmed must be true");
+    return {
+      deviceId,
+      connectionRole: "auxiliary",
+      purpose: "beans",
+      weightG: input.weightG,
+      units: "g",
+      capturedAt: iso(input.capturedAt, "capturedAt", false),
+      sampleTimestamp: iso(input.sampleTimestamp, "sampleTimestamp", true),
+      userConfirmed: true,
+      source: "operator-confirmed auxiliary scale capture",
+    };
+  }
   function tasteSignals(mark) {
     const signals = [];
     if (mark.taste) signals.push(mark.taste);
@@ -1164,14 +1283,14 @@ function createPlugin(host) {
       textOrNull(workflow.context.beanBatchId) ||
       textOrNull(settings.BeanBatchId);
     if (!id) return { status: "unavailable", missingData: ["beanBatchId"] };
-    const batchResponse = await fetch(
+    const batchResponse = await apiRequest(
       `${API_BASE}/api/v1/bean-batches/${encodeURIComponent(id)}`,
     );
     if (!batchResponse.ok) throw new Error("current bean batch unavailable");
     const batch = await batchResponse.json();
     if (!batch || batch.id !== id || !textOrNull(batch.beanId))
       throw new Error("invalid bean batch");
-    const beanResponse = await fetch(
+    const beanResponse = await apiRequest(
       `${API_BASE}/api/v1/beans/${encodeURIComponent(batch.beanId)}`,
     );
     if (!beanResponse.ok) throw new Error("current bean unavailable");
@@ -1218,6 +1337,33 @@ function createPlugin(host) {
       requiresHistoricalConfirmation: true,
     };
   }
+  function reviewedReferenceContext(current, beanCatalog) {
+    const references = createReferenceCatalog();
+    const grinderMatches = references.matchReferences({
+      grinderModel: current.grinderModel,
+    });
+    const exactBurrMatches = current.burrIdentity
+      ? references.matchReferences({
+          grinderModel: current.grinderModel,
+          burrIdentity: current.burrIdentity,
+        })
+      : [];
+    const bean = beanCatalog?.bean || {};
+    const beanMatches = references.matchReferences({
+      bean: { roaster: bean.roaster, name: bean.name },
+    });
+    const byId = new Map();
+    grinderMatches.concat(exactBurrMatches, beanMatches).forEach((source) => {
+      if (!byId.has(source.id)) byId.set(source.id, source);
+    });
+    return {
+      schemaVersion: references.schemaVersion,
+      reviewedAt: references.reviewedAt,
+      matches: Array.from(byId.values()),
+      provenance:
+        "Matched offline reviewed references are contextual facts only; they do not alter the suggestion, infer a grinder coordinate, or backfill historical shot metadata.",
+    };
+  }
   async function analysis(shotId) {
     const generation = cacheGeneration;
     await loadStorage();
@@ -1227,11 +1373,30 @@ function createPlugin(host) {
       ? JSON.parse(JSON.stringify(feedback[shotId]))
       : null;
     const metrics = createBrewMetrics().analyze(full, mark);
+    if (mark?.measuredBeanDose) {
+      const measured = mark.measuredBeanDose;
+      metrics.measuredBeanDose = {
+        weightG: measured.weightG,
+        units: measured.units,
+        deviceId: measured.deviceId,
+        connectionRole: measured.connectionRole,
+        purpose: measured.purpose,
+        capturedAt: measured.capturedAt,
+        sampleTimestamp: measured.sampleTimestamp,
+        userConfirmed: measured.userConfirmed,
+        source: measured.source,
+      };
+      metrics.annotations.actualYieldToMeasuredBeanDoseRatio =
+        metrics.scale.finalMeasuredWeightG != null && measured.weightG > 0
+          ? metrics.scale.finalMeasuredWeightG / measured.weightG
+          : null;
+    }
     if (!active || generation !== cacheGeneration)
       throw new Error("shot changed during analysis");
     return {
       shotId,
       metrics,
+      measuredBeanDose: metrics.measuredBeanDose || null,
       feedback: mark,
       context: historicalContext(full, mark),
       provenance:
@@ -1259,10 +1424,14 @@ function createPlugin(host) {
         !(numberOrNull(entry.brewTimeSec) > 0 && entry.brewTimeSec <= 600)
       )
         return null;
-      let confirmedContext, flavour;
+      let confirmedContext, flavour, measuredBeanDose;
       try {
         flavour = validateFlavour(entry.flavour);
         confirmedContext = validateConfirmedContext(entry.confirmedContext);
+        if (entry.measuredBeanDose != null) {
+          const { source: _source, ...storedMeasurement } = entry.measuredBeanDose;
+          measuredBeanDose = validateMeasuredBeanDose(storedMeasurement);
+        }
       } catch (_) {
         return null;
       }
@@ -1274,6 +1443,7 @@ function createPlugin(host) {
         flavour,
         brewTimeSec: entry.brewTimeSec ?? null,
         confirmedContext,
+        measuredBeanDose,
       };
     }
     return result;
@@ -1421,7 +1591,7 @@ function createPlugin(host) {
     return context;
   }
   async function fullShot(id) {
-    const response = await fetch(
+    const response = await apiRequest(
       `${API_BASE}/api/v1/shots/${encodeURIComponent(id)}`,
     );
     if (!response.ok) throw new Error("shot unavailable");
@@ -1431,7 +1601,7 @@ function createPlugin(host) {
     return shot;
   }
   async function currentWorkflow() {
-    const response = await fetch(`${API_BASE}/api/v1/workflow`);
+    const response = await apiRequest(`${API_BASE}/api/v1/workflow`);
     if (!response.ok) throw new Error("workflow unavailable");
     const workflow = await response.json();
     if (
@@ -1560,7 +1730,7 @@ function createPlugin(host) {
     const requestGeneration = cacheGeneration;
     let truncated = true;
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const response = await fetch(
+      const response = await apiRequest(
         `${API_BASE}/api/v1/shots?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}&order=desc`,
       );
       if (!response.ok)
@@ -1807,6 +1977,10 @@ function createPlugin(host) {
     for (const shot of sorted) {
       const id = String(shot.id),
         mark = marks[id];
+      // Rich dial-in guidance may use an explicitly marked bad shot as
+      // evidence: a negative cup is exactly what supplies the adjustment
+      // direction. Basic recorded-good recommendations filter good:false
+      // separately in recommendation().
       if (!mark || seen.has(id)) continue;
       seen.add(id);
       const reject = (reason) => excluded.push({ shotId: id, reason });
@@ -1898,9 +2072,133 @@ function createPlugin(host) {
     if (!active || generation !== cacheGeneration)
       throw new Error("history changed during suggestion");
     base.sourceShotIds = evidence.map((item) => item.shotId);
+    let currentBeanCatalog = null;
+    let reviewedReferences = null;
+    if (evidence.length) {
+      currentBeanCatalog = await beanContext();
+      if (currentBeanCatalog.status !== "available")
+        return abstain("Current bean catalog context is unavailable", {
+          missingData: currentBeanCatalog.missingData || ["beanBatchId"],
+        });
+      reviewedReferences = reviewedReferenceContext(current, currentBeanCatalog);
+      base.currentBeanCatalog = currentBeanCatalog;
+      base.reviewedReferences = reviewedReferences;
+    }
+    if (evidence.length > 0 && evidence.length < 3) {
+      // A new bean may have only one or two verified shots.  This path is
+      // deliberately provisional: it requires the same complete setup and
+      // explicit feedback as the mature cohort, but never claims a learned
+      // slope from one or two observations.
+      const catalog = currentBeanCatalog;
+      const times = evidence
+        .map((item) => item.elapsedTimeSec)
+        .sort((a, b) => a - b);
+      const median =
+        (times[Math.floor((times.length - 1) / 2)] +
+          times[Math.floor(times.length / 2)]) /
+        2;
+      const timeDirection =
+        median < target - tolerance
+          ? "finer"
+          : median > target + tolerance
+            ? "coarser"
+            : null;
+      const tastes = new Set(
+        evidence.flatMap((item) => item.tasteSignals).filter(Boolean),
+      );
+      const timing = {
+        medianElapsedTimeSec: median,
+        targetTimeSec: target,
+        toleranceSec: tolerance,
+        timeDirection,
+      };
+      if (tastes.has("channeling"))
+        return abstain(
+          "Channeling feedback: inspect preparation before adjusting grind",
+          timing,
+        );
+      if (tastes.has("weak"))
+        return abstain(
+          "Weak feedback needs extraction and preparation evidence",
+          timing,
+        );
+      const tasteDirections = new Set();
+      if (tastes.has("sour")) tasteDirections.add("finer");
+      if (tastes.has("bitter") || tastes.has("astringent"))
+        tasteDirections.add("coarser");
+      if (
+        tasteDirections.size > 1 ||
+        (tastes.has("balanced") && tasteDirections.size)
+      )
+        return abstain("Taste feedback conflicts across provisional shots", timing);
+      if (!tasteDirections.size)
+        return abstain(
+          tastes.has("balanced")
+            ? "Balanced feedback: retain the setting and verify the target"
+            : "Structured taste feedback is required alongside shot timing",
+          timing,
+        );
+      const direction = Array.from(tasteDirections)[0];
+      if (timeDirection && direction !== timeDirection)
+        return abstain("Taste and timing suggest opposite adjustments", timing);
+      const proposal = {
+        ...base,
+        ...timing,
+        status: "suggestion",
+        stage: "provisional",
+        evidenceCount: evidence.length,
+        direction,
+        confidence: "provisional",
+        beanContext: {
+          beanBatchId: current.beanBatchId,
+          beanType: current.beanType,
+          roastLevel: current.roastLevel,
+        },
+        currentBeanCatalog: catalog,
+        currentSetting: current.grinderSetting,
+        settingUnit: current.settingUnit,
+        proposedSetting: null,
+        reason:
+          "Provisional first-shot guidance from explicit taste and timing; no learned slope is claimed",
+        warnings: [
+          "Only one or two comparable shots are available; verify another shot before relying on this direction",
+        ],
+      };
+      const currentNumber = dialNumber(current.grinderSetting);
+      const step = configuredNumber("StepSize", 0);
+      const sign = configuredNumber("NumericFinerDelta", 0);
+      const min = configuredNumber("MinSetting", 0);
+      const max = configuredNumber("MaxSetting", 0);
+      if (
+        Number.isFinite(currentNumber) &&
+        step > 0 &&
+        (sign === 1 || sign === -1) &&
+        Number.isFinite(min) &&
+        Number.isFinite(max) &&
+        min < max &&
+        currentNumber >= min &&
+        currentNumber <= max
+      ) {
+        const next =
+          currentNumber + step * sign * (direction === "finer" ? 1 : -1);
+        if (!Number.isFinite(next) || next < min || next > max)
+          return abstain(
+            "The calibrated step would leave the confirmed dial bounds",
+            timing,
+          );
+        proposal.proposedSetting = Number(next.toPrecision(12));
+        proposal.numericProvenance =
+          "one owner-calibrated step; not a firmware GBS prediction";
+      } else {
+        proposal.warnings.push(
+          "Direction only: confirm a numeric setting, positive owner-calibrated step, finer sign and dial bounds",
+        );
+      }
+      return proposal;
+    }
     if (evidence.length < 3)
       return abstain(
-        "At least three recent comparable feedback shots at the current intended setting are required",
+        "No comparable marked feedback shot is available at the current intended setting",
       );
     const times = evidence
       .map((item) => item.elapsedTimeSec)
@@ -1967,6 +2265,8 @@ function createPlugin(host) {
         beanType: current.beanType,
         roastLevel: current.roastLevel,
       },
+      currentBeanCatalog,
+      reviewedReferences,
       currentSetting: current.grinderSetting,
       settingUnit: current.settingUnit,
       proposedSetting: null,
@@ -2149,20 +2449,28 @@ function createPlugin(host) {
 <p>This assistant recommends recorded settings and manual guidance. It never changes a machine.</p>
 <button id="recommend" type="button">Find recorded recommendation</button>
 <h2>Richer suggestion</h2>
-<p>Save feedback for at least three comparable shots first. Configure the current setup and timing target in plugin settings.</p>
-<button id="suggestion" type="button">Suggest a manual adjustment</button>
+<p>Each marked shot adds evidence. Early suggestions are cautious; repeated comparable shots make the direction more reliable. Configure the current setup and timing target in plugin settings.</p>
+<button id="suggestion" type="button">Suggest next step</button>
 <h2>Bean context and brew analysis</h2>
 <button id="beans" type="button">Show current bean and roast catalog</button>
+<button id="references" type="button">Recipe and grinder references</button>
 <p>The current catalog may have changed since an older brew. Confirm historical bean type and roast explicitly in that shot feedback.</p>
+<label>Recent shot <select id="shotSelect"><option value="">Load shots to choose one</option></select></label>
+<button id="loadShots" type="button">Load recent shots</button>
+<a id="returnLink" hidden>Return to Streamline</a>
 <form id="analysis"><label>Shot ID <input required name="shotId"></label><button type="submit">Analyse saved brew metrics</button></form>
+<details><summary>Advanced: replay research calculations</summary>
 <h2>Advanced research replay</h2>
+<p><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/blob/main/docs/GBS_GUIDE.md" target="_blank" rel="noopener">Read the calculation guide</a></p>
 <form id="research">
   <p>Software replay only. The calculator does not contact hardware or infer physical dial direction.</p>
   <label>Calculator request JSON<textarea name="state" aria-label="Research replay JSON">{"operation":"adjust","algorithm":"GbS2","firmwareBuild":"HEM-HSG-HMI-S01 V01.16-24","coordinateUnit":"deci-micrometre","scope":{"grinderId":"synthetic-grinder","beanBatchId":"synthetic-beans","burrIdentity":"synthetic-burrs","calibrationEpoch":"simulation-1","profile":"synthetic-profile"},"input":{"actualBrewTimeMs":30000,"targetBrewTimeMs":28000,"estimatedDdDum":500,"setpointDdDum":500,"toleranceMs":1000}}</textarea></label>
   <p>This sample uses synthetic inputs. To replay the next shot, copy the returned stateEnvelope into the request and update input. Keep scope unchanged only for the same setup. Other operations and units are documented in README.</p>
   <button type="submit">Run software replay</button>
 </form>
+</details>
 <output id="result" aria-live="polite"></output>
+<details id="reviewedReferences" hidden><summary>Reviewed references used for this suggestion</summary><ul id="referenceList"></ul></details>
 <h2>Feedback after a brew</h2>
 <form id="feedback">
   <label>Shot ID <input required name="shotId"></label>
@@ -2202,19 +2510,58 @@ function createPlugin(host) {
     <label>Dose (g) <input name="dose" type="number" min="0" step="0.1"></label>
     <label>Yield (g) <input name="yield" type="number" min="0" step="0.1"></label>
   </details>
+  <details>
+    <summary>Optional bean weighing record</summary>
+    <p>This is a separate scale observation. It is never silently used as the recipe dose or historical shot dose.</p>
+    <label><input name="confirmBeanMeasurement" type="checkbox"> Confirm these beans were weighed for this shot</label>
+    <label>Scale device ID <input name="beanScaleId" autocomplete="off"></label>
+    <label>Scale role <input name="beanScaleRole" value="auxiliary" readonly></label>
+    <label>Bean weight (g) <input name="beanWeight" type="number" min="0" step="0.01"></label>
+    <label>Captured at <input name="beanCapturedAt" type="datetime-local"></label>
+    <label>Scale sample timestamp (optional) <input name="beanSampleTimestamp" type="datetime-local"></label>
+  </details>
   <button name="good" value="true">Mark good</button>
-  <button name="good" value="false">Remove good mark</button>
+  <button name="good" value="false">Mark as not a good result</button>
 </form>
 <script>
 const out=document.querySelector('#result');
-const show=async (url, init)=>{const r=await fetch(url,init);const body=await r.json();out.textContent=JSON.stringify(body,null,2);};
-const fail=(message)=>{out.textContent=message;};
-document.querySelector('#recommend').onclick=async()=>{out.textContent='Loading...';try{await show('recommendation')}catch(e){fail('Could not load recommendation. Try again.')}};
-document.querySelector('#suggestion').onclick=async()=>{out.textContent='Calculating...';try{await show('suggestion')}catch(e){fail('Could not calculate suggestion. Try again.')}};
-document.querySelector('#beans').onclick=async()=>{out.textContent='Loading bean context...';try{await show('bean-context')}catch(e){fail('Could not load current bean context. Try again.')}};
-document.querySelector('#analysis').onsubmit=async e=>{e.preventDefault();out.textContent='Analysing brew...';try{await show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:new FormData(e.target).get('shotId')})})}catch(e){fail('Could not analyse the brew. Try again.')}};
-document.querySelector('#research').onsubmit=async e=>{e.preventDefault();let data;try{data=JSON.parse(new FormData(e.target).get('state'))}catch(e){fail('Research replay JSON is invalid.');return}out.textContent='Replaying software state...';try{await show('research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}catch(e){fail('Could not run research replay. Try again.')}};
-document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const context={};['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel'].forEach(k=>{const v=f.get(k);if(v)context[k]=v});['dose','yield'].forEach(k=>{const v=f.get(k);if(v!=='')context[k]=Number(v)});const raw=f.get('brewTimeSec');const flavour={};const descriptors=f.get('descriptors');if(descriptors.trim())flavour.descriptors=descriptors.split(',').map(v=>v.trim()).filter(Boolean);const overall=f.get('overall');if(overall)flavour.overall=overall;['acidity','bitterness','sweetness','body','astringency'].forEach(k=>{const v=f.get(k);if(v!=='')flavour[k]=Number(v)});out.textContent='Saving...';try{await show('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:(e.submitter?.value||'true')==='true',notes:f.get('notes'),taste:f.get('taste')||null,flavour:Object.keys(flavour).length?flavour:null,brewTimeSec:raw===''?null:Number(raw),confirmedContext:context})})}catch(e){fail('Could not save feedback. Try again.')}};
+const basePath=typeof location!=='undefined'&&location.pathname?location.pathname.endsWith('/ui')?location.pathname.slice(0,-3):location.pathname:'';
+const requestState={generation:0};
+const endpoint=name=>basePath?basePath+'/'+name:name;
+const fail=(message,generation)=>{if(generation===undefined||generation===requestState.generation)out.textContent=message;};
+const failRequest=(error,message)=>{if(!error.generation||error.generation===requestState.generation)fail(message);};
+const value=(object,...keys)=>{for(const key of keys)if(object&&object[key]!==null&&object[key]!==undefined&&object[key]!=='')return object[key];return null;};
+const referenceDetails=document.querySelector('#reviewedReferences');const referenceList=document.querySelector('#referenceList');
+const humanKey=key=>{const labels={doseG:'Dose (g)',yieldG:'Beverage yield (g)',brewTimeSec:'Brew time (s)',temperatureC:'Temperature (°C)',flowMlPerSec:'Flow (ml/s)',pressureBar:'Pressure (bar)'};return labels[key]||String(key).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_-]+/g,' ').replace(/^./,char=>char.toUpperCase());};
+const humanFact=(key,value)=>{if(value===null||value===undefined||value==='')return 'not recorded';if(Array.isArray(value))return value.map(item=>humanFact(key,item)).join(', ');if(typeof value==='object'){if(value.min!==undefined||value.max!==undefined){const low=value.min===undefined?'':String(value.min);const high=value.max===undefined?'':String(value.max);return low&&high?low+'–'+high+(value.unit?' '+value.unit:''):low||high+(value.unit?' '+value.unit:'');}return Object.entries(value).map(([childKey,childValue])=>humanKey(childKey)+': '+humanFact(childKey,childValue)).join('; ');}return String(value)+(key==='temperatureC'?' °C':'');};
+const humanFacts=object=>Object.entries(object||{}).map(([key,value])=>humanKey(key)+': '+humanFact(key,value)).join('; ');
+const safeReferenceUrl=url=>{try{const parsed=new URL(String(url));return parsed.protocol==='https:'&&!parsed.username&&!parsed.password?parsed.href:null;}catch(e){return null;}};
+const renderReferenceDetails=references=>{if(!referenceDetails||!referenceList)return;referenceList.textContent='';const matches=references&&Array.isArray(references.matches)?references.matches:[];if(!matches.length){referenceDetails.hidden=true;return;}matches.forEach(source=>{const item=document.createElement('li');const link=document.createElement('a');const safeUrl=safeReferenceUrl(source.url);if(safeUrl){link.href=safeUrl;link.target='_blank';link.rel='noopener';}link.textContent=source.title||source.publisher||'Reviewed reference';item.appendChild(link);const details=document.createElement('p');const scope=source.scope&&typeof source.scope==='object'?humanFacts(source.scope):String(source.scope||'Contextual reference');const facts=humanFacts(source.facts);const notes=Array.isArray(source.notes)?source.notes.join(' '):String(source.notes||'');details.textContent=[source.publisher,scope&&'Scope: '+scope,facts&&'Facts: '+facts,notes&&'Notes: '+notes].filter(Boolean).join(' — ');item.appendChild(details);referenceList.appendChild(item);});referenceDetails.hidden=false;};
+
+const render=({endpoint:name,body})=>{
+  if(name==='recommendation')return body.status==='recommendation'?'Recorded recommendation\\nSetting: '+body.grinderSetting+'\\nSource shot: '+body.sourceShotId+'\\n\\n'+(body.notes||'No note saved.'):'No safe recommendation\\n'+(body.reason||'Comparable history is unavailable.');
+  if(name==='suggestion'){const evidenceCount=body.evidenceCount??(body.sourceShotIds||[]).length;if(body.status!=='suggestion'&&body.status!=='provisional'&&body.status!=='established')return 'No safe adjustment\\n'+(body.reason||'The evidence is incomplete or conflicting.');const provisional=body.status==='provisional'||(body.status==='suggestion'&&evidenceCount<3);const heading=provisional?'Early manual next step':'Manual adjustment suggestion';const caution=provisional?'One or two comparable shots are only an early signal. Confirm the next brew and keep collecting evidence.':'Repeated comparable shots support this direction; confirm it manually before changing the grinder.';return heading+'\\nDirection: '+(body.direction||'confirm manually')+'\\nCurrent setting: '+(body.currentSetting||'unavailable')+'\\n'+(body.proposedSetting==null?'Proposed numeric setting: confirm manually':'Proposed numeric setting: '+body.proposedSetting)+'\\nEvidence shots: '+evidenceCount+'\\n\\n'+caution+'\\n'+(body.reason||'');}
+  if(name==='references'){const sources=body.sources||[];return 'Reviewed recipe and grinder references\\n'+sources.map(source=>(source.title||source.publisher||'Reference')+'\\n'+(safeReferenceUrl(source.url)||'')+'\\n'+(source.scope?'Scope: '+(typeof source.scope==='object'?humanFacts(source.scope):source.scope):'')+'\\n'+(source.facts?'Facts: '+humanFacts(source.facts):'')+'\\n'+(Array.isArray(source.notes)?'Notes: '+source.notes.join(' '):'')).join('\\n\\n')+'\\n\\n'+(body.provenance||'');}
+  if(name==='bean-context'){const bean=body.bean||{},batch=body.batch||{};if(body.status!=='available')return 'Bean context unavailable\\n'+(body.missingData||[]).join(', ');const nameLine=[bean.name,bean.roaster].filter(Boolean).join(' — ')||'Unknown bean';const species=bean.species?'\\nSpecies: '+bean.species:'';return 'Current bean catalog\\n'+nameLine+species+(bean.variety?'\\nVariety: '+(Array.isArray(bean.variety)?bean.variety.join(', '):bean.variety):'')+'\\nProcessing: '+(bean.processing||'unknown')+'\\nOrigin: '+[bean.country,bean.region].filter(Boolean).join(', ')+'\\nRoast: '+(batch.roastLevel||'unknown')+(batch.roastDate?' ('+batch.roastDate+')':'')+'\\n\\n'+(body.provenance||'');}
+  if(name==='analysis'){const metrics=body.metrics||{},machine=metrics.machine||{},scale=metrics.scale||{};const mae=part=>part&&part.timeWeightedMae!==undefined?Number(part.timeWeightedMae).toFixed(2):'unavailable';const feedback=body.feedback?(body.feedback.good?'good':'not marked good')+(body.feedback.flavour&&body.feedback.flavour.overall?', '+body.feedback.flavour.overall:''):'none';const measured=body.measuredBeanDose||metrics.measuredBeanDose;const measuredText=measured?'\\nBeans weighed for this shot: '+measured.weightG+' g ('+measured.deviceId+', '+measured.connectionRole+')':'\\nBeans weighed for this shot: none recorded';const warnings=(metrics.warnings||[]).concat(scale.warnings||[]);const warningText=warnings.length?'\\nWarnings: '+warnings.join(' | '):'';return 'Saved brew analysis: '+body.shotId+'\\nElapsed: '+(metrics.elapsedSec??'unavailable')+' s\\nAverage pressure difference from target: '+mae(machine.pressure)+' bar\\nAverage flow difference from target: '+mae(machine.flow)+' ml/s\\nAverage mix temperature difference from target: '+mae(machine.mixTemperature)+' °C\\nAverage group temperature difference from target: '+mae(machine.groupTemperature)+' °C\\nScale yield: '+(scale.finalMeasuredWeightG??'unavailable')+' g\\nScale flow: '+(scale.brewFlowGPerSec??'unavailable')+' g/s'+measuredText+'\\nMeasured bean ratio: '+((metrics.annotations&&metrics.annotations.actualYieldToMeasuredBeanDoseRatio)??'unavailable')+warningText+'\\n\\nThese are descriptive differences from recorded targets; they do not diagnose extraction.\\nFeedback: '+feedback+'\\n'+(body.provenance||'');}
+  if(name==='feedback')return body.saved?'Feedback saved for shot '+body.shotId+'.':(body.reason||body.error||'Feedback was not saved.');
+  return body.provenance?body.provenance+'\\n\\n'+JSON.stringify(body,null,2):JSON.stringify(body,null,2);
+};
+const show=async(name,init,label)=>{const generation=++requestState.generation;out.textContent=label||'Loading...';try{const r=await fetch(endpoint(name),init);const body=await r.json();if(!r.ok){if(generation===requestState.generation)out.textContent=body.error||'The request could not be completed.';return body;}if(generation===requestState.generation){out.textContent=render({endpoint:name,body});renderReferenceDetails(body.reviewedReferences);}return body;}catch(e){e.generation=generation;fail('Could not load this information. Try again.',generation);throw e;}};
+const setShotId=id=>{const input=document.querySelector('#analysis input[name="shotId"]');const feedback=document.querySelector('#feedback input[name="shotId"]');if(input&&id)input.value=id;if(feedback&&id)feedback.value=id;};
+const refreshShots=async()=>{const generation=++requestState.generation;out.textContent='Loading recent shots...';try{const r=await fetch(endpoint('shots'));const body=await r.json();if(!r.ok)throw new Error('request failed');if(generation!==requestState.generation)return;const select=document.querySelector('#shotSelect');if(select&&typeof document.createElement==='function'){select.textContent='';(body.items||[]).forEach(shot=>{const option=document.createElement('option');option.value=String(shot.id);option.textContent=String(shot.id)+' — '+(shot.timestamp||'undated');select.appendChild(option);});if(body.items?.length)setShotId(String(body.items[0].id));}out.textContent='Loaded '+(body.items||[]).length+' recent shots. Choose one for analysis or feedback.';}catch(e){fail('Could not load recent shots. Try again.',generation);}};
+document.querySelector('#recommend').onclick=async()=>{try{await show('recommendation',undefined,'Loading recommendation...')}catch(e){failRequest(e,'Could not load recommendation. Try again.')}};
+document.querySelector('#suggestion').onclick=async()=>{try{await show('suggestion',undefined,'Calculating suggestion...')}catch(e){failRequest(e,'Could not calculate suggestion. Try again.')}};
+document.querySelector('#beans').onclick=async()=>{try{await show('bean-context',undefined,'Loading bean context...')}catch(e){failRequest(e,'Could not load current bean context. Try again.')}};
+const referencesButton=document.querySelector('#references');if(referencesButton)referencesButton.onclick=async()=>{try{await show('references',undefined,'Loading reviewed references...')}catch(e){failRequest(e,'Could not load references. Try again.')}};
+const loadShotsButton=document.querySelector('#loadShots');
+if(loadShotsButton)loadShotsButton.onclick=refreshShots;
+const shotSelect=document.querySelector('#shotSelect');
+if(shotSelect)shotSelect.onchange=e=>setShotId(e.target.value);
+document.querySelector('#analysis').onsubmit=async e=>{e.preventDefault();try{await show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:new FormData(e.target).get('shotId')})},'Analysing saved brew...')}catch(e){failRequest(e,'Could not analyse the brew. Try again.')}};
+document.querySelector('#research').onsubmit=async e=>{e.preventDefault();let data;try{data=JSON.parse(new FormData(e.target).get('state'))}catch(e){fail('Research replay JSON is invalid.');return}try{await show('research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)},'Replaying software state...')}catch(e){failRequest(e,'Could not run research replay. Try again.')}};
+let feedbackBusy=false;const feedbackForm=document.querySelector('#feedback');const feedbackButtons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];const resetFeedbackBusy=()=>{feedbackBusy=false;feedbackButtons.forEach(button=>button.disabled=false);};feedbackForm.onsubmit=async e=>{e.preventDefault();if(feedbackBusy)return;feedbackBusy=true;feedbackButtons.forEach(button=>button.disabled=true);try{const f=new FormData(e.target);const context={};['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel'].forEach(k=>{const v=f.get(k);if(v)context[k]=v});['dose','yield'].forEach(k=>{const v=f.get(k);if(v!=='')context[k]=Number(v)});const raw=f.get('brewTimeSec');const flavour={};const descriptors=f.get('descriptors');if(descriptors.trim())flavour.descriptors=descriptors.split(',').map(v=>v.trim()).filter(Boolean);const overall=f.get('overall');if(overall)flavour.overall=overall;['acidity','bitterness','sweetness','body','astringency'].forEach(k=>{const v=f.get(k);if(v!=='')flavour[k]=Number(v)});const measurementConfirmed=f.get('confirmBeanMeasurement')==='on'||f.get('confirmBeanMeasurement')==='true';let measuredBeanDose=null;if(measurementConfirmed){const weight=Number(f.get('beanWeight'));const capturedAt=f.get('beanCapturedAt');const scaleId=f.get('beanScaleId');const capturedDate=capturedAt?new Date(capturedAt):null;const sampleValue=f.get('beanSampleTimestamp');const sampleDate=sampleValue?new Date(sampleValue):null;if(!scaleId||!Number.isFinite(weight)||weight<=0||!capturedDate||Number.isNaN(capturedDate.getTime())||(sampleDate&&!Number.isFinite(sampleDate.getTime()))){throw new Error('Confirm a positive bean weight, scale ID and valid capture time.');}measuredBeanDose={deviceId:scaleId,connectionRole:'auxiliary',purpose:'beans',weightG:weight,units:'g',capturedAt:capturedDate.toISOString(),sampleTimestamp:sampleDate?sampleDate.toISOString():null,userConfirmed:true};}await show('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:(e.submitter?.value||'true')==='true',notes:f.get('notes'),taste:f.get('taste')||null,flavour:Object.keys(flavour).length?flavour:null,brewTimeSec:raw===''?null:Number(raw),confirmedContext:context,...(measuredBeanDose?{measuredBeanDose}: {})})},'Saving feedback...');}catch(e){if(e.message&&e.message.startsWith('Confirm a positive'))fail(e.message);else failRequest(e,'Could not save feedback. Try again.');}finally{resetFeedbackBusy();}};
+try{const query=new URLSearchParams(typeof location!=='undefined'&&location.search?location.search:'');const shotId=query.get('shotId');if(shotId)setShotId(shotId);const action=query.get('action');if(action==='analyze'&&shotId)show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:shotId})},'Analysing saved brew...').catch(e=>failRequest(e,'Could not analyse the brew. Try again.'));if(action==='feedback'){const feedbackShot=document.querySelector('#feedback input[name=\"shotId\"]');if(feedbackShot&&feedbackShot.focus)feedbackShot.focus();}const measurementFields={beanScaleId:query.get('beanScaleId'),beanScaleRole:query.get('beanScaleRole')||'auxiliary',beanWeight:query.get('beanWeight'),beanCapturedAt:query.get('beanCapturedAt'),beanSampleTimestamp:query.get('beanSampleTimestamp')};Object.keys(measurementFields).forEach(key=>{const input=document.querySelector('#feedback input[name=\"'+key+'\"]');if(input&&measurementFields[key])input.value=measurementFields[key];});const returnValue=query.get('returnTo')||query.get('return');const returnLink=document.querySelector('#returnLink');if(returnLink&&returnValue){const here=typeof location!=='undefined'?new URL(location.href):new URL('http://127.0.0.1/');const target=new URL(returnValue,here.href);if((target.protocol===here.protocol&&(target.protocol==='http:'||target.protocol==='https:'))&&!target.username&&!target.password&&target.hostname===here.hostname&&target.pathname.startsWith('/')){returnLink.href=target.href;returnLink.hidden=false;}}}catch(e){}
 </script>`;
 
   return {
@@ -2295,6 +2642,18 @@ document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const 
             return json(400, { error: "shotId is required" });
           return json(200, await analysis(id));
         }
+        if (endpoint === "references" && request.method === "GET") {
+          const catalog = createReferenceCatalog();
+          return json(200, {
+            schemaVersion: catalog.schemaVersion,
+            reviewedAt: catalog.reviewedAt,
+            sources: catalog.sources,
+            provenance:
+              "Offline reviewed reference catalog; source facts remain scoped examples and are not universal targets, calibration, or device observations.",
+            attribution:
+              "Each source record retains its publisher, URL, scope, facts, notes and reuse boundary.",
+          });
+        }
         if (endpoint === "research" && request.method === "POST") {
           try {
             return json(200, research(request));
@@ -2326,12 +2685,24 @@ document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const 
               error:
                 "elapsed shot time must be positive and at most 600 seconds",
             });
-          let confirmedContext, flavour;
+          let confirmedContext, flavour, measuredBeanDose;
           try {
             flavour = validateFlavour(input.flavour);
             confirmedContext = validateConfirmedContext(input.confirmedContext);
-          } catch (_) {
+          } catch (error) {
+            if (input.measuredBeanDose != null) {
+              try {
+                measuredBeanDose = validateMeasuredBeanDose(input.measuredBeanDose);
+              } catch (measurementError) {
+                return json(400, { error: measurementError.message });
+              }
+            }
             return json(400, { error: "invalid confirmed historical context" });
+          }
+          try {
+            measuredBeanDose = validateMeasuredBeanDose(input.measuredBeanDose);
+          } catch (error) {
+            return json(400, { error: error.message });
           }
           if (Object.keys(confirmedContext).length) {
             const shot = await fullShot(shotId);
@@ -2360,6 +2731,7 @@ document.querySelector('#feedback').onsubmit=async e=>{e.preventDefault();const 
                 flavour,
                 brewTimeSec: input.brewTimeSec ?? null,
                 confirmedContext,
+                measuredBeanDose,
               };
               try {
                 await persist();

@@ -119,7 +119,6 @@ test("scale metrics use only scale timestamps and preserve positive measured fin
 
 test("missing and invalid samples are explicit and do not produce NaN", () => {
   const value = shot();
-  value.volume = 250;
   value.measurements = [
     {
       machine: { timestamp: "2026-10-11T10:00:00Z", pressure: NaN },
@@ -131,7 +130,7 @@ test("missing and invalid samples are explicit and do not produce NaN", () => {
     },
     {
       machine: { timestamp: "2026-10-11T10:00:02Z", pressure: NaN },
-      scale: { timestamp: "2026-10-11T10:00:01Z", weight: -1, weightFlow: 2 },
+      scale: { timestamp: "2026-10-11T10:00:01Z", weight: NaN, weightFlow: 2 },
     },
   ];
   const result = factory().analyze(value);
@@ -139,8 +138,8 @@ test("missing and invalid samples are explicit and do not produce NaN", () => {
   assert.equal(result.scale.finalMeasuredWeightG, null);
   assert.equal(result.scale.lastPositiveWeightG, 2);
   assert.equal(result.machine.pressure.available, false);
-  assert.equal(result.scale.brewFlowGPerSec, 0);
-  assert.equal(result.scale.massGainG, 0);
+  assert.equal(result.scale.brewFlowGPerSec, 6);
+  assert.equal(result.scale.massGainG, 3);
   assert.equal(JSON.stringify(result).includes("NaN"), false);
   assert.equal(result.scale.reportedWeightFlowGPerSec.mean, 1.5);
 });

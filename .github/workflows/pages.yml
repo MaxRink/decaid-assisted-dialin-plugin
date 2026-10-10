@@ -1,0 +1,43 @@
+name: Publish simulator
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: simulator-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Require the validated current main
+        env:
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$VALIDATED_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python scripts/build-simulator.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: .site
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

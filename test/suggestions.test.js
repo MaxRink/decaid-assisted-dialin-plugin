@@ -121,6 +121,10 @@ async function load({
         ? response(fullById.get(decodeURIComponent(match[1])))
         : response({}, { ok: false, status: 404 });
     }
+    if (url.endsWith("/bean-batches/batch-a"))
+      return response({ id: "batch-a", beanId: "bean-a", roastLevel: "light" });
+    if (url.endsWith("/beans/bean-a"))
+      return response({ id: "bean-a", name: "Fixture bean", species: "arabica", processing: "washed" });
     return response({}, { ok: false, status: 404 });
   };
   const contextVm = {
@@ -192,6 +196,9 @@ test("requires three recent complete shots and returns the median timing with ca
   assert.equal(body.proposedSetting, 9.5);
   assert.equal(body.settingUnit, "marks");
   assert.equal(body.requiresConfirmation, true);
+  assert.equal(body.currentBeanCatalog.status, "available");
+  assert.ok(body.reviewedReferences.matches.some((source) => source.id === "df64-clive"));
+  assert.match(body.reviewedReferences.matches.find((source) => source.id === "df64-clive").url, /^https:\/\//);
   assert.equal(
     body.evidence[0].timingProvenance,
     "saved machine timestamps: last measurement minus shot start",
@@ -300,8 +307,12 @@ test("good false feedback persists while ordinary good-shot lookup excludes it",
   assert.equal(stored[entries[0].id].good, false);
   assert.equal(stored[entries[0].id].taste, "sour");
   const { body } = await suggest(plugin);
-  assert.equal(body.status, "abstain");
-  assert.match(body.reason, /three|comparable/i);
+  assert.equal(body.status, "suggestion");
+  assert.equal(body.stage, "provisional");
+  assert.equal(body.evidenceCount, 1);
+  assert.deepEqual(body.sourceShotIds, [entries[0].id]);
+  assert.equal(body.direction, "finer");
+  assert.equal(body.proposedSetting, 9.5);
 });
 
 test("missing numeric calibration returns direction only", async () => {
@@ -413,7 +424,9 @@ test("excludes each changed cohort field instead of mixing evidence", async () =
     const { plugin } = await load({ shots: entries });
     for (const entry of entries) await mark(plugin, entry.id, "sour");
     const { body } = await suggest(plugin);
-    assert.equal(body.status, "abstain", field);
+    assert.equal(body.status, "suggestion", field);
+    assert.equal(body.stage, "provisional", field);
+    assert.equal(body.evidenceCount, 2, field);
     assert.ok(
       body.excluded.some((entry) => entry.shotId === changed.id),
       field,

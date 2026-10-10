@@ -426,7 +426,56 @@ void main() {
     expect((beanContext['batch'] as Map)['roastLevel'], 'light');
     expect(beanContext['provenance'], contains('fetched now'));
     expect(beanContext['requiresHistoricalConfirmation'], true);
+    final references = await call('references', 'references', 'GET');
+    expect(references['schemaVersion'], 1);
+    final referenceSources = references['sources'] as List<dynamic>;
+    expect(referenceSources.length, greaterThan(0));
+    expect(referenceSources.length, lessThanOrEqualTo(128));
+    expect(
+      referenceSources.every(
+        (source) => (source as Map)['url'].toString().startsWith('https://'),
+      ),
+      true,
+    );
+    expect(
+      (references['provenance'] as String).toLowerCase(),
+      contains('offline reviewed reference'),
+    );
 
+    final measuredBeanDose = {
+      'deviceId': 'aux-scale-1',
+      'connectionRole': 'auxiliary',
+      'purpose': 'beans',
+      'weightG': 18.5,
+      'units': 'g',
+      'capturedAt': '2026-10-11T10:00:00.000Z',
+      'sampleTimestamp': '2026-10-11T09:59:59.500Z',
+      'userConfirmed': true,
+    };
+    var invalidMeasurement = Map<String, dynamic>.from(measuredBeanDose)
+      ..['connectionRole'] = 'primary';
+    var response = await request(manager, manifest.id, 'bean-dose-primary', {
+      'endpoint': 'feedback',
+      'method': 'POST',
+      'body': {
+        'shotId': 'shot-0',
+        'good': true,
+        'measuredBeanDose': invalidMeasurement,
+      },
+    });
+    expect(response['status'], 400);
+    invalidMeasurement = Map<String, dynamic>.from(measuredBeanDose)
+      ..['capturedAt'] = '2026-02-31T10:00:00Z';
+    response = await request(manager, manifest.id, 'bean-dose-calendar', {
+      'endpoint': 'feedback',
+      'method': 'POST',
+      'body': {
+        'shotId': 'shot-0',
+        'good': true,
+        'measuredBeanDose': invalidMeasurement,
+      },
+    });
+    expect(response['status'], 400);
     for (var i = 0; i < 3; i++) {
       final result = await call('good-$i', 'feedback', 'POST', {
         'shotId': 'shot-$i',
@@ -445,6 +494,12 @@ void main() {
       });
       expect(result['saved'], true);
     }
+    final savedMeasurement = await call('bean-dose-save', 'feedback', 'POST', {
+      'shotId': 'shot-0',
+      'good': true,
+      'measuredBeanDose': measuredBeanDose,
+    });
+    expect(savedMeasurement['saved'], true);
     final analysis = await call('analysis', 'analysis', 'POST', {
       'shotId': 'shot-0',
     });
@@ -469,7 +524,34 @@ void main() {
     );
     expect((metrics['scale'] as Map)['finalMeasuredWeightG'], 40.0);
     expect((metrics['scale'] as Map)['brewFlowGPerSec'], 2.0);
+    expect(
+      (analysis['measuredBeanDose'] as Map)['source'],
+      'operator-confirmed auxiliary scale capture',
+    );
+    expect((analysis['measuredBeanDose'] as Map)['weightG'], 18.5);
+    expect(
+      (metrics['annotations'] as Map)['actualYieldToMeasuredBeanDoseRatio'],
+      closeTo(40 / 18.5, 1e-9),
+    );
+    expect((metrics['recipeTargets'] as Map)['ratio'], closeTo(40 / 18, 1e-9));
     expect(analysis['provenance'], contains('Saved full shot'));
+    await manager.dispose();
+    manager = await load();
+    final reloadedAnalysis = await call(
+      'bean-dose-reload',
+      'analysis',
+      'POST',
+      {'shotId': 'shot-0'},
+    );
+    expect(
+      (reloadedAnalysis['feedback'] as Map)['measuredBeanDose'],
+      isNotNull,
+    );
+    expect(
+      ((reloadedAnalysis['feedback'] as Map)['measuredBeanDose']
+          as Map)['source'],
+      'operator-confirmed auxiliary scale capture',
+    );
     var result = await call('suggestion', 'suggestion', 'GET');
     expect(result['status'], 'suggestion');
     expect(result['sourceShotIds'], hasLength(3));

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Play with the Decaid assisted dial-in algorithms using a safe, fictional coffee simulator.">
+  <title>Dial-in lab · Decaid</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Decaid assisted dial-in</p>
+      <h1>Dial-in lab</h1>
+      <p class="lede">Try a few shots, see what the algorithms remember, and compare their next suggestion. Everything here is a made-up brew model: it cannot control a grinder or promise a real-world setting.</p>
+      <div class="badges"><span>Offline friendly</span><span>Keyboard accessible</span><span>Uses shipped calculations</span></div>
+    </div>
+  </header>
+  <main class="wrap" id="app">
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    <section class="grid two">
+      <article class="card">
+        <div class="card-head"><div><p class="eyebrow">1 · Your setup</p><h2>Make a coffee</h2></div><button id="theme" class="quiet" type="button">Light mode</button></div>
+        <div class="fields">
+          <label>Algorithm<select id="algorithm"><option value="GbS1">GbS1 · smooth memory</option><option value="GbS2">GbS2 · regression</option><option value="GbS3">GbS3 · cautious phases</option><option value="GbS4">GbS4 · near-lock</option><option value="DdEff">DdEff · measurement sweep</option></select></label>
+          <label>Grinder<select id="grinder"><option>DF64 Gen 2</option><option>DF54</option><option>E64 WS</option><option>Other known grinder</option></select></label>
+          <label>Burrs / calibration<input id="burrs" value="stock burrs · zero 0 · epoch 1"></label>
+          <label>Bean / lot<input id="bean" value="Washed Ethiopia"></label>
+          <label>Species / blend<input id="species" value="Arabica"></label>
+          <label>Roast level<input id="roast" value="light"></label>
+          <label>Calibration epoch<input id="calibration" value="epoch 1"></label>
+          <label>Dose (g)<input id="dose" type="number" min="1" max="100" step="0.1" value="18"></label>
+          <label>Target yield (g)<input id="yield" type="number" min="1" max="200" step="0.1" value="36"></label>
+          <label>Target time (seconds)<input id="target" type="number" min="1" max="600" step="0.1" value="28"></label>
+          <label>Starting setting (dD)<input id="start" type="number" min="-2147483648" max="2147483647" step="1" value="500"></label>
+          <label>Ideal tolerance (seconds)<input id="tolerance" type="number" min="0" max="60" step="0.1" value="1"></label>
+        </div>
+        <p class="hint">Bean and burr details identify the experiment. The shipped GBS formulas use timing and grinder coordinates; this lab keeps those context fields visible so you can see what is and is not used.</p>
+      </article>
+      <article class="card plant-card">
+        <div class="card-head"><div><p class="eyebrow">2 · Brew model</p><h2>Choose what the coffee does</h2></div><span class="tag">fictional plant</span></div>
+        <p>In simulated mode, this is a deliberately fictional plant: higher setting numbers make the simulated shot faster. That direction is not a DF64 conversion. Pressure and flow are recorded as context; GBS itself only receives the documented timing inputs.</p>
+        <div class="fields compact"><label>Plant speed<input id="plant" type="number" min="0.2" max="2" step="0.05" value="1"></label><label>Shot-to-shot noise<input id="noise" type="number" min="0" max="10" step="0.1" value="0.8"></label><label>Pressure (bar)<input id="pressure" type="number" min="0" max="15" step="0.1" value="9"></label><label>Flow (g/s)<input id="flow" type="number" min="0" max="20" step="0.1" value="2.2"></label></div>
+        <div class="actions"><button id="next" class="primary" type="button">Brew next shot</button><button id="run" type="button">Run planned shots</button><button id="reset" type="button">Reset experiment</button></div>
+        <p class="hint">The “Brew” button runs the current recommendation through the fictional plant. “Run planned shots” uses the table below one row at a time and can always be replayed from reset.</p>
+      </article>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><p class="eyebrow">3 · Your plan</p><h2>Plan and compare shots</h2></div><div class="actions"><button id="add" type="button">Add shot</button><button id="undo" type="button">Undo last</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Pass</th><th>Setting</th><th>Actual time</th><th>Target</th><th>Pressure</th><th>Flow</th><th>Taste after brew</th><th>What the algorithm said</th><th></th></tr></thead><tbody id="shots"></tbody></table></div>
+      <p class="hint">You can edit planned actual times to replay a known experiment. Actual times are never silently replaced by the model.</p>
+    </section>
+    <section class="grid two">
+      <article class="card"><div class="card-head"><div><p class="eyebrow">First shot</p><h2>Bean-aware starting help</h2></div><span class="tag">provisional</span></div>
+        <p>The first shot can still produce a cautious starting suggestion when the bean and grinder are known. It is a starting point, not a measured conversion.</p>
+        <div class="fields compact"><label>Taste for latest shot<select id="assist-taste"><option value="">No taste signal</option><option value="balanced">Balanced</option><option value="sour">Sour / acidic</option><option value="bitter">Bitter / dry</option><option value="astringent">Astringent / harsh</option><option value="weak">Weak</option><option value="channeling">Channeling</option></select></label></div>
+        <button id="assist" class="primary" type="button">Suggest a cautious first step</button><div id="assist-result" class="result" aria-live="polite"><p>Brew a shot, add your taste feedback, then ask for a suggestion.</p></div>
+      </article>
+      <article class="card"><div class="card-head"><div><p class="eyebrow">Supporting calculators</p><h2>Explore the other tools</h2></div><span class="tag">shipped factory</span></div>
+        <label>Calculator<select id="helper"><option value="manual">Manual DF54 / DF64 guidance</option><option value="wizard">Initial E64 / E65 / E80 suggestion</option><option value="effective">Effective setting over grind time</option><option value="grindtime">Grind-time adjustment modes</option><option value="inverse">Inverse regression</option></select></label>
+        <div id="helper-fields" class="fields compact"></div><button id="helper-run" type="button">Run calculator</button><div id="helper-result" class="result" aria-live="polite"><p>Select a calculator.</p></div>
+      </article>
+    </section>
+    <section class="grid two">
+      <article class="card"><div class="card-head"><div><p class="eyebrow">4 · What happened?</p><h2>Algorithm result</h2></div><button id="replay" type="button">Replay from start</button></div><div id="result" class="result"><p>Run a shot to see the first recommendation.</p></div><details><summary>How to read this</summary><p id="explain">The algorithm gets a brew time, target time, current setting, and tolerance. It returns a candidate and a returned setting. A hold or cancel means it is deliberately waiting for better evidence.</p></details></article>
+      <article class="card"><div class="card-head"><div><p class="eyebrow">5 · Compare</p><h2>Same shots, every algorithm</h2></div><span id="comparison-count" class="tag">0 passes</span></div><div id="compare" class="compare"></div></article>
+    </section>
+    <section class="card"><div class="card-head"><div><p class="eyebrow">6 · See the pattern</p><h2>Settings and brew time</h2></div><div class="legend"><span class="dot time"></span> actual time <span class="dot target"></span> target<br><span class="hint">Lines show returned settings: GbS1 amber · GbS2 pink · GbS3 purple · GbS4 green · DdEff red</span></div></div><div id="chart" class="chart" role="img" aria-label="Chart of simulated brew times and algorithm returned settings"></div></section>
+    <section class="grid two">
+      <article class="card"><p class="eyebrow">Save your experiment</p><h2>Export or import</h2><p>Save a scenario as JSON to share or repeat later. Imported data is bounded and treated as data, never as HTML.</p><div class="actions"><button id="export" type="button">Download scenario</button><label class="file-button">Import JSON<input id="import" type="file" accept="application/json"></label></div></article>
+      <article class="card"><p class="eyebrow">Learn</p><h2>Plain-language guide</h2><p>GbS1 smooths recent results. GbS2 fits a line. GbS3 keeps a cautious middle phase. GbS4 locks near the target. DdEff deliberately sweeps settings so a later measurement can learn the grinder.</p><a href="../docs/GBS_GUIDE.md">Read the full GBS guide</a><p class="source">Research revision is shown in the run details. Physical burr movement and manufacturer mappings still require calibration.</p></article>
+    </section>
+    <section class="card">
+      <div class="card-head"><div><p class="eyebrow">Reference shelf</p><h2>Starting points from roasters and research</h2></div><span id="catalog-status" class="tag">Loading…</span></div>
+      <p class="hint">These are linked, reviewed facts for human starting points. They do not teach the simulator a hidden grinder conversion and never override your confirmed shot data.</p>
+      <label class="search">Search references<input id="catalog-search" type="search" placeholder="espresso, light roast, E64…" autocomplete="off"></label>
+      <div id="catalog" class="catalog" aria-live="polite"></div>
+    </section>
+  </main>
+  <footer class="wrap footer">Decaid · simulation only · no hardware access</footer>
+  <script src="../plugin.js"></script>
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

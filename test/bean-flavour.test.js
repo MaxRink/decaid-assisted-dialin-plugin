@@ -106,6 +106,10 @@ async function load({
         : response({}, { ok: false, status: 404 });
     if (beanBatch && url.endsWith(`/bean-batches/${beanBatch.id}`))
       return response(beanBatch);
+    if (url.endsWith("/bean-batches/batch-a"))
+      return response({id: "batch-a", beanId: "bean-a", roastLevel: "light"});
+    if (url.endsWith("/beans/bean-a"))
+      return response({id: "bean-a", name: "Fixture bean", species: "Arabica", variety: ["Bourbon"], processing: "washed"});
     return response({}, { ok: false, status: 404 });
   };
   const vmContext = {
@@ -178,6 +182,100 @@ test("accepts structured flavour feedback and preserves it through reload", asyn
   const body = JSON.parse(analysis.body);
   assert.deepEqual(body.feedback.flavour, flavour);
   assert.ok(body.analyzeMetrics || body.metrics);
+});
+
+test("persists an explicitly confirmed auxiliary bean-dose measurement without rewriting recipe data", async () => {
+  const entry = shot("bean-dose-1");
+  entry.full.measurements[0].scale.timestamp = entry.full.measurements[0].machine.timestamp;
+  const first = await load({ shots: [entry] });
+  const measuredBeanDose = {
+    deviceId: "aux-scale-1",
+    connectionRole: "auxiliary",
+    purpose: "beans",
+    weightG: 18.5,
+    units: "g",
+    capturedAt: "2026-10-11T10:00:00.000Z",
+    sampleTimestamp: null,
+    userConfirmed: true,
+  };
+  const saved = await feedback(first.plugin, entry.id, { measuredBeanDose });
+  assert.equal(saved.status, 200);
+  const stored = first.events.filter((event) => event && event.stored).at(-1).stored;
+  assert.equal(stored[entry.id].measuredBeanDose.source, "operator-confirmed auxiliary scale capture");
+
+  const second = await load({ shots: [entry], stored });
+  const response = await second.plugin.handleHttpRequest({
+    endpoint: "analysis",
+    method: "POST",
+    body: { shotId: entry.id },
+  });
+  assert.equal(response.status, 200);
+  const body = JSON.parse(response.body);
+  assert.deepEqual(body.feedback.measuredBeanDose, {
+    ...measuredBeanDose,
+    source: "operator-confirmed auxiliary scale capture",
+  });
+  assert.equal(body.metrics.recipeTargets.ratio, 2);
+  assert.equal(body.metrics.annotations.ratio, 2);
+  assert.equal(
+    body.metrics.annotations.actualYieldToMeasuredBeanDoseRatio,
+    36 / 18.5,
+  );
+  assert.equal(body.metrics.measuredBeanDose.weightG, 18.5);
+  assert.equal(body.measuredBeanDose.weightG, 18.5);
+});
+
+test("rejects unsafe auxiliary bean-dose measurements with specific validation errors", async () => {
+  const entry = shot("bean-dose-invalid");
+  const { plugin } = await load({ shots: [entry] });
+  const base = {
+    deviceId: "aux-scale-1",
+    connectionRole: "auxiliary",
+    purpose: "beans",
+    weightG: 18.5,
+    units: "g",
+    capturedAt: "2026-10-11T10:00:00.000Z",
+    sampleTimestamp: null,
+    userConfirmed: true,
+  };
+  const invalid = [
+    { ...base, connectionRole: "primary" },
+    { ...base, purpose: "shot" },
+    { ...base, weightG: NaN },
+    { ...base, weightG: 0 },
+    { ...base, units: "kg" },
+    { ...base, capturedAt: "not-a-date" },
+    { ...base, capturedAt: "2026-02-31T10:00:00Z" },
+    { ...base, capturedAt: "2025-02-29T10:00:00Z" },
+    { ...base, capturedAt: "2026-10-11T24:00:00Z" },
+    { ...base, capturedAt: "2026-10-11T10:00:00+14:01" },
+    { ...base, sampleTimestamp: "not-a-date" },
+    { ...base, userConfirmed: false },
+    { ...base, extra: true },
+  ];
+  for (const measuredBeanDose of invalid) {
+    const result = await feedback(plugin, entry.id, { measuredBeanDose });
+    assert.equal(result.status, 400, JSON.stringify(measuredBeanDose));
+    assert.match(JSON.parse(result.body).error, /measuredBeanDose/);
+  }
+});
+
+test("accepts leap-day and bounded offset ISO timestamps", async () => {
+  const entry = shot("bean-dose-time-valid");
+  const { plugin } = await load({ shots: [entry] });
+  const result = await feedback(plugin, entry.id, {
+    measuredBeanDose: {
+      deviceId: "aux-scale-1",
+      connectionRole: "auxiliary",
+      purpose: "beans",
+      weightG: 18.5,
+      units: "g",
+      capturedAt: "2024-02-29T10:00:00+14:00",
+      sampleTimestamp: "2024-02-29T00:00:00-12:00",
+      userConfirmed: true,
+    },
+  });
+  assert.equal(result.status, 200);
 });
 
 test("rejects malformed flavour values, unknown keys and oversized descriptors", async () => {

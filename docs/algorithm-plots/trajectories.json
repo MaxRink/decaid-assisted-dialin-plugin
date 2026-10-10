@@ -1,0 +1,2264 @@
+{
+  "extras": {
+    "grindTime": {
+      "adjustedTimeMs": 1000,
+      "optional": true
+    },
+    "grindTimeSweep": [
+      {
+        "mode": 2,
+        "result": {
+          "adjustedTimeMs": null,
+          "optional": false
+        },
+        "targetDdDum": 300
+      },
+      {
+        "mode": 2,
+        "result": {
+          "adjustedTimeMs": null,
+          "optional": false
+        },
+        "targetDdDum": 500
+      },
+      {
+        "mode": 2,
+        "result": {
+          "adjustedTimeMs": null,
+          "optional": false
+        },
+        "targetDdDum": 700
+      },
+      {
+        "mode": 3,
+        "result": {
+          "adjustedTimeMs": 1041,
+          "optional": true
+        },
+        "targetDdDum": 300
+      },
+      {
+        "mode": 3,
+        "result": {
+          "adjustedTimeMs": 1000,
+          "optional": true
+        },
+        "targetDdDum": 500
+      },
+      {
+        "mode": 3,
+        "result": {
+          "adjustedTimeMs": 962,
+          "optional": true
+        },
+        "targetDdDum": 700
+      }
+    ],
+    "inverseSweep": [
+      {
+        "predictionUm": 60.5,
+        "targetSec": 24
+      },
+      {
+        "predictionUm": 56.5,
+        "targetSec": 26
+      },
+      {
+        "predictionUm": 52.5,
+        "targetSec": 28
+      },
+      {
+        "predictionUm": 48.5,
+        "targetSec": 30
+      },
+      {
+        "predictionUm": 44.5,
+        "targetSec": 32
+      }
+    ],
+    "manual": {
+      "confidence": 0.7000000000000001,
+      "currentDial": 30,
+      "direction": "finer",
+      "physicalTurn": "clockwise",
+      "profile": "df64_gen1",
+      "proposedDial": 31,
+      "reasons": [
+        "brew time is below target",
+        "sensory input suggests under-extraction"
+      ],
+      "requiresConfirmation": true,
+      "safetyNotes": [
+        "recommendation only; this tool never contacts or moves a grinder",
+        "use a small calibrated step and re-measure the next shot",
+        "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+        "follow the manufacturer's motor-running adjustment guidance"
+      ],
+      "suggestedStepMarks": 1
+    },
+    "manualProfiles": [
+      {
+        "conflict": {
+          "confidence": 0,
+          "currentDial": 30,
+          "direction": "none",
+          "physicalTurn": null,
+          "profile": "df54",
+          "proposedDial": null,
+          "reasons": [
+            "brew time is below target",
+            "sensory input suggests over-extraction",
+            "time and sensory signals conflict; confirm before changing grind"
+          ],
+          "requiresConfirmation": true,
+          "safetyNotes": [
+            "recommendation only; this tool never contacts or moves a grinder",
+            "use a small calibrated step and re-measure the next shot",
+            "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+            "follow the manufacturer's motor-running adjustment guidance"
+          ],
+          "suggestedStepMarks": 1
+        },
+        "normal": {
+          "confidence": 0.7000000000000001,
+          "currentDial": 30,
+          "direction": "finer",
+          "physicalTurn": "counterclockwise",
+          "profile": "df54",
+          "proposedDial": 31,
+          "reasons": [
+            "brew time is below target",
+            "sensory input suggests under-extraction"
+          ],
+          "requiresConfirmation": true,
+          "safetyNotes": [
+            "recommendation only; this tool never contacts or moves a grinder",
+            "use a small calibrated step and re-measure the next shot",
+            "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+            "follow the manufacturer's motor-running adjustment guidance"
+          ],
+          "suggestedStepMarks": 1
+        },
+        "profile": "df54"
+      },
+      {
+        "conflict": {
+          "confidence": 0,
+          "currentDial": 30,
+          "direction": "none",
+          "physicalTurn": null,
+          "profile": "df64_gen1",
+          "proposedDial": null,
+          "reasons": [
+            "brew time is below target",
+            "sensory input suggests over-extraction",
+            "time and sensory signals conflict; confirm before changing grind"
+          ],
+          "requiresConfirmation": true,
+          "safetyNotes": [
+            "recommendation only; this tool never contacts or moves a grinder",
+            "use a small calibrated step and re-measure the next shot",
+            "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+            "follow the manufacturer's motor-running adjustment guidance"
+          ],
+          "suggestedStepMarks": 1
+        },
+        "normal": {
+          "confidence": 0.7000000000000001,
+          "currentDial": 30,
+          "direction": "finer",
+          "physicalTurn": "clockwise",
+          "profile": "df64_gen1",
+          "proposedDial": 31,
+          "reasons": [
+            "brew time is below target",
+            "sensory input suggests under-extraction"
+          ],
+          "requiresConfirmation": true,
+          "safetyNotes": [
+            "recommendation only; this tool never contacts or moves a grinder",
+            "use a small calibrated step and re-measure the next shot",
+            "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+            "follow the manufacturer's motor-running adjustment guidance"
+          ],
+          "suggestedStepMarks": 1
+        },
+        "profile": "df64_gen1"
+      },
+      {
+        "conflict": {
+          "confidence": 0,
+          "currentDial": 30,
+          "direction": "none",
+          "physicalTurn": null,
+          "profile": "df64_gen2",
+          "proposedDial": null,
+          "reasons": [
+            "brew time is below target",
+            "sensory input suggests over-extraction",
+            "time and sensory signals conflict; confirm before changing grind"
+          ],
+          "requiresConfirmation": true,
+          "safetyNotes": [
+            "recommendation only; this tool never contacts or moves a grinder",
+            "use a small calibrated step and re-measure the next shot",
+            "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+            "follow the manufacturer's motor-running adjustment guidance"
+          ],
+          "suggestedStepMarks": 1
+        },
+        "normal": {
+          "confidence": 0.7000000000000001,
+          "currentDial": 30,
+          "direction": "finer",
+          "physicalTurn": "clockwise",
+          "profile": "df64_gen2",
+          "proposedDial": 31,
+          "reasons": [
+            "brew time is below target",
+            "sensory input suggests under-extraction"
+          ],
+          "requiresConfirmation": true,
+          "safetyNotes": [
+            "recommendation only; this tool never contacts or moves a grinder",
+            "use a small calibrated step and re-measure the next shot",
+            "verify true zero, burr set, alignment, and the sign of the physical dial on this unit",
+            "follow the manufacturer's motor-running adjustment guidance"
+          ],
+          "suggestedStepMarks": 1
+        },
+        "profile": "df64_gen2"
+      }
+    ],
+    "wizardRows": [
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 22,
+        "roastDegreeIndex": 0,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 43,
+        "roastDegreeIndex": 0,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 64,
+        "roastDegreeIndex": 0,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 42,
+        "roastDegreeIndex": 1,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 63,
+        "roastDegreeIndex": 1,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 84,
+        "roastDegreeIndex": 1,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 62,
+        "roastDegreeIndex": 2,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 83,
+        "roastDegreeIndex": 2,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 1,
+        "proposedDdDum": 104,
+        "roastDegreeIndex": 2,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 28,
+        "roastDegreeIndex": 0,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 52,
+        "roastDegreeIndex": 0,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 76,
+        "roastDegreeIndex": 0,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 48,
+        "roastDegreeIndex": 1,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 72,
+        "roastDegreeIndex": 1,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 96,
+        "roastDegreeIndex": 1,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 68,
+        "roastDegreeIndex": 2,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 92,
+        "roastDegreeIndex": 2,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 2,
+        "proposedDdDum": 116,
+        "roastDegreeIndex": 2,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 52,
+        "roastDegreeIndex": 0,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 88,
+        "roastDegreeIndex": 0,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 124,
+        "roastDegreeIndex": 0,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 72,
+        "roastDegreeIndex": 1,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 108,
+        "roastDegreeIndex": 1,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 144,
+        "roastDegreeIndex": 1,
+        "weightMg": 24000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 92,
+        "roastDegreeIndex": 2,
+        "weightMg": 12000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 128,
+        "roastDegreeIndex": 2,
+        "weightMg": 18000
+      },
+      {
+        "modelEnum": 3,
+        "proposedDdDum": 164,
+        "roastDegreeIndex": 2,
+        "weightMg": 24000
+      }
+    ]
+  },
+  "firmwareBuild": "HEM-HSG-HMI-S01 V01.16-24",
+  "rows": [
+    {
+      "input": {
+        "actualBrewTimeMs": 35000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 1,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1050,
+        "centralSec": 35,
+        "committed": true,
+        "correction": 5,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1050
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 105,
+        "history": [
+          {
+            "age": 0,
+            "value": 35
+          },
+          {
+            "age": 1,
+            "value": 35
+          },
+          {
+            "age": 2,
+            "value": 35
+          },
+          {
+            "age": 3,
+            "value": 35
+          }
+        ],
+        "lastResultDum": 1050,
+        "previousQuantizedUm": 105
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 32000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 2,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1100,
+        "centralSec": 35,
+        "committed": true,
+        "correction": 5,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1100
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 110,
+        "history": [
+          {
+            "age": 0,
+            "value": 32
+          },
+          {
+            "age": 1,
+            "value": 35
+          },
+          {
+            "age": 2,
+            "value": 35
+          },
+          {
+            "age": 3,
+            "value": 35
+          }
+        ],
+        "lastResultDum": 1100,
+        "previousQuantizedUm": 110
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 3,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1150,
+        "centralSec": 33.5,
+        "committed": false,
+        "correction": 5,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1100
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 115,
+        "history": [
+          {
+            "age": 0,
+            "value": 28
+          },
+          {
+            "age": 1,
+            "value": 32
+          },
+          {
+            "age": 2,
+            "value": 35
+          },
+          {
+            "age": 3,
+            "value": 35
+          }
+        ],
+        "lastResultDum": 1100,
+        "previousQuantizedUm": 115
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 4,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1200,
+        "centralSec": 31,
+        "committed": true,
+        "correction": 5,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1200
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 120,
+        "history": [
+          {
+            "age": 1,
+            "value": 28
+          },
+          {
+            "age": 0,
+            "value": 30
+          },
+          {
+            "age": 2,
+            "value": 32
+          },
+          {
+            "age": 3,
+            "value": 35
+          }
+        ],
+        "lastResultDum": 1200,
+        "previousQuantizedUm": 120
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 26000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 5,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1226,
+        "centralSec": 29,
+        "committed": true,
+        "correction": 2.5703703703703704,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1226
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 122.57037037037037,
+        "history": [
+          {
+            "age": 0,
+            "value": 26
+          },
+          {
+            "age": 2,
+            "value": 28
+          },
+          {
+            "age": 1,
+            "value": 30
+          },
+          {
+            "age": 3,
+            "value": 32
+          }
+        ],
+        "lastResultDum": 1226,
+        "previousQuantizedUm": 122.60000000000001
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 34000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 6,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1252,
+        "centralSec": 29,
+        "committed": true,
+        "correction": 2.5703703703703704,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1252
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 125.14074074074074,
+        "history": [
+          {
+            "age": 1,
+            "value": 26
+          },
+          {
+            "age": 3,
+            "value": 28
+          },
+          {
+            "age": 2,
+            "value": 30
+          },
+          {
+            "age": 0,
+            "value": 34
+          }
+        ],
+        "lastResultDum": 1252,
+        "previousQuantizedUm": 125.2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 7,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1278,
+        "centralSec": 29,
+        "committed": false,
+        "correction": 2.5703703703703704,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1252
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 127.71111111111111,
+        "history": [
+          {
+            "age": 2,
+            "value": 26
+          },
+          {
+            "age": 0,
+            "value": 28
+          },
+          {
+            "age": 3,
+            "value": 30
+          },
+          {
+            "age": 1,
+            "value": 34
+          }
+        ],
+        "lastResultDum": 1252,
+        "previousQuantizedUm": 127.80000000000001
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 31000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 8,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1314,
+        "centralSec": 29.5,
+        "committed": true,
+        "correction": 3.6422808523659365,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1314
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 131.35339196347704,
+        "history": [
+          {
+            "age": 3,
+            "value": 26
+          },
+          {
+            "age": 1,
+            "value": 28
+          },
+          {
+            "age": 0,
+            "value": 31
+          },
+          {
+            "age": 2,
+            "value": 34
+          }
+        ],
+        "lastResultDum": 1314,
+        "previousQuantizedUm": 131.4
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 9,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1350,
+        "centralSec": 29.5,
+        "committed": false,
+        "correction": 3.6422808523659365,
+        "locked": false,
+        "phase": "adjust",
+        "returnedDdDum": 1314
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 134.99567281584297,
+        "history": [
+          {
+            "age": 2,
+            "value": 28
+          },
+          {
+            "age": 0,
+            "value": 28
+          },
+          {
+            "age": 1,
+            "value": 31
+          },
+          {
+            "age": 3,
+            "value": 34
+          }
+        ],
+        "lastResultDum": 1314,
+        "previousQuantizedUm": 135
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 10,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1350,
+        "centralSec": 28,
+        "committed": false,
+        "correction": 0,
+        "locked": false,
+        "phase": "within-error-window",
+        "returnedDdDum": 1314
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 134.99567281584297,
+        "history": [
+          {
+            "age": 3,
+            "value": 28
+          },
+          {
+            "age": 1,
+            "value": 28
+          },
+          {
+            "age": 0,
+            "value": 28
+          },
+          {
+            "age": 2,
+            "value": 31
+          }
+        ],
+        "lastResultDum": 1314,
+        "previousQuantizedUm": 135
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 11,
+      "result": {
+        "algorithm": "GbS1",
+        "candidateDdDum": 1350,
+        "centralSec": 28,
+        "committed": false,
+        "correction": 0,
+        "locked": false,
+        "phase": "within-error-window",
+        "returnedDdDum": 1314
+      },
+      "scenario": "GbS1",
+      "state": {
+        "algorithm": "GbS1",
+        "continuousUm": 134.99567281584297,
+        "history": [
+          {
+            "age": 2,
+            "value": 28
+          },
+          {
+            "age": 1,
+            "value": 28
+          },
+          {
+            "age": 0,
+            "value": 28
+          },
+          {
+            "age": 3,
+            "value": 31
+          }
+        ],
+        "lastResultDum": 1314,
+        "previousQuantizedUm": 135
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 35000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 1,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 1032,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 103.5,
+        "returnedDdDum": 1032
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 100,
+            "y": 35
+          }
+        ],
+        "lastResultDum": 1032
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 32000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 980,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 2,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 1088,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 110,
+        "returnedDdDum": 1088
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 100,
+            "y": 35
+          },
+          {
+            "x": 98,
+            "y": 32
+          }
+        ],
+        "lastResultDum": 1088
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 960,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 3,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 1056,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 106.66666666666667,
+        "returnedDdDum": 1056
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 100,
+            "y": 35
+          },
+          {
+            "x": 98,
+            "y": 32
+          },
+          {
+            "x": 96,
+            "y": 30
+          }
+        ],
+        "lastResultDum": 1056
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 29000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 940,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 4,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 1030,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 104,
+        "returnedDdDum": 1030
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 100,
+            "y": 35
+          },
+          {
+            "x": 98,
+            "y": 32
+          },
+          {
+            "x": 96,
+            "y": 30
+          },
+          {
+            "x": 94,
+            "y": 29
+          }
+        ],
+        "lastResultDum": 1030
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 27000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 920,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 5,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 1003,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 101.2,
+        "returnedDdDum": 1003
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 100,
+            "y": 35
+          },
+          {
+            "x": 98,
+            "y": 32
+          },
+          {
+            "x": 96,
+            "y": 30
+          },
+          {
+            "x": 94,
+            "y": 29
+          },
+          {
+            "x": 92,
+            "y": 27
+          }
+        ],
+        "lastResultDum": 1003
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 26000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 900,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 6,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 978,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 98.66666666666667,
+        "returnedDdDum": 978
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 100,
+            "y": 35
+          },
+          {
+            "x": 98,
+            "y": 32
+          },
+          {
+            "x": 96,
+            "y": 30
+          },
+          {
+            "x": 94,
+            "y": 29
+          },
+          {
+            "x": 92,
+            "y": 27
+          },
+          {
+            "x": 90,
+            "y": 26
+          }
+        ],
+        "lastResultDum": 978
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 31000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 880,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 7,
+      "result": {
+        "algorithm": "GbS2",
+        "candidateDdDum": 946,
+        "committed": true,
+        "locked": false,
+        "phase": "regression",
+        "predictionUm": 95.33333333333333,
+        "returnedDdDum": 946
+      },
+      "scenario": "GbS2",
+      "state": {
+        "algorithm": "GbS2",
+        "history": [
+          {
+            "x": 98,
+            "y": 32
+          },
+          {
+            "x": 96,
+            "y": 30
+          },
+          {
+            "x": 94,
+            "y": 29
+          },
+          {
+            "x": 92,
+            "y": 27
+          },
+          {
+            "x": 90,
+            "y": 26
+          },
+          {
+            "x": 88,
+            "y": 31
+          }
+        ],
+        "lastResultDum": 946
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 40000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 1,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 1429,
+        "committed": true,
+        "locked": false,
+        "phase": "far",
+        "predictionUm": 142.85714285714286,
+        "returnedDdDum": 1429
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 4000,
+        "history": [],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1429,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 34000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 2,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 1321,
+        "committed": true,
+        "locked": false,
+        "phase": "far",
+        "predictionUm": 132.14285714285714,
+        "returnedDdDum": 1321
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 3700,
+        "history": [],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1321,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 3,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 1196,
+        "committed": true,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 119.64285714285714,
+        "returnedDdDum": 1196
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 3350,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1196,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 4,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 1051,
+        "committed": false,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 100.5,
+        "returnedDdDum": 1196
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 3075,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1196,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 27000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 5,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 1016,
+        "committed": true,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 100.16666666666667,
+        "returnedDdDum": 1016
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2887.5,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1016,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 26000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 6,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 999,
+        "committed": true,
+        "locked": false,
+        "phase": "near",
+        "predictionUm": 99.875,
+        "returnedDdDum": 999
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2743.75,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          },
+          {
+            "x": 100,
+            "y": 26
+          }
+        ],
+        "holdCyclesRemaining": 2,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 999,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 35000,
+        "estimatedDdDum": 1700,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 7,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 999,
+        "committed": false,
+        "locked": true,
+        "phase": "cancel",
+        "returnedDdDum": 999
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2743.75,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          },
+          {
+            "x": 100,
+            "y": 26
+          }
+        ],
+        "holdCyclesRemaining": 2,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 999,
+        "lastTargetDum": 1700,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 8,
+      "result": {
+        "algorithm": "GbS3",
+        "candidateDdDum": 999,
+        "committed": false,
+        "locked": true,
+        "phase": "cancel",
+        "returnedDdDum": 999
+      },
+      "scenario": "GbS3",
+      "state": {
+        "algorithm": "GbS3",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2743.75,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          },
+          {
+            "x": 100,
+            "y": 26
+          }
+        ],
+        "holdCyclesRemaining": 2,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 999,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 40000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 1,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1429,
+        "committed": true,
+        "locked": false,
+        "phase": "far",
+        "predictionUm": 142.85714285714286,
+        "returnedDdDum": 1429
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 4000,
+        "history": [],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1429,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 34000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 2,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1321,
+        "committed": true,
+        "locked": false,
+        "phase": "far",
+        "predictionUm": 132.14285714285714,
+        "returnedDdDum": 1321
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 3700,
+        "history": [],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1321,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 30000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 3,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1196,
+        "committed": true,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 119.64285714285714,
+        "returnedDdDum": 1196
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 3350,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1196,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 4,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1051,
+        "committed": false,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 100.5,
+        "returnedDdDum": 1196
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 3075,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1196,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 27000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 5,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1016,
+        "committed": true,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 100.16666666666667,
+        "returnedDdDum": 1016
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2887.5,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1016,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 26000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 6,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1016,
+        "committed": false,
+        "locked": true,
+        "phase": "near",
+        "returnedDdDum": 1016
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2887.5,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1016,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 28000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 7,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1016,
+        "committed": false,
+        "locked": true,
+        "phase": "near",
+        "returnedDdDum": 1016
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2887.5,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1016,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "actualBrewTimeMs": 31000,
+        "estimatedDdDum": 1000,
+        "setpointDdDum": 1000,
+        "targetBrewTimeMs": 28000,
+        "toleranceMs": 1000
+      },
+      "pass": 8,
+      "result": {
+        "algorithm": "GbS4",
+        "candidateDdDum": 1036,
+        "committed": true,
+        "locked": false,
+        "phase": "mid",
+        "predictionUm": 100.5,
+        "returnedDdDum": 1036
+      },
+      "scenario": "GbS4",
+      "state": {
+        "algorithm": "GbS4",
+        "farFactor": 0,
+        "filterRetention": 0.5,
+        "filteredDdTimesBrew": 2993.75,
+        "history": [
+          {
+            "x": 100,
+            "y": 30
+          },
+          {
+            "x": 100,
+            "y": 28
+          },
+          {
+            "x": 100,
+            "y": 27
+          },
+          {
+            "x": 100,
+            "y": 31
+          }
+        ],
+        "holdCyclesRemaining": 0,
+        "holdCyclesSetting": 2,
+        "keepMediumIntervalWidth": false,
+        "lastAdjustmentDum": 1036,
+        "lastTargetDum": 1000,
+        "midFactor": 0.5,
+        "nearFactor": 1,
+        "nearThresholdSec": 2
+      }
+    },
+    {
+      "input": {
+        "call": 1,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 1,
+      "result": {
+        "returnedDdDum": 1000
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 1
+      }
+    },
+    {
+      "input": {
+        "call": 2,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 2,
+      "result": {
+        "returnedDdDum": 1000
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 2
+      }
+    },
+    {
+      "input": {
+        "call": 3,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 3,
+      "result": {
+        "returnedDdDum": 1000
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 3
+      }
+    },
+    {
+      "input": {
+        "call": 4,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 4,
+      "result": {
+        "returnedDdDum": 1000
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 4
+      }
+    },
+    {
+      "input": {
+        "call": 5,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 5,
+      "result": {
+        "returnedDdDum": 1000
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 5
+      }
+    },
+    {
+      "input": {
+        "call": 6,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 6,
+      "result": {
+        "returnedDdDum": 1000
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 6
+      }
+    },
+    {
+      "input": {
+        "call": 7,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 7,
+      "result": {
+        "returnedDdDum": 800
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 7
+      }
+    },
+    {
+      "input": {
+        "call": 8,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 8,
+      "result": {
+        "returnedDdDum": 800
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 8
+      }
+    },
+    {
+      "input": {
+        "call": 9,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 9,
+      "result": {
+        "returnedDdDum": 800
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 9
+      }
+    },
+    {
+      "input": {
+        "call": 10,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 10,
+      "result": {
+        "returnedDdDum": 800
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 10
+      }
+    },
+    {
+      "input": {
+        "call": 11,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 11,
+      "result": {
+        "returnedDdDum": 800
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 11
+      }
+    },
+    {
+      "input": {
+        "call": 12,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 12,
+      "result": {
+        "returnedDdDum": 800
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 12
+      }
+    },
+    {
+      "input": {
+        "call": 13,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 13,
+      "result": {
+        "returnedDdDum": 1200
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 13
+      }
+    },
+    {
+      "input": {
+        "call": 14,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 14,
+      "result": {
+        "returnedDdDum": 1200
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 14
+      }
+    },
+    {
+      "input": {
+        "call": 15,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 15,
+      "result": {
+        "returnedDdDum": 1200
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 15
+      }
+    },
+    {
+      "input": {
+        "call": 16,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 16,
+      "result": {
+        "returnedDdDum": 1200
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 16
+      }
+    },
+    {
+      "input": {
+        "call": 17,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 17,
+      "result": {
+        "returnedDdDum": 1200
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 17
+      }
+    },
+    {
+      "input": {
+        "call": 18,
+        "calls": 18,
+        "initialDdDum": 1000
+      },
+      "pass": 18,
+      "result": {
+        "returnedDdDum": 1200
+      },
+      "scenario": "DdEff",
+      "state": {
+        "calls": 18
+      }
+    },
+    {
+      "input": {
+        "grindDdDum": 500,
+        "grindDurationMs": 1000
+      },
+      "nextState": {
+        "residue": 50
+      },
+      "pass": 1,
+      "result": {
+        "nextState": {
+          "residue": 50
+        },
+        "result": 500
+      },
+      "scenario": "effectiveDd",
+      "state": {
+        "residue": 50
+      }
+    },
+    {
+      "input": {
+        "grindDdDum": 540,
+        "grindDurationMs": 1000,
+        "previousEffective": 50
+      },
+      "nextState": {
+        "residue": 51.24994693057263
+      },
+      "pass": 2,
+      "result": {
+        "nextState": {
+          "residue": 51.24994693057263
+        },
+        "result": 507
+      },
+      "scenario": "effectiveDd",
+      "state": {
+        "residue": 51.24994693057263
+      }
+    },
+    {
+      "input": {
+        "grindDdDum": 580,
+        "grindDurationMs": 1000,
+        "previousEffective": 50.7
+      },
+      "nextState": {
+        "residue": 53.3592489594059
+      },
+      "pass": 3,
+      "result": {
+        "nextState": {
+          "residue": 53.3592489594059
+        },
+        "result": 519
+      },
+      "scenario": "effectiveDd",
+      "state": {
+        "residue": 53.3592489594059
+      }
+    },
+    {
+      "input": {
+        "grindDdDum": 620,
+        "grindDurationMs": 1000,
+        "previousEffective": 51.9
+      },
+      "nextState": {
+        "residue": 56.05936901966411
+      },
+      "pass": 4,
+      "result": {
+        "nextState": {
+          "residue": 56.05936901966411
+        },
+        "result": 536
+      },
+      "scenario": "effectiveDd",
+      "state": {
+        "residue": 56.05936901966411
+      }
+    },
+    {
+      "input": {
+        "grindDdDum": 660,
+        "grindDurationMs": 1000,
+        "previousEffective": 53.6
+      },
+      "nextState": {
+        "residue": 59.165684315120615
+      },
+      "pass": 5,
+      "result": {
+        "nextState": {
+          "residue": 59.165684315120615
+        },
+        "result": 557
+      },
+      "scenario": "effectiveDd",
+      "state": {
+        "residue": 59.165684315120615
+      }
+    }
+  ]
+}

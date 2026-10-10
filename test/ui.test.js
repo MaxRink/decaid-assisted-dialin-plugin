@@ -13,6 +13,9 @@ class Element {
     this.fields = {};
     this.innerHTML = "";
     this._textContent = "";
+    this.children = [];
+    this.focused = false;
+    this.hidden = true;
   }
   set textContent(value) {
     this._textContent = String(value);
@@ -22,6 +25,12 @@ class Element {
   }
   addEventListener(name, callback) {
     this.listeners[name] = callback;
+  }
+  appendChild(child) {
+    this.children.push(child);
+  }
+  focus() {
+    this.focused = true;
   }
 }
 
@@ -38,7 +47,7 @@ function response(value, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => value };
 }
 
-async function uiFixture(fetchImpl, { rich = false } = {}) {
+async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   let plugin;
   const host = {
     log() {},
@@ -64,6 +73,7 @@ async function uiFixture(fetchImpl, { rich = false } = {}) {
     clearTimeout,
     FormData: FormDataFixture,
     document: null,
+    location,
   };
   vm.createContext(context);
   vm.runInContext(`${source}\nthis.createPlugin = createPlugin;`, context);
@@ -78,6 +88,11 @@ async function uiFixture(fetchImpl, { rich = false } = {}) {
   const research = new Element("research");
   const beans = new Element("beans");
   const analysis = new Element("analysis");
+  const loadShots = new Element("loadShots");
+  const shotSelect = new Element("shotSelect");
+  const returnLink = new Element("returnLink");
+  const referenceDetails = new Element("reviewedReferences");
+  const referenceList = new Element("referenceList");
   analysis.fields = { shotId: "shot-1" };
   form.fields = { shotId: "shot-1", notes: "<img src=x onerror=alert(1)>" };
   form.fields = {
@@ -108,7 +123,15 @@ async function uiFixture(fetchImpl, { rich = false } = {}) {
         "#research": research,
         "#beans": beans,
         "#analysis": analysis,
+        "#loadShots": loadShots,
+        "#shotSelect": shotSelect,
+        "#returnLink": returnLink,
+        "#reviewedReferences": referenceDetails,
+        "#referenceList": referenceList,
       }[selector];
+    },
+    createElement() {
+      return new Element("option");
     },
   };
   const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
@@ -122,6 +145,11 @@ async function uiFixture(fetchImpl, { rich = false } = {}) {
     research,
     beans,
     analysis,
+    loadShots,
+    shotSelect,
+    returnLink,
+    referenceDetails,
+    referenceList,
     context,
   };
 }
@@ -346,4 +374,171 @@ test("brew metrics and bean context UI use their public endpoints", async () => 
   assert.equal(requests[0].init, undefined);
   assert.equal(requests[1].url, "analysis");
   assert.equal(JSON.parse(requests[1].init.body).shotId, "shot-1");
+});
+
+test("bean weighing is sent only after explicit confirmation", async () => {
+  const requests = [];
+  const ui = await uiFixture(async (url, init) => {
+    requests.push({ url, init });
+    return response({ saved: true, shotId: "shot-1" });
+  });
+  Object.assign(ui.form.fields, {
+    confirmBeanMeasurement: "on",
+    beanScaleId: "scale-1",
+    beanScaleRole: "auxiliary",
+    beanWeight: "18.4",
+    beanCapturedAt: "2026-10-11T12:00",
+    beanSampleTimestamp: "2026-10-11T11:59",
+  });
+  await ui.form.onsubmit({ preventDefault() {}, target: ui.form });
+  const body = JSON.parse(requests[0].init.body);
+  assert.deepEqual(body.measuredBeanDose, {
+    deviceId: "scale-1",
+    connectionRole: "auxiliary",
+    purpose: "beans",
+    weightG: 18.4,
+    units: "g",
+    capturedAt: new Date("2026-10-11T12:00").toISOString(),
+    sampleTimestamp: new Date("2026-10-11T11:59").toISOString(),
+    userConfirmed: true,
+  });
+});
+
+test("invalid confirmed bean weighing does not lock the form and can be corrected", async () => {
+  const requests = [];
+  const ui = await uiFixture(async (url, init) => {
+    requests.push({ url, init });
+    return response({ saved: true, shotId: "shot-1" });
+  });
+  ui.form.fields.confirmBeanMeasurement = "on";
+  await ui.form.onsubmit({ preventDefault() {}, target: ui.form });
+  assert.equal(requests.length, 0);
+  assert.match(ui.output.textContent, /positive bean weight/);
+  Object.assign(ui.form.fields, {
+    beanScaleId: "scale-1",
+    beanWeight: "18.4",
+    beanCapturedAt: "2026-10-11T12:00",
+  });
+  await ui.form.onsubmit({ preventDefault() {}, target: ui.form });
+  assert.equal(requests.length, 1);
+});
+
+test("launch action analyses the selected shot and permits a same-host return port", async () => {
+  const requests = [];
+  const ui = await uiFixture(
+    async (url, init) => {
+      requests.push({ url, init });
+      return response({ shotId: "shot-9", metrics: {}, feedback: null });
+    },
+    {
+      location: {
+        pathname: "/api/v1/plugins/assisted-dialin.reaplugin/ui",
+        search: "?shotId=shot-9&action=analyze&return=http%3A%2F%2Flocalhost%3A3000%2Fshots%2F9",
+        href: "http://localhost:8080/api/v1/plugins/assisted-dialin.reaplugin/ui?shotId=shot-9",
+        origin: "http://localhost:8080",
+      },
+    },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests[0].url, "/api/v1/plugins/assisted-dialin.reaplugin/analysis");
+  assert.equal(JSON.parse(requests[0].init.body).shotId, "shot-9");
+  assert.equal(ui.returnLink.href, "http://localhost:3000/shots/9");
+});
+
+test("return navigation rejects hostile schemes, hosts and credentials", async () => {
+  for (const target of [
+    "javascript:alert(1)",
+    "https://evil.example/steal",
+    "http://user:pass@localhost:3000/private",
+  ]) {
+    const ui = await uiFixture(
+      async () => response({ status: "abstain" }),
+      {
+        location: {
+          pathname: "/api/v1/plugins/assisted-dialin.reaplugin/ui",
+          search: `?returnTo=${encodeURIComponent(target)}`,
+          href: "http://localhost:8080/api/v1/plugins/assisted-dialin.reaplugin/ui",
+          origin: "http://localhost:8080",
+        },
+      },
+    );
+    assert.equal(ui.returnLink.hidden, true);
+  }
+});
+
+test("a stale shot-list response cannot replace a newer list", async () => {
+  let resolveFirst;
+  const first = new Promise((resolve) => {
+    resolveFirst = resolve;
+  });
+  let calls = 0;
+  const ui = await uiFixture(async (url) => {
+    calls += 1;
+    if (calls === 1) return first;
+    return response({ items: [{ id: "new", timestamp: "now" }] });
+  });
+  const oldRefresh = ui.loadShots.onclick();
+  const newRefresh = ui.loadShots.onclick();
+  await newRefresh;
+  resolveFirst(response({ items: [{ id: "old", timestamp: "before" }] }));
+  await oldRefresh;
+  assert.equal(ui.shotSelect.children[0].value, "new");
+});
+
+test("analysis rendering explains target differences and preserves zero metrics", async () => {
+  const ui = await uiFixture(async () =>
+    response({
+      shotId: "shot-1",
+      metrics: {
+        elapsedSec: 25,
+        machine: {
+          pressure: { timeWeightedMae: 0 },
+          flow: { timeWeightedMae: 0.25 },
+          mixTemperature: { timeWeightedMae: 0 },
+          groupTemperature: { timeWeightedMae: 0.1 },
+        },
+        scale: { finalMeasuredWeightG: 40, brewFlowGPerSec: 2, warnings: ["partial scale data"] },
+        annotations: { actualYieldToMeasuredBeanDoseRatio: 0 },
+        warnings: ["sample gap"],
+      },
+      feedback: { good: false, flavour: { overall: "balanced" } },
+      provenance: "Saved full shot",
+    }),
+  );
+  await ui.analysis.onsubmit({ preventDefault() {}, target: ui.analysis });
+  assert.match(ui.output.textContent, /Average pressure difference from target: 0\.00 bar/);
+  assert.match(ui.output.textContent, /Measured bean ratio: 0/);
+  assert.match(ui.output.textContent, /Warnings: sample gap \| partial scale data/);
+  assert.match(ui.output.textContent, /These are descriptive differences/);
+  assert.equal(ui.output.textContent.includes("\\n"), false);
+  assert.ok(ui.output.textContent.includes("\n"));
+});
+
+test("matched references render as safe human-readable source details", async () => {
+  const ui = await uiFixture(async () =>
+    response({
+      status: "provisional",
+      direction: "finer",
+      evidenceCount: 1,
+      reviewedReferences: {
+        matches: [{
+          title: "Example guide",
+          publisher: "Example publisher",
+          url: "https://example.test/guide",
+          scope: { applicability: "model-specific" },
+          facts: { brewTimeSec: { min: 20, max: 30, unit: "s" } },
+          notes: ["Use as a scoped example"],
+        }],
+      },
+    }),
+  );
+  await ui.suggestion.onclick();
+  assert.equal(ui.referenceDetails.hidden, false);
+  assert.equal(ui.referenceList.children.length, 1);
+  const item = ui.referenceList.children[0];
+  assert.equal(item.children[0].textContent, "Example guide");
+  assert.equal(item.children[0].href, "https://example.test/guide");
+  assert.match(item.children[1].textContent, /Brew time \(s\): 20–30 s/);
+  assert.match(item.children[1].textContent, /scoped example/);
+  assert.equal(item.children[1].innerHTML, "");
 });

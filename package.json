@@ -1,11 +1,11 @@
 {
   "name": "decaid-assisted-dialin-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "package": "rm -rf .package dist && mkdir .package dist && cp manifest.json plugin.js README.md NOTICE LICENSE .package/ && (cd .package && zip -q -r ../dist/decaid-assisted-dialin-plugin-0.2.0.zip manifest.json plugin.js README.md NOTICE LICENSE)"
+    "package": "rm -rf .package dist && mkdir .package dist && cp manifest.json plugin.js README.md NOTICE LICENSE .package/ && cp -R docs .package/docs && (cd .package && zip -q -r ../dist/decaid-assisted-dialin-plugin-0.3.0.zip manifest.json plugin.js README.md NOTICE LICENSE docs)"
   },
   "license": "GPL-3.0-or-later"
 }
