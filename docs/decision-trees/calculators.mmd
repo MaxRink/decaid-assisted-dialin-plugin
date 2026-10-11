@@ -1,0 +1,12 @@
+flowchart TD
+A[Choose supporting calculation] --> B{Calculation}
+ B -->|DdEff| C[Six calls each: initial, initial minus 200, initial plus 200]
+ B -->|effectiveDd| D{Residue initialized?}
+ D -->|No| E[Initialize and return start]
+ D -->|Yes| F[Require baseline; apply duration formula]
+ B -->|grindTime| G{Mode equals 3?}
+ G -->|No| H[Optional value unavailable]
+ G -->|Yes| I[Apply recovered velocity ratio]
+ B -->|proposedDd wizard| J{Known model, roast and non-negative dose?}
+ J -->|No| K[Reject]
+ J -->|Yes| L[Table coordinate; output unit unknown]

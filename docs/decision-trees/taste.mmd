@@ -1,0 +1,14 @@
+flowchart TD
+A[Selected evidence] --> B{Any evidence and current bean catalog?}
+ B -->|No| X[Abstain]
+ B -->|Yes| C{Channeling or weak feedback?}
+ C -->|Yes| X
+ C -->|No| D{Sensory direction absent or conflicting?}
+ D -->|Yes| X
+ D -->|No| E{Median timing gives opposite direction?}
+ E -->|Yes| X
+ E -->|No| F{Evidence count below 3?}
+ F -->|Yes| G[Provisional next experiment]
+ F -->|No| H[Heuristic next experiment]
+ G --> I[Owner step and bounds gate]
+ H --> I

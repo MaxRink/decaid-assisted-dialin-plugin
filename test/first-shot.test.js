@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { timedMeasurements } = require('./shot-fixtures');
 
 const source = fs.readFileSync('plugin.js', 'utf8');
 const profile = {name: 'espresso', steps: [{pump: 'pressure', pressure: 9}]};
@@ -14,7 +15,8 @@ function shot(id, shotContext, seconds = 20) {
   const timestamp = new Date(Date.now() - 60_000).toISOString();
   const full = {
     id, timestamp, workflow: {context: shotContext, profile},
-    measurements: [{machine: {timestamp: new Date(Date.parse(timestamp) + seconds * 1000).toISOString(), flow: 2, pressure: 9}, scale: {timestamp: new Date(Date.parse(timestamp) + seconds * 1000).toISOString(), weight: 36}}],
+    measurements: timedMeasurements(timestamp, seconds).map(sample => ({ ...sample,
+      scale: { timestamp: sample.machine.timestamp, weight: 36 } })),
     annotations: {actualDoseWeight: 18, actualYield: 36},
   };
   return {id, timestamp, workflow: full.workflow, full};

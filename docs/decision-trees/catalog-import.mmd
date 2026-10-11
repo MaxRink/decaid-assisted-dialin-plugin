@@ -1,0 +1,21 @@
+flowchart TD
+A[Catalog reference] --> B{Host import or local setup?}
+ B -->|Local| C{beanEligible exactly true?}
+ C -->|No| X[Reference only]
+ C -->|Yes| V[Reset local experiment and apply explicit fields]
+ B -->|Host| D[First click: preview]
+ D --> E{Unsupported product format?}
+ E -->|Yes| X
+ E -->|No| F{Whole-bean and decaf facts confirmed?}
+ F -->|No| W[Wait for missing owner confirmation]
+ F -->|Yes| G[Lock action; fetch host beans including archived]
+ G --> H{Lookup succeeds and catalog ID exists?}
+ H -->|No| Y[Show error]
+ H -->|Yes| I{Matching catalog ID returned?}
+ I -->|Yes| J[Reuse host record]
+ I -->|No| K[Create host bean]
+ J --> L[Read back host ID and catalog identity]
+ K --> L
+ L --> M{Identity matches?}
+ M -->|No| Y
+ M -->|Yes| N[Confirm import; batch details remain separate]

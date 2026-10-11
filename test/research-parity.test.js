@@ -21,13 +21,15 @@ const close = (actual, expected, message) =>
     `${message}: ${actual} != ${expected}`,
   );
 
-test("manual DF54/DF64 recommendations match the independent research oracle", () => {
+test("explicit manual assessments retain legacy community rule outputs without claiming probability", () => {
   for (const vector of golden.manual) {
     const result = createResearchAlgorithms().recommendManual({
       profile: vector.input.profile,
       targetTimeSec: vector.input.target_time_s,
       actualTimeSec: vector.input.actual_time_s,
-      flavor: vector.input.flavor,
+      // The old community fixture used bare taste words. The product now
+      // requires explicit dissatisfaction; this fixture is not firmware evidence.
+      flavor: vector.input.flavor ? "too " + vector.input.flavor : undefined,
       currentDial: vector.input.current_dial,
       stepMarks: vector.input.step_marks,
       numericFinerDelta: vector.input.numeric_finer_delta,
@@ -45,10 +47,12 @@ test("manual DF54/DF64 recommendations match the independent research oracle", (
       );
     }
     close(
-      result.confidence,
+      result.legacyScore,
       vector.expected.confidence,
-      `${vector.name}.confidence`,
+      `${vector.name}.legacyScore`,
     );
+    assert.equal(result.confidence, result.direction === "none" ? "none" : "heuristic");
+    assert.match(result.legacyScoreProvenance, /not a probability/);
   }
 });
 

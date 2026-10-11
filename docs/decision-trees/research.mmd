@@ -1,0 +1,12 @@
+flowchart TD
+A[Research request] --> B{Shape, size and acknowledgments valid?}
+ B -->|No| X[400 invalid research input]
+ B -->|Yes| C{Operation}
+ C -->|adjust| D{Scope and state envelope match?}
+ D -->|No| X
+ D -->|Yes| E[Validate and dispatch algorithm]
+ C -->|calculator or manual| F[Validate operation-specific input]
+ C -->|compare| G[One isolated case per algorithm]
+ G --> H{Case supplied and valid?}
+ H -->|No| I[Unavailable or invalid row with reason]
+ H -->|Yes| J[Computed row; independent state and units]

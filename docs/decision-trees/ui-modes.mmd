@@ -1,0 +1,10 @@
+flowchart TD
+A[Open task] --> B[Step 1: coffee and equipment]
+ B --> C[Step 2: recipe and profile or brew model]
+ C --> D[Step 3: trace and taste]
+ D --> E[Step 4: compare results]
+ E -->|Next| E
+ F[Simple or Expert toggle] --> G{Expert?}
+ G -->|Yes| H[Expose technical controls and details]
+ G -->|No| I[Hide expert details]
+ J[Algorithm or experiment context changed] --> K[Reset experiment history]

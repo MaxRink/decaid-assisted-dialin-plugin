@@ -1,0 +1,10 @@
+flowchart TD
+A[Matched reference or grinder image] --> B{Contextual source fact or image?}
+ B -->|Fact| C[Display scope, facts and provenance]
+ C --> D[Does not alter calculation or historical record]
+ B -->|Image| E{Explicit reusable rights and safe image/license URLs?}
+ E -->|Yes| F[Display photo with credit]
+ E -->|No| G[Schematic or source link]
+ F --> H{Image fails in simulator?}
+ H -->|Yes| G
+ H -->|No| I[Keep photo]

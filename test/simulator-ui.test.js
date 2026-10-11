@@ -44,7 +44,7 @@ class Element {
 function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null) {
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
-    "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog",
+    "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
@@ -68,6 +68,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   Object.assign(elements.get("assist-profile"), { value: "df64_gen2" });
   Object.assign(elements.get("assist-taste"), { value: "" });
   Object.assign(elements.get("helper"), { value: "manual" });
+  elements.get("actual-shot-clock").value = "pump";
   const document = {
     body: new Element("body"),
     getElementById(id) {
@@ -113,7 +114,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
     setTimeout,
     clearTimeout,
     queueMicrotask,
-    fetch: async (url) => ({ ok: true, json: async () => String(url).includes("grinder-dials") ? dialData : catalog }),
+    fetch: async (url) => ({ ok: true, json: async () => String(url).includes("grinder-dials") ? dialData : String(url).includes("decent-profiles") ? JSON.parse(fs.readFileSync(require("node:path").join(root, "data/decent-profiles.json"), "utf8")) : catalog }),
     localStorage: persistentStorage || { data: new Map(), getItem(key) { return this.data.has(key) ? this.data.get(key) : null; }, setItem(key, value) { this.data.set(key, String(value)); }, removeItem(key) { this.data.delete(key); } },
     Blob: BlobFixture,
     FileReader: FileReaderFixture,
@@ -298,6 +299,7 @@ test("simulator first-shot assistant handles no taste and explicit sour taste", 
   assert.match(ui.elements.get("assist-result").textContent, /provisional|Bean context/);
   row.children[6].children[0].value = "sour";
   row.children[6].children[0].dispatch("change");
+  row.children[6].children[1].value = "under-extracted"; row.children[6].children[1].dispatch("change");
   await ui.elements.get("assist").click();
   assert.match(ui.elements.get("assist-result").textContent, /finer|provisional/);
   assert.match(ui.elements.get("assist-result").textContent, /Bean context/);
@@ -347,6 +349,7 @@ test("reviewed recipe adoption keeps ranges explicit and filter recipes informat
   const catalog = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/reference-catalog.json"), "utf8"));
   const ui = uiFixture(catalog);
   await new Promise(setImmediate);
+  while (ui.elements.get("catalog").children.some(node => node.tagName === "BUTTON")) ui.elements.get("catalog").children.find(node => node.tagName === "BUTTON").click();
   assert.equal(ui.elements.get("catalog").children.length, catalog.sources.length);
   const cards = ui.elements.get("catalog").children;
   const filter = cards.find(card => card.textContent.includes("Pour-over guide"));
@@ -372,8 +375,108 @@ test("bean-specific roaster references reach actual first-shot suggestion proven
   time.value = 24; time.dispatch("change");
   ui.elements.get("assist-taste").value = "sour";
   ui.elements.get("assist-taste").dispatch("change");
+  ui.elements.get("assist-overall").value = "under-extracted"; ui.elements.get("assist-overall").dispatch("change");
   await ui.elements.get("assist").click();
   assert.match(ui.elements.get("assist-result").textContent, /provisional/);
   assert.match(ui.elements.get("assist-result").textContent, /Red Brick espresso recipe/);
   assert.match(ui.elements.get("assist-result").textContent, /finer/);
+});
+
+
+test("real saved-shot import uses measured traces, preserves unknown pump time and round-trips sensory input", () => {
+  const ui = uiFixture();
+  const shot = {id: "recorded-1", timestamp: "2026-10-11T08:00:00Z", workflow: {profile: {steps: [{pump: "pressure", pressure: 9}]}, context: {}}, measurements: [0, 1, 2, 10, 11].map(second => ({machine: {timestamp: new Date(Date.parse("2026-10-11T08:00:00Z") + second * 1000).toISOString(), flow: 2, pressure: 9, mixTemperature: 93}, scale: {timestamp: new Date(Date.parse("2026-10-11T08:00:00Z") + second * 1000).toISOString(), weight: second}}))};
+  const open = value => ui.elements.get("shot-trace-import").dispatch("change", {target: {files: [{size: JSON.stringify(value).length, text: JSON.stringify(value)}]}});
+  open(shot);
+  assert.match(ui.elements.get("shot-trace-status").textContent, /recorded-1/);
+  const metrics = JSON.parse(ui.elements.get("actual-shot-details").textContent);
+  assert.equal(metrics.trace.machineFlow.gapCount, 1);
+  assert.equal(ui.elements.get("actual-shot-time").value, "", "recording time must not masquerade as pump time");
+  assert.ok(ui.elements.get("actual-shot-trace").children.some(node => node.tagName === "SVG"));
+  ui.elements.get("taste-temperature").value = "52";
+  ui.elements.get("taste-minutes").value = "3";
+  ui.elements.get("assist-overall").value = "uncertain";
+  ui.elements.get("export-shot-trace").click();
+  const exported = JSON.parse(ui.downloads.at(-1).parts.join(""));
+  assert.equal(exported.feedback.flavour.tastingTemperatureC, 52);
+  assert.equal(exported.feedback.flavour.overall, "uncertain");
+  ui.elements.get("clear-shot-trace").click(); open(exported);
+  assert.equal(Number(ui.elements.get("taste-temperature").value), 52);
+  assert.equal(ui.elements.get("assist-overall").value, "uncertain");
+  open({timestamp: "not-a-date", measurements: []});
+  assert.match(ui.elements.get("shot-trace-status").textContent, /recorded-1/, "bad import must retain the previous trace");
+});
+
+test("profile browser exposes all stock and supplemental references without replacing experiment inputs", async () => {
+  const ui = uiFixture(); await new Promise(setImmediate);
+  const holder = ui.elements.get("profile-picker"), select = holder.children[0].children[0];
+  assert.equal(select.children.length, 105);
+  const before = ui.elements.get("target").value;
+  select.value = select.children[1].value; select.dispatch("change");
+  assert.match(holder.textContent, /saved|authoritative|runtime/i);
+  assert.equal(ui.elements.get("target").value, before);
+});
+
+test("structured supplemental inputs compute all ten isolated algorithms", () => {
+  const ui = uiFixture(); ui.elements.get("next").click();
+  const values = {
+    effectiveDd: {grindDdDum: 500, grindDurationMs: 3000, effectiveBaseline: 50, residue: 50},
+    grindTime: {mode: 3, recipeDdUm: 50, targetDdDum: 500, recipeTimeMs: 3000},
+    inverseRegression: {x1: 50, y1: 32, x2: 60, y2: 25, targetSec: 28},
+    proposedDd: {model: "e64", roast: "light", dose: 18},
+    manual: {profile: "df64_gen2", targetTimeSec: 28, actualTimeSec: 24, currentDial: 20, stepMarks: 1, numericFinerDelta: "-1", flavor: "too sour"},
+  };
+  for (const [algorithm, fields] of Object.entries(values)) {
+    const enabled = ui.context.document.getElementById("lab-" + algorithm + "-enabled"); enabled.checked = true; enabled.dispatch("change");
+    for (const [key, value] of Object.entries(fields)) ui.context.document.getElementById("lab-" + algorithm + "-" + key).value = String(value);
+  }
+  ui.elements.get("compare-all-lab").click();
+  const rows = ui.elements.get("all-comparison-results").children;
+  assert.equal(rows.length, 10);
+  for (const row of rows) assert.match(row.children[0].textContent, /computed$/, row.textContent);
+});
+
+test("reset fences an in-flight simulator suggestion", async () => {
+  const ui = uiFixture(); ui.elements.get("next").click();
+  const pending = ui.elements.get("assist").click(); ui.elements.get("reset").click(); await pending;
+  assert.doesNotMatch(ui.elements.get("assist-result").textContent, /Pass simulation-shot/);
+  assert.match(ui.elements.get("assist-result").textContent, /Evidence changed/);
+});
+
+test("manual comparison accepts the selectable adjustment intents and retains nonactionable results", () => {
+  const ui = uiFixture(), field = key => ui.context.document.getElementById("lab-manual-" + key);
+  field("enabled").checked = true; field("enabled").dispatch("change");
+  for (const [key, value] of Object.entries({profile: "df64_gen2", targetTimeSec: 28, actualTimeSec: 28, currentDial: 20, stepMarks: 1, numericFinerDelta: "-1"})) field(key).value = String(value);
+  const options = field("flavor").children.map(node => node.value);
+  for (const [flavor, direction, proposedDial] of [["too sour", "finer", 19], ["too bitter", "coarser", 21], ["too astringent", "coarser", 21], ["balanced", "none", null], ["weak", "none", null], ["channeling", "none", null]]) {
+    assert.ok(options.includes(flavor), flavor + " must be selectable"); field("flavor").value = flavor;
+    ui.elements.get("compare-all-lab").click();
+    const row = ui.elements.get("all-comparison-results").children.find(node => node.children[0].textContent.startsWith("manual ·"));
+    assert.match(row.children[0].textContent, /computed$/);
+    const result = JSON.parse(row.children[2].children[1].textContent).result;
+    assert.equal(result.direction, direction, flavor); assert.equal(result.proposedDial, proposedDial, flavor);
+    if (["weak", "channeling"].includes(flavor)) assert.match(result.reasons.join(" "), /not.*used|not state a recognized/);
+  }
+});
+
+test("saved-shot manual-stop confirmation survives import, editing, API feedback and export", async () => {
+  const ui = uiFixture(), shot = {id: "manually-stopped", timestamp: "2026-10-11T08:00:00Z", stopReason: "appStop", workflow: {profile: {steps: [{pump: "pressure", pressure: 9}]}, context: {}}, measurements: [0, 1].map(second => ({machine: {timestamp: new Date(Date.parse("2026-10-11T08:00:00Z") + second * 1000).toISOString(), flow: 2, pressure: 9}}))};
+  const open = value => ui.elements.get("shot-trace-import").dispatch("change", {target: {files: [{size: JSON.stringify(value).length, text: JSON.stringify(value)}]}});
+  const save = () => { ui.elements.get("export-shot-trace").click(); return JSON.parse(ui.downloads.at(-1).parts.join("")); };
+  open({shot, feedback: {manualStopConfirmed: true}});
+  assert.equal(ui.elements.get("manual-stop-confirmed").checked, true);
+  assert.equal(save().feedback.manualStopConfirmed, true);
+  const submitted = [], factory = ui.context.createPlugin;
+  ui.context.createPlugin = (...args) => { const instance = factory(...args), handle = instance.handleHttpRequest; instance.handleHttpRequest = request => { if (request.endpoint === "feedback") submitted.push(request.body); return handle(request); }; return instance; };
+  await ui.elements.get("assist").click();
+  assert.equal(submitted.at(-1).manualStopConfirmed, true, "actual shipped feedback API receives owner confirmation");
+  ui.elements.get("manual-stop-confirmed").checked = false; ui.elements.get("manual-stop-confirmed").dispatch("change");
+  assert.match(ui.elements.get("assist-result").textContent, /Evidence changed/);
+  const declined = save(); assert.equal(declined.feedback.manualStopConfirmed, false);
+  open(declined); assert.equal(ui.elements.get("manual-stop-confirmed").checked, false);
+  open({shot, feedback: {manualStopConfirmed: "true"}});
+  assert.match(ui.elements.get("notice").textContent, /expected a boolean/);
+  assert.equal(save().feedback.manualStopConfirmed, false, "invalid input retains previous explicit choice");
+  open({shot, feedback: {manualStopConfirmed: true}}); ui.elements.get("clear-shot-trace").click();
+  assert.equal(ui.elements.get("manual-stop-confirmed").checked, false, "confirmation cannot leak into another shot");
 });

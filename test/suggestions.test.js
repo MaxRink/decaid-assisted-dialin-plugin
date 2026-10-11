@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const { timedMeasurements } = require("./shot-fixtures");
 
 const source = fs.readFileSync("plugin.js", "utf8");
 
@@ -39,15 +40,7 @@ function shot(id, ageMs, seconds, options = {}) {
   const summaryContext = options.summaryContext || fullContext;
   const measurements =
     options.measurements === undefined
-      ? [
-          {
-            machine: {
-              timestamp: new Date(
-                Date.parse(timestamp) + seconds * 1000,
-              ).toISOString(),
-            },
-          },
-        ]
+      ? timedMeasurements(timestamp, seconds)
       : options.measurements;
   return {
     id,
@@ -73,6 +66,7 @@ async function load({
   routeError = null,
   deferFull = false,
   currentContext = context(),
+  currentProfile = profile,
 } = {}) {
   const events = [];
   const fullById = new Map(shots.map((entry) => [entry.id, entry.full]));
@@ -108,7 +102,7 @@ async function load({
     if (routeError && routeError.test(url))
       return response({ error: "fixture failure" }, { ok: false, status: 500 });
     if (url.endsWith("/workflow"))
-      return response({ context: currentContext, profile });
+      return response({ context: currentContext, profile: currentProfile });
     if (url.includes("/shots?"))
       return response({
         items: shots.map(({ full, ...summary }) => summary),
@@ -201,7 +195,7 @@ test("requires three recent complete shots and returns the median timing with ca
   assert.match(body.reviewedReferences.matches.find((source) => source.id === "df64-clive").url, /^https:\/\//);
   assert.equal(
     body.evidence[0].timingProvenance,
-    "saved machine timestamps: last measurement minus shot start",
+    "recorded_machine_substates: pump clock",
   );
 });
 
@@ -267,7 +261,7 @@ test("stale, future and malformed timing evidence are excluded", async () => {
     body.excluded.some(
       (entry) =>
         entry.shotId === "nonmonotonic" &&
-        /unavailable|invalid/.test(entry.reason),
+        /unavailable|invalid|boundaries are incomplete/.test(entry.reason),
     ),
   );
 });
@@ -491,7 +485,122 @@ test("operator-confirmed timing survives reload alongside full-shot metrics", as
   assert.ok(
     body.evidence.every(
       (entry) =>
-        entry.timingProvenance === "operator-confirmed elapsed shot time",
+        entry.timingProvenance === "operator-confirmed pump time",
     ),
   );
+});
+
+test("a blank, absent or invalid target never becomes an implicit 30-second goal", async () => {
+  for (const target of [undefined, null, "", "  ", false, 0, -1, "not a number"]) {
+    const entry = shot("target", 60_000, 20);
+    const { plugin } = await load({ shots: [entry], settings: { TargetTimeSec: target } });
+    await mark(plugin, entry.id);
+    const { body } = await suggest(plugin);
+    assert.equal(body.status, "abstain", String(target));
+    assert.ok(body.missingData.includes("TargetTimeSec"));
+  }
+});
+
+test("pump, pouring and recording targets use distinct observed clocks", async () => {
+  for (const [clock, expected] of [["pump", 20], ["pouring", 19], ["recording", 21]]) {
+    const entry = shot("clocks", 60_000, 20);
+    const { plugin } = await load({ shots: [entry], settings: { TargetTimeClock: clock } });
+    await mark(plugin, entry.id);
+    const { body } = await suggest(plugin);
+    assert.equal(body.status, "suggestion", JSON.stringify(body));
+    assert.equal(body.medianElapsedTimeSec, expected);
+    assert.equal(body.targetTimeClock, clock);
+    assert.equal(body.evidence[0].brewTimeClock, clock);
+  }
+});
+
+test("missing native boundaries require an operator time on the matching clock", async () => {
+  const entry = shot("partial", 60_000, 20);
+  entry.full.measurements = entry.full.measurements.slice(1, -1);
+  const { plugin, events } = await load({ shots: [entry] });
+  await mark(plugin, entry.id);
+  let result = await suggest(plugin);
+  assert.equal(result.body.status, "abstain");
+  assert.match(result.body.excluded[0].reason, /boundaries are incomplete/);
+  const save = async (clock) => plugin.handleHttpRequest({ endpoint: "feedback", method: "POST",
+    body: { shotId: entry.id, good: false, taste: "sour", brewTimeSec: 20, brewTimeClock: clock } });
+  assert.equal((await save("pouring")).status, 200);
+  result = await suggest(plugin);
+  assert.match(result.body.excluded[0].reason, /different clock/);
+  assert.equal((await save("pump")).status, 200);
+  result = await suggest(plugin);
+  assert.equal(result.body.status, "suggestion");
+  assert.equal(result.body.evidence[0].timingProvenance, "operator-confirmed pump time");
+  const stored = events.filter(event => event.stored).at(-1).stored;
+  assert.equal(stored.partial.brewTimeClock, "pump");
+  const reloaded = await load({ shots: [entry], stored });
+  assert.equal((await suggest(reloaded.plugin)).body.status, "suggestion");
+});
+
+test("preheat and settling do not change pump-time evidence", async () => {
+  const entry = shot("extra-recording", 60_000, 20);
+  const start = Date.parse(entry.timestamp);
+  const extra = (second, substate) => ({ machine: { timestamp: new Date(start + second * 1000).toISOString(),
+    state: { state: "espresso", substate }, pressure: 0, flow: 0 } });
+  entry.full.measurements.forEach(sample => {
+    sample.machine.timestamp = new Date(Date.parse(sample.machine.timestamp) + 4000).toISOString();
+  });
+  entry.full.measurements.unshift(extra(0, "preparingForShot"));
+  entry.full.measurements.push(extra(28, "idle"));
+  const { plugin } = await load({ shots: [entry] });
+  await mark(plugin, entry.id);
+  const { body } = await suggest(plugin);
+  assert.equal(body.status, "suggestion", JSON.stringify(body));
+  assert.equal(body.medianElapsedTimeSec, 20);
+  assert.equal(body.evidence[0].metrics.timing.recording.durationSec, 28);
+});
+
+test("manual stops require recipe completion confirmation without an invented yield tolerance", async () => {
+  for (const yieldG of [10, 36, 36.1]) {
+    const entry = shot("manual-stop", 60_000, 20);
+    entry.full.stopReason = "appStop";
+    entry.full.measurements.at(-1).scale = { timestamp: entry.full.measurements.at(-1).machine.timestamp, weight: yieldG };
+    const { plugin, events } = await load({ shots: [entry] });
+    await mark(plugin, entry.id);
+    const withheld = await suggest(plugin);
+    assert.equal(withheld.body.status, "abstain");
+    assert.match(withheld.body.excluded[0].reason, /manually stopped/);
+    assert.doesNotMatch(withheld.body.excluded[0].reason, /before.*yield/);
+    const saved = await plugin.handleHttpRequest({ endpoint: "feedback", method: "POST",
+      body: { shotId: entry.id, good: false, taste: "sour", manualStopConfirmed: true } });
+    assert.equal(saved.status, 200);
+    const stored = events.filter(event => event.stored).at(-1).stored;
+    assert.equal(stored[entry.id].manualStopConfirmed, true);
+    const reloaded = await load({ shots: [entry], stored });
+    const accepted = await suggest(reloaded.plugin);
+    assert.equal(accepted.body.status, "suggestion");
+    assert.equal(accepted.body.evidence[0].manualStopConfirmed, true);
+  }
+});
+
+test("feedback rejects invalid clocks, detached clock labels and nonboolean stop confirmation", async () => {
+  const { plugin } = await load();
+  for (const extra of [{ brewTimeSec: 20, brewTimeClock: "total" }, { brewTimeClock: "pump" },
+    { manualStopConfirmed: "true" }]) {
+    const result = await plugin.handleHttpRequest({ endpoint: "feedback", method: "POST",
+      body: { shotId: "invalid-clock", good: false, ...extra } });
+    assert.equal(result.status, 400);
+  }
+});
+
+
+test("a matching operator clock cannot make unknown or flow-only controllers eligible", async () => {
+  for (const steps of [[], [{ pump: "unsupported" }], [{ pump: "flow", flow: 2 }],
+    [{ name: "Preinfusion", pump: "flow", flow: 2 }],
+    [{ pump: "pressure", pressure: 9, limiter: { value: 2 } }]]) {
+    const currentProfile = { steps };
+    const entry = shot("controller", 60_000, 20);
+    entry.workflow.profile = currentProfile;
+    entry.full.workflow.profile = currentProfile;
+    const { plugin } = await load({ shots: [entry], currentProfile });
+    await mark(plugin, entry.id, "sour", undefined, 20);
+    const { body } = await suggest(plugin);
+    assert.equal(body.status, "abstain", JSON.stringify(steps));
+    assert.match(body.reason, steps.length ? /profile control cannot support/ : /Complete current setup/);
+  }
 });

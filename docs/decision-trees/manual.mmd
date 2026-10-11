@@ -1,0 +1,12 @@
+flowchart TD
+A[Explicit target, observed time and optional taste intent] --> B{All input and profile checks pass?}
+ B -->|No| X[Reject]
+ B -->|Yes| C[Collect out-of-window time direction and exact taste intent]
+ C --> D{Balanced, conflict or no direction?}
+ D -->|Yes| E[No adjustment]
+ D -->|No| F[Heuristic finer or coarser experiment]
+ F --> G{Current dial, calibrated numeric sign and step present?}
+ G -->|No| H[Direction only]
+ G -->|Yes| I{Candidate inside reference range?}
+ I -->|No| J[Withhold numeric setting]
+ I -->|Yes| K[Show one-step proposed dial]

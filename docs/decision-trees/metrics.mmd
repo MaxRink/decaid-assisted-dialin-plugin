@@ -1,0 +1,14 @@
+flowchart TD
+A[Saved snapshot] --> B{Object and sample bounds valid?}
+ B -->|No| X[Reject]
+ B -->|Yes| C[Order each signal independently; warn and skip invalid times]
+ C --> D[Machine pressure, flow and temperatures]
+ C --> E[Scale mass in grams]
+ C --> F[Recipe targets and unverified annotations remain separate]
+ E --> G{Final scale sample positive and finite?}
+ G -->|Yes| H[Final measured weight]
+ G -->|No| I[Final yield unavailable]
+ D --> J[Descriptive metrics; no extraction diagnosis]
+ H --> J
+ I --> J
+ F --> J

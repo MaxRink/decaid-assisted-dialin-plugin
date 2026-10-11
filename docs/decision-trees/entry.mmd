@@ -1,0 +1,11 @@
+flowchart TD
+A[Request] --> B{Purpose}
+ B -->|Recall a good setting| C[recommendation]
+ B -->|Next experiment| D[suggestion]
+ B -->|Describe a saved shot| E[analysis]
+ B -->|Expert calculation| F[research]
+ C --> G[Display answer and its provenance]
+ D --> G
+ E --> G
+ F --> G
+ G --> H[Operator decides what to do]

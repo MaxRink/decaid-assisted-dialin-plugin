@@ -1,0 +1,12 @@
+flowchart TD
+A[Age history and append current time] --> B[Sort and average central pair]
+ B --> C{Central error greater than 0.5 s?}
+ C -->|No| D[Keep candidate]
+ C -->|Yes| E[Bound correction to plus or minus 5; floor continuous at 1]
+ E --> F{Beyond 0.16 hysteresis or first quantization?}
+ F -->|Yes| G[Quantize to 0.2 um]
+ F -->|No| D
+ G --> H{Raw error at least tolerance?}
+ D --> H
+ H -->|Yes| I[Commit candidate]
+ H -->|No| J[Return previous result]

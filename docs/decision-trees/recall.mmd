@@ -1,0 +1,10 @@
+flowchart TD
+A[Current bean, grinder and profile] --> B{Required identity present?}
+ B -->|No| X[Abstain]
+ B -->|Yes| C[Marked-good historical shots]
+ C --> D{Context matches and recorded setting exists?}
+ D -->|No| E[Exclude with reason]
+ D -->|Yes| F[Sort eligible shots newest first]
+ F --> G{Any eligible shot?}
+ G -->|No| X
+ G -->|Yes| H[Recall recorded setting with missing-field warnings]

@@ -1,0 +1,13 @@
+flowchart TD
+A[Selected scenario file] --> B{Size and JSON valid?}
+ B -->|No| X[Reject]
+ B -->|Yes| C{Schema, ranges and allowed fields valid?}
+ C -->|No| X
+ C -->|Yes| D{Profile IDs unique and existing-unit identities consistent?}
+ D -->|No| X
+ D -->|Yes| E{Historical rows and calibration valid?}
+ E -->|No| X
+ E -->|Yes| G{Preflight replay succeeds?}
+ G -->|Yes| F[Apply imported experiment and replay completed rows]
+ F --> H[Display replayed results]
+ G -->|No| X

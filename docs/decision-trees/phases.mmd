@@ -1,0 +1,15 @@
+flowchart TD
+A[Saved machine samples] --> B{Any recorded frame or substate?}
+ B -->|Yes| C[Split runs at frame, substate or long-gap changes]
+ C --> D{Known non-pump substate?}
+ D -->|Yes| E[Outside pump]
+ D -->|No| F{Preinfusion substate or valid saved step mapping?}
+ F -->|Yes| G[Label role and its recorded or profile-intent provenance]
+ F -->|No| H[Unknown role and mapping]
+ B -->|No| I{Explicit boundaries valid and inside recording?}
+ I -->|Yes| J[Recorded boundaries; role inferred only from name]
+ I -->|No| K[Phase unavailable]
+ G --> L[Never replace missing timing with programmed maximum durations]
+ H --> L
+ J --> L
+ K --> L

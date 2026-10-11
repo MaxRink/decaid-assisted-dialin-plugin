@@ -1,0 +1,10 @@
+flowchart TD
+A[Append setting and time; keep last six] --> B{More than one point and variance above 0.001?}
+ B -->|No| C[Fallback slope -2]
+ B -->|Yes| D[Fit slope; cap at -0.5]
+ C --> E[Invert line at target]
+ D --> E
+ E --> F[Blend current 10 percent and prediction 90 percent]
+ F --> G{Raw error at least tolerance?}
+ G -->|Yes| H[Commit rounded candidate]
+ G -->|No| I[Return previous result]

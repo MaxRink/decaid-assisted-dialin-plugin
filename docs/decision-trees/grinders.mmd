@@ -1,0 +1,13 @@
+flowchart TD
+A[Choose or edit individual grinder] --> B{Known model and owner fields valid?}
+ B -->|No| X[Reject]
+ B -->|Yes| C[Create or update host grinder]
+ C --> D{Stable host ID returned?}
+ D -->|No| X
+ D -->|Yes| E[Save local profile bound to host ID]
+ E --> F{Storage acknowledged?}
+ F -->|No| G[Restore local memory; report failure]
+ F -->|Yes| H[Select profile and read back settings]
+ H --> I{Current unit and calibration identity match?}
+ I -->|No| J[Withhold calibration]
+ I -->|Yes| K[Owner conversion may be used]

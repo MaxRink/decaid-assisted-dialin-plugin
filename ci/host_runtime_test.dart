@@ -11,7 +11,7 @@ final profile = {
   'id': 'espresso',
   'title': 'espresso',
   'steps': [
-    {'temperature': 93, 'seconds': 30},
+    {'name': 'Extraction', 'pump': 'pressure', 'pressure': 9, 'temperature': 93, 'seconds': 30},
   ],
 };
 Map<String, dynamic> shot(
@@ -44,7 +44,6 @@ Map<String, dynamic> fullShot(
   String calibration = 'burr-1',
 }) {
   final start = started.toUtc();
-  final end = start.add(Duration(seconds: elapsedSeconds));
   return {
     'id': id,
     'timestamp': start.toIso8601String(),
@@ -67,61 +66,34 @@ Map<String, dynamic> fullShot(
       },
       'profile': profile,
     },
+    // One-second native samples bracket the pump clock with preheat and stop.
     'measurements': [
-      {
-        'machine': {
-          'timestamp': start.toIso8601String(),
-          'pressure': 8.0,
-          'targetPressure': 9.0,
-          'flow': 1.0,
-          'targetFlow': 1.2,
-          'mixTemperature': 92.0,
-          'targetMixTemperature': 93.0,
-          'groupTemperature': 92.5,
-          'targetGroupTemperature': 93.0,
+      for (var second = 0; second <= elapsedSeconds + 1; second++)
+        {
+          'machine': {
+            'timestamp': start.add(Duration(seconds: second)).toIso8601String(),
+            'state': {
+              'state': 'espresso',
+              'substate': second == 0 ? 'preparingForShot'
+                  : second == 1 ? 'preinfusion'
+                  : second == elapsedSeconds + 1 ? 'pouringDone' : 'pouring',
+            },
+            'profileFrame': second <= 1 ? 0 : 1,
+            'pressure': 8.0 + second / (elapsedSeconds + 1),
+            'targetPressure': 9.0,
+            'flow': 1.0 + 0.8 * second / (elapsedSeconds + 1),
+            'targetFlow': 1.2,
+            'mixTemperature': 92.0 + second / (elapsedSeconds + 1),
+            'targetMixTemperature': 93.0,
+            'groupTemperature': 92.5 + 0.5 * second / (elapsedSeconds + 1),
+            'targetGroupTemperature': 93.0,
+          },
+          'scale': {
+            'timestamp': start.add(Duration(seconds: second)).toIso8601String(),
+            'weight': 40.0 * second / (elapsedSeconds + 1),
+            'weightFlow': 40.0 / (elapsedSeconds + 1),
+          },
         },
-        'scale': {
-          'timestamp': start.toIso8601String(),
-          'weight': 0.0,
-          'weightFlow': 0.0,
-        },
-      },
-      {
-        'machine': {
-          'timestamp': start.add(const Duration(seconds: 10)).toIso8601String(),
-          'pressure': 8.5,
-          'targetPressure': 9.0,
-          'flow': 1.5,
-          'targetFlow': 1.2,
-          'mixTemperature': 92.5,
-          'targetMixTemperature': 93.0,
-          'groupTemperature': 92.8,
-          'targetGroupTemperature': 93.0,
-        },
-        'scale': {
-          'timestamp': start.add(const Duration(seconds: 10)).toIso8601String(),
-          'weight': 20.0,
-          'weightFlow': 2.0,
-        },
-      },
-      {
-        'machine': {
-          'timestamp': end.toIso8601String(),
-          'pressure': 9.0,
-          'targetPressure': 9.0,
-          'flow': 1.8,
-          'targetFlow': 1.2,
-          'mixTemperature': 93.0,
-          'targetMixTemperature': 93.0,
-          'groupTemperature': 93.0,
-          'targetGroupTemperature': 93.0,
-        },
-        'scale': {
-          'timestamp': end.toIso8601String(),
-          'weight': 40.0,
-          'weightFlow': 2.0,
-        },
-      },
     ],
     'volume': 38.5,
     'annotations': {'actualDoseWeight': 18.2, 'actualYield': 40.1},
@@ -508,7 +480,8 @@ void main() {
     expect((analysis['context'] as Map)['roastLevel'], 'light');
     expect((analysis['feedback'] as Map)['good'], true);
     final metrics = analysis['metrics'] as Map<String, dynamic>;
-    expect(metrics['elapsedSec'], 20);
+    expect(metrics['elapsedSec'], 21);
+    expect((metrics['timing'] as Map)['pump']['durationSec'], 20);
     expect(
       (metrics['machine'] as Map)['pressure']['timeWeightedMae'],
       isA<num>(),
@@ -523,7 +496,7 @@ void main() {
       isA<num>(),
     );
     expect((metrics['scale'] as Map)['finalMeasuredWeightG'], 40.0);
-    expect((metrics['scale'] as Map)['brewFlowGPerSec'], 2.0);
+    expect((metrics['scale'] as Map)['brewFlowGPerSec'], closeTo(40 / 21, 1e-9));
     expect(
       (analysis['measuredBeanDose'] as Map)['source'],
       'operator-confirmed auxiliary scale capture',
@@ -553,7 +526,7 @@ void main() {
       'operator-confirmed auxiliary scale capture',
     );
     var result = await call('suggestion', 'suggestion', 'GET');
-    expect(result['status'], 'suggestion');
+    expect(result['status'], 'suggestion', reason: jsonEncode(result));
     expect(result['sourceShotIds'], hasLength(3));
     expect(result['medianElapsedTimeSec'], 20);
     expect(result['timeDirection'], 'finer');

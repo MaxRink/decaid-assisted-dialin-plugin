@@ -1,0 +1,14 @@
+flowchart TD
+A[Validated scenario] --> B[Start separate state for each algorithm]
+ B --> C{First shot, explicit reset or changed scope?}
+ C -->|Yes| D[Fresh state and initial setting]
+ C -->|No| E[Continue prior state]
+ D --> F{Explicit observed time?}
+ E --> F
+ F -->|Yes| G[Use recorded input]
+ F -->|No| H{Synthetic plant available?}
+ H -->|No| X[Reject]
+ H -->|Yes| I[Generate labelled fictional observation]
+ G --> J[Run shipped algorithm]
+ I --> J
+ J --> K[Retain raw result; bound applied simulator setting]

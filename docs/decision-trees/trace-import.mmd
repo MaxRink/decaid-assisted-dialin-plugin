@@ -1,0 +1,15 @@
+flowchart TD
+A[Saved-shot file] --> B{Size, JSON, timestamp and measurements valid?}
+ B -->|No| X[Reject; retain existing trace]
+ B -->|Yes| C[Analyse with createBrewMetrics]
+ C --> D{Trace and optional feedback valid?}
+ D -->|No| X
+ D -->|Yes| E{Still current import generation?}
+ E -->|No| Y[Ignore stale result]
+ E -->|Yes| F[Store real shot and render evidence]
+ F --> G{Selected measured clock available?}
+ G -->|Yes| H[Prefill its duration]
+ G -->|No| I[Leave time blank]
+ H --> J[Explicit saved time may restore matching clock]
+ I --> J
+ J --> K[Run shipped assessment or export shot and feedback]

@@ -94,9 +94,9 @@ test("replays rich bean-aware suggestions through the actual plugin factory", as
   const result = await engine.replayRichSuggestions(context.createPlugin, scenario({
     scope: { grinderId: "e64-1", beanBatchId: "beans-abc", burrIdentity: "stock", calibrationEpoch: "cal-1", profile: "espresso" },
     shots: [
-      { actualBrewTimeMs: 24000, taste: "sour" },
-      { actualBrewTimeMs: 24000, taste: "sour" },
-      { actualBrewTimeMs: 24000, taste: "sour" },
+      { actualBrewTimeMs: 24000, taste: "sour", overall: "under-extracted" },
+      { actualBrewTimeMs: 24000, taste: "sour", overall: "under-extracted" },
+      { actualBrewTimeMs: 24000, taste: "sour", overall: "under-extracted" },
     ],
   }), { now: Date.now() });
   assert.equal(result.storageIsolated, true);
@@ -129,4 +129,17 @@ test("rich replay creates chronological synthetic plant observations", async () 
   assert.ok(result.shots[0].timestamp < result.shots[1].timestamp);
   assert.deepEqual(result.shots.map((shot) => shot.actualBrewTimeMs), [28000, 28000, 28000]);
   assert.equal(result.shots[0].workflow.context.beanBatchId, "beans-1");
+});
+
+ test("rich replay never converts sour or bitter descriptors into extraction assessments", async () => {
+  for (const taste of ["sour", "bitter"]) {
+    const result = await engine.replayRichSuggestions(context.createPlugin, scenario({ shots: [{ actualBrewTimeMs: 28000, taste }] }), { now: Date.now() });
+    assert.equal(result.suggestions[0].feedback.flavour ?? null, null);
+    const evidence = result.suggestions[0].suggestion.evidence || [];
+    assert.ok(evidence.every(item => item.flavour == null || item.flavour.overall == null));
+  }
+ });
+
+test("rich replay rejects a target-only shot instead of manufacturing an observed success", async () => {
+  await assert.rejects(engine.replayRichSuggestions(context.createPlugin, scenario({shots: [{}]})), /target is not an observation/);
 });

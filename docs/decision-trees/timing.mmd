@@ -1,0 +1,10 @@
+flowchart TD
+A[Choose pump, pouring or preinfusion active substates] --> B{Any active observation?}
+ B -->|No| C[Unavailable]
+ B -->|Yes| D{Both nearby inactive boundaries observed?}
+ D -->|No| E[Incomplete; duration unknown]
+ D -->|Yes| F{No excluded timestamps, long gap or interruption?}
+ F -->|No| E
+ F -->|Yes| G[Complete observed duration]
+ E --> H[Expose coverage and boundary provenance]
+ G --> H

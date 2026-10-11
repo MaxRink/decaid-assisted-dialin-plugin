@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "scope": "Flow and preinfusion interpretation for Decent espresso traces",
+  "knowledgePolicy": {
+    "recorded": "A value directly present in a machine or scale sample.",
+    "derived": "A deterministic calculation from recorded samples and their timestamps.",
+    "inferred": "A phase or comparison produced by an explicit rule and labelled as such.",
+    "unknown": "A physical or sensory claim that the available signals cannot establish."
+  },
+  "sources": [
+    {
+      "id": "decent-how-de1-measures",
+      "kind": "first-party-machine-documentation",
+      "title": "How the DE1 measures",
+      "url": "https://decentespresso.com/docs/how_the_de1_measures",
+      "scope": "DE1 display and pressure/flow measurement concepts",
+      "supports": ["pressure and flow are distinct plotted signals", "flow and pressure curves describe machine behaviour"],
+      "doesNotSupport": ["a universal optimal curve", "diagnosing channeling from a curve alone"]
+    },
+    {
+      "id": "decent-dflow",
+      "kind": "first-party-profile-documentation",
+      "title": "How to dial in D-Flow",
+      "url": "https://en.decentespresso.com/docs/how_to_dial_in_dflow",
+      "scope": "D-Flow profile family and its fast-fill/pressurised preinfusion concept",
+      "supports": ["D-Flow uses profile phases and adaptive behaviour", "fast fill and pressurised hold are profile intent"],
+      "doesNotSupport": ["D-Flow is optimal for every coffee", "fixed universal phase thresholds"]
+    },
+    {
+      "id": "decent-preinfusion-flow-study",
+      "kind": "first-party-experiment",
+      "title": "The impact of the preinfusion flow rate on espresso extraction",
+      "url": "https://en.decentespresso.com/docs/the_impact_of_the_preinfusion_flow_rate_on_espresso_extraction",
+      "scope": "Decent DE1PRO experiment varying preinfusion flow while holding selected variables",
+      "supports": ["preinfusion flow can change peak pressure, yield and extraction metrics in the tested setup"],
+      "doesNotSupport": ["transfer to every machine, basket or bean", "a universal best preinfusion flow"]
+    },
+    {
+      "id": "schmieder-espresso-kinetics",
+      "kind": "peer-reviewed-open-access",
+      "title": "Influence of Flow Rate, Particle Size, and Temperature on Espresso Extraction Kinetics",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10418593/",
+      "doi": "10.3390/foods12152871",
+      "scope": "Controlled extraction experiments and chemical component mass",
+      "supports": ["flow, grind and temperature interact", "in the tested conditions higher flow reduced component mass"],
+      "doesNotSupport": ["a universal espresso target", "a direct grinder-dial conversion", "channel diagnosis from endpoint flow"]
+    },
+    {
+      "id": "cameron-systematically-improving-espresso",
+      "kind": "peer-reviewed-research",
+      "title": "Systematically Improving Espresso: Insights from Mathematical Modeling and Experiment",
+      "url": "https://doi.org/10.1016/j.matt.2019.12.019",
+      "scope": "Model and experiments on dose, grind, pressure, flow and non-uniform extraction",
+      "supports": ["non-uniform flow contributes to irreproducibility", "multiple controls interact"],
+      "doesNotSupport": ["a single flow curve guarantees uniform extraction", "a universal channeling threshold"]
+    },
+    {
+      "id": "decent-profile-guide",
+      "kind": "first-party-profile-documentation",
+      "title": "Decent Espresso Profile Guide",
+      "url": "https://en.decentespresso.com/profile_guide",
+      "scope": "Examples and intended use of pressure, flow and adaptive profiles",
+      "supports": ["profile intent can be flow-controlled, pressure-controlled or adaptive", "grinder and roast context affect profile behaviour"],
+      "doesNotSupport": ["profile examples are universal prescriptions"]
+    },
+    {
+      "id": "salamanca-espresso-temperature-gradient",
+      "kind": "peer-reviewed-espresso-study",
+      "title": "Extraction of espresso coffee by using gradient of temperature. Effect on physicochemical and sensorial characteristics of espresso",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27507518/",
+      "doi": "10.1016/j.foodchem.2016.07.120",
+      "scope": "Espresso fixed and gradient brewing-temperature profiles for selected Arabica and Robusta coffees",
+      "supports": ["brewing-temperature profile can change chemical and sensory results in the tested setup"],
+      "doesNotSupport": ["a universal temperature correction", "temperature advice independent of coffee, machine and profile"]
+    },
+    {
+      "id": "steen-serving-temperature",
+      "kind": "peer-reviewed-sensory-study",
+      "title": "Influence of serving temperature on flavour perception and release of Bourbon Caturra coffee",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27765259/",
+      "doi": "10.1016/j.foodchem.2016.09.113",
+      "scope": "Serving temperature, volatile release and descriptive sensory evaluation for one coffee cultivar",
+      "supports": ["tasting temperature changes volatile release and perceived flavour attributes"],
+      "doesNotSupport": ["brew-temperature recommendations", "a universal sour/bitter temperature rule", "transfer to every cultivar or serving context"]
+    },
+    {
+      "id": "adhikari-consumption-temperature",
+      "kind": "peer-reviewed-sensory-study",
+      "title": "Impact of consumption temperature on sensory properties of hot brewed coffee",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30599987/",
+      "doi": "10.1016/j.foodres.2018.08.014",
+      "scope": "Descriptive sensory analysis of four hot brewed coffees consumed at 50, 60 and 70 °C",
+      "supports": ["consumption temperature affects sensory attributes", "coffee samples can respond differently to consumption temperature"],
+      "doesNotSupport": ["espresso-specific brew settings", "a universal sensory direction for all beans"]
+    }
+  ],
+  "implementationPolicy": {
+    "phaseBoundaryPriority": ["saved profile transition", "recorded profile frame", "explicit inferred rule"],
+    "simpleMode": ["show graph", "show phase timing", "show target-following and coverage", "give bounded next-test suggestions"],
+    "expertMode": ["show raw timestamps", "show cumulative volume/mass", "show slopes and pressure-flow trajectory", "show provenance and warnings"],
+    "hardLimits": ["never equate machine flow with beverage mass flow", "never claim channeling or extraction yield from pressure/flow alone", "never hide missing or incompatible traces"]
+  },
+  "temperaturePolicy": {
+    "brewingTemperature": "Machine/group temperature target or measured trajectory during extraction.",
+    "tastingTemperature": "Measured or user-entered beverage temperature at sensory evaluation; never inferred from machine telemetry.",
+    "sensoryAdvice": "Use temperature as a conditional controlled experiment only after matching or recording dose, profile, grind cohort, strength and tasting conditions.",
+    "precision": "Do not imply validated sensory precision below the resolution and uncertainty of the sensor and tasting protocol."
+  }
+}

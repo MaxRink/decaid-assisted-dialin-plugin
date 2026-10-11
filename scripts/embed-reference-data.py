@@ -120,6 +120,8 @@ function createReferenceCatalog() {{
     reviewedAt: catalog.reviewedAt,
     sources: catalog.sources,
     grinderDials: catalog.grinderDials,
+    coffeeCatalog: catalog.coffeeCatalog,
+    decentProfiles: catalog.decentProfiles,
     matchReferences(query = {{}}) {{
       if (!query || typeof query !== "object" || Array.isArray(query)) return [];
       return catalog.sources.filter((source) => matches(source, query));
@@ -178,6 +180,27 @@ def main():
             if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
                 fail("grinderDials link must be HTTPS without credentials")
     catalog["grinderDials"] = dials
+    for name, key, list_key in (("coffee-catalog.json", "coffeeCatalog", "products"), ("decent-profiles.json", "decentProfiles", "profiles")):
+        path = ROOT / "data" / name
+        if not path.exists():
+            continue
+        if path.stat().st_size > 4 * 1024 * 1024:
+            fail(f"{name} is too large")
+        extra = json.loads(path.read_text())
+        validate_json(extra, key)
+        if extra.get("schemaVersion") != 1 or not isinstance(extra.get(list_key), list) or len(extra[list_key]) > 2000:
+            fail(f"{name} schema or item count is invalid")
+        extra_ids = set()
+        for item in extra[list_key]:
+            item_id = item.get("id") if isinstance(item, dict) else None
+            if not isinstance(item_id, str) or not item_id or len(item_id) > 256 or item_id in extra_ids:
+                fail(f"{name} item IDs must be bounded and unique")
+            extra_ids.add(item_id)
+            source_url = item.get("url") if key == "coffeeCatalog" else item.get("source", {}).get("url")
+            parsed = urlparse(source_url or "")
+            if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+                fail(f"{name} source URL must be HTTPS without credentials")
+        catalog[key] = extra
     source = PLUGIN.read_text()
     block = generated(catalog)
     if START in source or END in source:

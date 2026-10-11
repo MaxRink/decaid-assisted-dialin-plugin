@@ -1,0 +1,12 @@
+flowchart TD
+A[Offline source export] --> B{Shopify or JSON-LD?}
+ B -->|Shopify| C[Require coffee product type, title and handle]
+ B -->|JSON-LD| D[Require Product or ProductGroup with name and URL]
+ C --> E[Apply source-specific product-form rules]
+ D --> E
+ E --> F[Preserve known facts; unknown values stay null]
+ F --> G{Catalog schema, identities and safe URLs valid?}
+ G -->|No| X[Reject]
+ G -->|Yes| H{Check mode?}
+ H -->|Yes| I[Verify deterministic representation]
+ H -->|No| J[Write validated offline catalog]

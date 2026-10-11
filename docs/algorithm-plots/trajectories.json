@@ -77,15 +77,18 @@
       }
     ],
     "manual": {
-      "confidence": 0.7000000000000001,
+      "confidence": "heuristic",
       "currentDial": 30,
       "direction": "finer",
+      "legacyScore": 0.7000000000000001,
+      "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
       "physicalTurn": "clockwise",
       "profile": "df64_gen1",
       "proposedDial": 31,
+      "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
       "reasons": [
         "brew time is below target",
-        "sensory input suggests under-extraction"
+        "operator assessment supports a finer test as a taste heuristic; extraction is not measured"
       ],
       "requiresConfirmation": true,
       "safetyNotes": [
@@ -99,15 +102,18 @@
     "manualProfiles": [
       {
         "conflict": {
-          "confidence": 0,
+          "confidence": "none",
           "currentDial": 30,
           "direction": "none",
+          "legacyScore": 0,
+          "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
           "physicalTurn": null,
           "profile": "df54",
           "proposedDial": null,
+          "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
           "reasons": [
             "brew time is below target",
-            "sensory input suggests over-extraction",
+            "operator assessment supports a coarser test as a taste heuristic; extraction is not measured",
             "time and sensory signals conflict; confirm before changing grind"
           ],
           "requiresConfirmation": true,
@@ -120,15 +126,18 @@
           "suggestedStepMarks": 1
         },
         "normal": {
-          "confidence": 0.7000000000000001,
+          "confidence": "heuristic",
           "currentDial": 30,
           "direction": "finer",
+          "legacyScore": 0.7000000000000001,
+          "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
           "physicalTurn": "counterclockwise",
           "profile": "df54",
           "proposedDial": 31,
+          "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
           "reasons": [
             "brew time is below target",
-            "sensory input suggests under-extraction"
+            "operator assessment supports a finer test as a taste heuristic; extraction is not measured"
           ],
           "requiresConfirmation": true,
           "safetyNotes": [
@@ -143,15 +152,18 @@
       },
       {
         "conflict": {
-          "confidence": 0,
+          "confidence": "none",
           "currentDial": 30,
           "direction": "none",
+          "legacyScore": 0,
+          "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
           "physicalTurn": null,
           "profile": "df64_gen1",
           "proposedDial": null,
+          "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
           "reasons": [
             "brew time is below target",
-            "sensory input suggests over-extraction",
+            "operator assessment supports a coarser test as a taste heuristic; extraction is not measured",
             "time and sensory signals conflict; confirm before changing grind"
           ],
           "requiresConfirmation": true,
@@ -164,15 +176,18 @@
           "suggestedStepMarks": 1
         },
         "normal": {
-          "confidence": 0.7000000000000001,
+          "confidence": "heuristic",
           "currentDial": 30,
           "direction": "finer",
+          "legacyScore": 0.7000000000000001,
+          "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
           "physicalTurn": "clockwise",
           "profile": "df64_gen1",
           "proposedDial": 31,
+          "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
           "reasons": [
             "brew time is below target",
-            "sensory input suggests under-extraction"
+            "operator assessment supports a finer test as a taste heuristic; extraction is not measured"
           ],
           "requiresConfirmation": true,
           "safetyNotes": [
@@ -187,15 +202,18 @@
       },
       {
         "conflict": {
-          "confidence": 0,
+          "confidence": "none",
           "currentDial": 30,
           "direction": "none",
+          "legacyScore": 0,
+          "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
           "physicalTurn": null,
           "profile": "df64_gen2",
           "proposedDial": null,
+          "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
           "reasons": [
             "brew time is below target",
-            "sensory input suggests over-extraction",
+            "operator assessment supports a coarser test as a taste heuristic; extraction is not measured",
             "time and sensory signals conflict; confirm before changing grind"
           ],
           "requiresConfirmation": true,
@@ -208,15 +226,18 @@
           "suggestedStepMarks": 1
         },
         "normal": {
-          "confidence": 0.7000000000000001,
+          "confidence": "heuristic",
           "currentDial": 30,
           "direction": "finer",
+          "legacyScore": 0.7000000000000001,
+          "legacyScoreProvenance": "Legacy community rule score for recognized signals; not a probability, measured confidence or firmware output",
           "physicalTurn": "clockwise",
           "profile": "df64_gen2",
           "proposedDial": 31,
+          "provenance": "Bounded manual experiment using an owner-supplied time target and explicit taste assessment; not a measured extraction diagnosis or a learned grind response",
           "reasons": [
             "brew time is below target",
-            "sensory input suggests under-extraction"
+            "operator assessment supports a finer test as a taste heuristic; extraction is not measured"
           ],
           "requiresConfirmation": true,
           "safetyNotes": [

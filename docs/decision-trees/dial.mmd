@@ -1,0 +1,12 @@
+flowchart TD
+A[Model, unit and value] --> B{Known profile?}
+ B -->|No| X[Unsupported]
+ B -->|Yes| C{Explicit research dD?}
+ C -->|Yes| D[Bounded research coordinate only]
+ C -->|No| E{Native micrometre scale?}
+ E -->|Yes| F[Apply scale 10]
+ E -->|No| G{Owner anchors supplied and identity matches?}
+ G -->|No| H[Calibration required or invalid]
+ G -->|Yes| I{Inside bounds and anchor interval?}
+ I -->|No| J[Reject extrapolation]
+ I -->|Yes| K[Affine interpolation; flag unachievable steps]

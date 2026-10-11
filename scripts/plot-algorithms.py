@@ -44,13 +44,13 @@ const gbs4 = run("GbS4", [40,34,30,28,27,26,28,31].map(x=>input(x*1000,28000,100
 const ddeff = a.ddEff(1000,18).map((value,i)=>({scenario:"DdEff",pass:i+1,input:{initialDdDum:1000,call:i+1,calls:18},result:{returnedDdDum:value},state:{calls:i+1}}));
 let effState=null, effective=[];
 for (let i=0;i<5;i++) { const dd=500+i*40, baseline=i?effective[i-1].result.result/10:undefined; const step=a.effectiveDd(effState,{grindDdDum:dd,grindDurationMs:1000,previousEffective:baseline}); effective.push({scenario:"effectiveDd",pass:i+1,input:{grindDdDum:dd,grindDurationMs:1000,previousEffective:baseline},result:step,nextState:step.nextState,state:step.nextState}); effState=step.nextState; }
-const manualProfiles = ["df54","df64_gen1","df64_gen2"].map(profile => ({profile, normal:a.manual({profile,targetTimeSec:30,actualTimeSec:25,flavor:"sour",currentDial:30,stepMarks:1,numericFinerDelta:1}), conflict:a.manual({profile,targetTimeSec:30,actualTimeSec:25,flavor:"bitter",currentDial:30,stepMarks:1,numericFinerDelta:1})}));
+const manualProfiles = ["df54","df64_gen1","df64_gen2"].map(profile => ({profile, normal:a.manual({profile,targetTimeSec:30,actualTimeSec:25,flavor:"too sour",currentDial:30,stepMarks:1,numericFinerDelta:1}), conflict:a.manual({profile,targetTimeSec:30,actualTimeSec:25,flavor:"too bitter",currentDial:30,stepMarks:1,numericFinerDelta:1})}));
 const grindTimeSweep = [2,3].flatMap(mode => [300,500,700].map(targetDdDum => ({mode,targetDdDum,result:a.grindTime({mode,recipeDdUm:50,targetDdDum,recipeTimeMs:1000})})));
 const wizardRows = [1,2,3].flatMap(modelEnum => [0,1,2].flatMap(roastDegreeIndex => [12000,18000,24000].map(weightMg => ({modelEnum,roastDegreeIndex,weightMg,proposedDdDum:a.proposedDd({modelEnum,roastDegreeIndex,weightMg}).proposedDd}))));
 const inverseSweep = [24,26,28,30,32].map(targetSec => ({targetSec,predictionUm:a.inverseRegression([{x:50,y:30},{x:45,y:32},{x:40,y:34},{x:35,y:36}],targetSec)}));
 const extras = {
   grindTime: a.grindTime({mode:3,recipeDdUm:50,targetDdDum:500,recipeTimeMs:1000}),
-  manual: a.manual({profile:"df64_gen1",targetTimeSec:30,actualTimeSec:25,flavor:"sour",currentDial:30,stepMarks:1,numericFinerDelta:1,finerDirection:"clockwise"}),
+  manual: a.manual({profile:"df64_gen1",targetTimeSec:30,actualTimeSec:25,flavor:"too sour",currentDial:30,stepMarks:1,numericFinerDelta:1,finerDirection:"clockwise"}),
   manualProfiles, grindTimeSweep, wizardRows, inverseSweep,
 };
 const all = [].concat(gbs1,gbs2,gbs3,gbs4,ddeff,effective);
@@ -157,11 +157,11 @@ def render_tools_svg(data: dict, path: Path) -> None:
     profiles = extras["manualProfiles"]
     x = list(range(len(profiles)))
     width = .35
-    axes[2].bar([i - width / 2 for i in x], [row["normal"]["confidence"] for row in profiles], width, label="time + taste agreement", color="#1464a0")
-    axes[2].bar([i + width / 2 for i in x], [profile["conflict"]["confidence"] for profile in profiles], width, label="contradictory taste", color="#e85d04")
-    axes[2].set_title("manual guidance confidence by profile")
+    axes[2].bar([i - width / 2 for i in x], [row["normal"]["legacyScore"] for row in profiles], width, label="time + explicit taste agreement", color="#1464a0")
+    axes[2].bar([i + width / 2 for i in x], [profile["conflict"]["legacyScore"] for profile in profiles], width, label="contradictory assessment", color="#e85d04")
+    axes[2].set_title("manual legacy rule score (not probability)")
     axes[2].set_xlabel("profile")
-    axes[2].set_ylabel("confidence (0–1)")
+    axes[2].set_ylabel("legacy heuristic score")
     axes[2].set_xticks(x, [row["profile"] for row in profiles])
     axes[2].set_ylim(0, 1.05)
     axes[2].grid(True, axis="y", alpha=.25)

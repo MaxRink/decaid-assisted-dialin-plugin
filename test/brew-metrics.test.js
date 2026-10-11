@@ -96,9 +96,8 @@ test("machine metrics expose distributions, time-weighted target error and profi
   assert.equal(result.machine.pressure.min, 0);
   assert.equal(result.machine.pressure.max, 10);
   assert.equal(result.machine.pressure.mean, 10 / 3);
-  assert.ok(
-    Math.abs(result.machine.pressure.timeWeightedMae - 100 / 11) < 1e-9,
-  );
+  assert.equal(result.machine.pressure.timeWeightedMae, 0);
+  assert.equal(result.machine.pressure.timeWeightedCoverageSec, 1);
   assert.equal(result.machine.profileFrameSegments.length, 2);
   assert.equal(
     result.machine.trackingDiagnostics.calibratedThresholdsUsed,
@@ -110,7 +109,8 @@ test("scale metrics use only scale timestamps and preserve positive measured fin
   const result = factory().analyze(shot());
   assert.equal(result.scale.finalMeasuredWeightG, 36);
   assert.equal(result.scale.massGainG, 36);
-  assert.equal(result.scale.brewFlowGPerSec, 3.6);
+  assert.equal(result.scale.brewFlowGPerSec, 1);
+  assert.equal(result.scale.brewFlowCoverageSec, 2);
   assert.equal(result.scale.firstIncreaseElapsedSec, 2.5);
   assert.equal(result.scale.firstIncreaseSampleGapSec, 2);
   assert.equal(result.scale.reportedWeightFlowGPerSec.available, false);
@@ -138,7 +138,8 @@ test("missing and invalid samples are explicit and do not produce NaN", () => {
   assert.equal(result.scale.finalMeasuredWeightG, null);
   assert.equal(result.scale.lastPositiveWeightG, 2);
   assert.equal(result.machine.pressure.available, false);
-  assert.equal(result.scale.brewFlowGPerSec, 6);
+  assert.equal(result.scale.brewFlowGPerSec, null);
+  assert.equal(result.scale.brewFlowCoverageSec, 0);
   assert.equal(result.scale.massGainG, 3);
   assert.equal(JSON.stringify(result).includes("NaN"), false);
   assert.equal(result.scale.reportedWeightFlowGPerSec.mean, 1.5);
@@ -176,7 +177,9 @@ test("overflow in derived metrics is rejected instead of emitting non-finite out
     {machine: {timestamp: "2026-10-11T10:00:00.000Z", pressure: 1e308, targetPressure: 0}},
     {machine: {timestamp: "2050-10-11T10:00:00.000Z", pressure: -1e308, targetPressure: 0}},
   ];
-  assert.throws(() => factory().analyze(value), /finite numeric bounds/);
+  const result = factory().analyze(value);
+  assert.equal(result.machine.pressure.timeWeightedCoverageSec, undefined);
+  assert.equal(JSON.stringify(result).includes("Infinity"), false);
 });
 
 test("sample bound and caller immutability are enforced", () => {
@@ -190,4 +193,75 @@ test("sample bound and caller immutability are enforced", () => {
   const original = JSON.stringify(value);
   assert.throws(() => factory().analyze(value));
   assert.equal(JSON.stringify(value), original);
+});
+
+test("trace analysis keeps separate flow units and does not invent preinfusion from a schedule", () => {
+  const value = shot();
+  value.workflow.profile = { steps: [
+    { name: "preinfusion", pump: "flow", seconds: 2, flow: 3 },
+    { name: "extraction", pump: "pressure", seconds: 9, pressure: 9 },
+  ] };
+  const result = factory().analyze(value);
+  assert.equal(result.trace.controlMode, "mixed_preinfusion_flow");
+  assert.equal(result.trace.machineFlow.unit, "ml/s");
+  assert.equal(result.trace.beverageFlow.unit, "g/s");
+  assert.equal(result.trace.beverageFlow.source, "scale_mass_derivative");
+  assert.equal(result.trace.preinfusion.available, false);
+  assert.equal(result.trace.preinfusion.source, "recorded_profile_frame");
+  assert.equal(result.trace.phases[0].name, "extraction");
+  assert.equal(result.trace.phases[1].mapping, "unknown");
+  assert.equal(result.trace.points[0].tSec, 0);
+  assert.match(result.trace.provenance, /separate signals/);
+});
+
+test("flow-controlled profiles explicitly abstain from elapsed-time-only grind advice", () => {
+  const value = shot();
+  value.workflow.profile = { steps: [{ name: "D-Flow", pump: "flow", seconds: 11, flow: 2 }] };
+  const result = factory().analyze(value);
+  assert.equal(result.trace.controlMode, "flow");
+  assert.equal(result.trace.recommendation.status, "abstain");
+  assert.match(result.trace.recommendation.reason, /elapsed time alone/);
+});
+
+test("trace integration skips large gaps and keeps invalid or nonuniform samples safe", () => {
+  const value = shot();
+  value.measurements = [
+    { machine: { timestamp: "2026-10-11T10:00:00Z", flow: 1, pressure: 2 }, scale: { timestamp: "2026-10-11T10:00:00Z", weight: 0 } },
+    { machine: { timestamp: "2026-10-11T10:00:01Z", flow: 3, pressure: 4 }, scale: { timestamp: "2026-10-11T10:00:01Z", weight: 2 } },
+    { machine: { timestamp: "2026-10-11T10:00:30Z", flow: 100, pressure: 9 }, scale: { timestamp: "2026-10-11T10:00:30Z", weight: 30 } },
+    { machine: { timestamp: "not-a-time", flow: 9 }, scale: { timestamp: "not-a-time", weight: 9 } },
+  ];
+  const result = factory().analyze(value);
+  assert.equal(result.trace.machineFlow.gapCount, 1);
+  assert.equal(result.trace.machineFlow.coverageSec, 1);
+  assert.equal(result.trace.machineFlow.integral, 2);
+  assert.equal(result.trace.beverageFlow.gapCount, 1);
+  assert.ok(result.warnings.some((warning) => /invalid timestamp/.test(warning)));
+  assert.equal(JSON.stringify(result).includes("NaN"), false);
+});
+
+test("beverage trace uses scale mass derivatives rather than integrating cumulative weight", () => {
+  const value = shot();
+  value.measurements = [
+    { scale: { timestamp: "2026-10-11T10:00:00Z", weight: 0 } },
+    { scale: { timestamp: "2026-10-11T10:00:05Z", weight: 10 } },
+    { scale: { timestamp: "2026-10-11T10:00:10Z", weight: 20 } },
+  ];
+  const result = factory().analyze(value);
+  assert.equal(result.trace.beverageFlow.mean, 2);
+  assert.equal(result.trace.beverageFlow.integral, 20);
+  assert.equal(result.trace.beverageFlow.min, 2);
+  assert.equal(result.trace.beverageFlow.max, 2);
+});
+
+test("temperature observations remain attributed and descriptive", () => {
+  const value = shot();
+  value.annotations.brewTemperatureC = 65;
+  value.annotations.tastingTemperatureC = 58;
+  value.annotations.servingTemperatureC = 55;
+  const result = factory().analyze(value);
+  assert.equal(result.annotations.brewTemperatureC, 65);
+  assert.equal(result.annotations.tastingTemperatureC, 58);
+  assert.equal(result.annotations.servingTemperatureC, 55);
+  assert.equal(result.machine.trackingDiagnostics.calibratedThresholdsUsed, false);
 });

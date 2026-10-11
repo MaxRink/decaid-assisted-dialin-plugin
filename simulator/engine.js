@@ -23,7 +23,7 @@
   const SCOPE_KEYS = ["grinderId", "beanBatchId", "burrIdentity", "calibrationEpoch", "profile"];
   const SHOT_KEYS = [
     "actualBrewTimeMs", "targetBrewTimeMs", "toleranceMs", "estimatedDdDum",
-    "setpointDdDum", "reset", "scope", "taste", "flavour", "beanType", "roastLevel", "dose", "yield",
+    "setpointDdDum", "reset", "scope", "taste", "flavour", "overall", "beanType", "roastLevel", "dose", "yield",
   ];
   const PLANT_KEYS = ["baseTimeMs", "targetDdDum", "slopeMsPerDdDum", "noiseMs"];
   const TASTES = ["balanced", "sour", "bitter", "astringent", "weak", "channeling"];
@@ -93,6 +93,7 @@
     if (value.scope != null) scope(value.scope);
     ["taste", "flavour", "beanType", "roastLevel"].forEach((key) => { if (value[key] != null) text(value[key], "shots[" + index + "]." + key); });
     ["dose", "yield"].forEach((key) => { if (value[key] != null && !(Number.isFinite(value[key]) && value[key] > 0 && value[key] <= 1000)) throw new Error("shots[" + index + "]." + key + " must be positive"); });
+    if (value.overall != null && !["under-extracted", "over-extracted", "balanced", "uncertain"].includes(value.overall)) throw new Error("overall must be an explicit supported assessment");
     if (value.taste != null && value.taste !== "none" && !TASTES.includes(value.taste)) throw new Error("shots[" + index + "].taste is unsupported");
     return { ...clone(value), taste: value.taste === "none" ? null : value.taste, targetBrewTimeMs: target, toleranceMs: tolerance };
   }
@@ -172,7 +173,7 @@
     const now = o.now == null ? Date.now() : o.now;
     if (!Number.isSafeInteger(now)) throw new Error("now must be a safe integer timestamp");
     const workflow = clone(o.workflow || {
-      profile: { steps: [{ type: "espresso" }] },
+      profile: { steps: [{ name: "Synthetic pressure extraction", pump: "pressure", pressure: 9, seconds: 30 }] },
       context: {
         beanBatchId: scenario.scope.beanBatchId,
         grinderId: scenario.scope.grinderId,
@@ -185,7 +186,7 @@
       },
     });
     const settings = clone(o.settings || {
-      TargetTimeSec: String(scenario.targetBrewTimeMs / 1000), TimeToleranceSec: String(scenario.toleranceMs / 1000), EvidenceMaxAgeDays: "14",
+      TargetTimeSec: String(scenario.targetBrewTimeMs / 1000), TargetTimeClock: "pump", TimeToleranceSec: String(scenario.toleranceMs / 1000), EvidenceMaxAgeDays: "14",
       CurrentSetting: String(scenario.initial.settingDdDum), SettingUnit: "deci-micrometre", StepSize: "1", NumericFinerDelta: "1", MinSetting: String(scenario.bounds.minDdDum), MaxSetting: String(scenario.bounds.maxDdDum), Dose: "18", Yield: "36",
       BeanBatchId: scenario.scope.beanBatchId, GrinderId: scenario.scope.grinderId, GrinderModel: scenario.scope.grinderId, BurrIdentity: scenario.scope.burrIdentity, CalibrationEpoch: scenario.scope.calibrationEpoch, BeanType: "arabica", RoastLevel: "medium", Basket: "standard",
     });
@@ -198,7 +199,8 @@
       const extras = { ...(shotWorkflow.context?.extras || {}), calibrationEpoch: shotScope.calibrationEpoch, beanType: planned.beanType || shotWorkflow.context?.extras?.beanType || "arabica", roastLevel: planned.roastLevel || shotWorkflow.context?.extras?.roastLevel || "medium", grinderSettingUnit: shotWorkflow.context?.extras?.grinderSettingUnit || "deci-micrometre" };
       shotWorkflow.context = { ...shotWorkflow.context, beanBatchId: shotScope.beanBatchId, beanId: shotWorkflow.context?.beanId || (shotScope.beanBatchId ? shotScope.beanBatchId + ":bean" : null), grinderId: shotScope.grinderId, grinderModel: shotWorkflow.context?.grinderModel || shotScope.grinderId, grinderBurrs: shotScope.burrIdentity, targetDoseWeight: planned.dose == null ? (shotWorkflow.context?.targetDoseWeight || 18) : planned.dose, targetYield: planned.yield == null ? (shotWorkflow.context?.targetYield || 36) : planned.yield, extras, grinderSetting: String(planned.setpointDdDum == null ? scenario.initial.settingDdDum : planned.setpointDdDum) };
       const setting = planned.setpointDdDum == null ? scenario.initial.settingDdDum : planned.setpointDdDum;
-      const observedTime = planned.actualBrewTimeMs == null && scenario.plant ? plantTime(scenario.plant, setting, index, scenario.seed) : (planned.actualBrewTimeMs == null ? planned.targetBrewTimeMs || scenario.targetBrewTimeMs : planned.actualBrewTimeMs);
+      const observedTime = planned.actualBrewTimeMs == null && scenario.plant ? plantTime(scenario.plant, setting, index, scenario.seed) : (planned.actualBrewTimeMs == null ? null : planned.actualBrewTimeMs);
+      if (observedTime == null) throw new Error("each shot needs actualBrewTimeMs or a synthetic plant; a target is not an observation");
       return { id, timestamp: stamp, workflow: shotWorkflow, actualBrewTimeMs: observedTime, measurements: [{ machine: { timestamp: new Date(Date.parse(stamp) + observedTime).toISOString() } }] };
     });
     const store = {};
@@ -249,8 +251,8 @@
         instance.onLoad({ ...settings, CurrentSetting: context.grinderSetting, BeanBatchId: context.beanBatchId, GrinderId: context.grinderId, GrinderModel: context.grinderModel, BurrIdentity: context.grinderBurrs, CalibrationEpoch: context.extras?.calibrationEpoch, BeanType: context.extras?.beanType, RoastLevel: context.extras?.roastLevel, Dose: String(context.targetDoseWeight), Yield: String(context.targetYield), SettingUnit: context.extras?.grinderSettingUnit });
         const planned = plannedShots[records.indexOf(record)] || {};
         const taste = planned.taste == null || planned.taste === "none" ? null : planned.taste;
-        const flavour = taste === "bitter" || taste === "astringent" ? { overall: "over-extracted" } : taste === "sour" ? { overall: "under-extracted" } : taste === "balanced" ? { overall: "balanced" } : null;
-        const feedback = await instance.handleHttpRequest({ endpoint: "feedback", method: "POST", body: { shotId: record.id, good: false, taste, flavour } });
+        const flavour = planned.overall ? { overall: planned.overall } : null;
+        const feedback = await instance.handleHttpRequest({ endpoint: "feedback", method: "POST", body: { shotId: record.id, good: false, taste, flavour, brewTimeSec: record.actualBrewTimeMs / 1000, brewTimeClock: "pump", notes: "Simulation input: synthetic or explicitly supplied pump duration, not a measured machine clock." } });
         if (feedback.status !== 200) throw new Error("simulated feedback was rejected");
         const suggestion = await instance.handleHttpRequest({ endpoint: "suggestion", method: "GET" });
         const suggestionBody = JSON.parse(suggestion.body);

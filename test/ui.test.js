@@ -225,7 +225,8 @@ test("native grinder manager uses host IDs, saves anchors, selects and reads bac
   });
   await ui.loadGrinders.click();
   await new Promise(setImmediate);
-  assert.equal(ui.grinderProfileSelect.children.length, 1);
+  assert.equal(ui.grinderProfileSelect.children.length, 2);
+  assert.equal(ui.grinderProfileSelect.children[0].value, "__new__");
   ui.grinderLabel.value = "Kitchen DF64";
   ui.grinderBurrs.value = "SSP HU";
   ui.grinderEpoch.value = "zero-1";
@@ -367,6 +368,8 @@ test("feedback saves explicit taste, timing and confirmed context", async () => 
     taste: "sour",
     flavour: null,
     brewTimeSec: 22.5,
+    brewTimeClock: "pump",
+    manualStopConfirmed: false,
     confirmedContext: {
       burrIdentity: "stock",
       calibrationEpoch: "cal-1",
@@ -602,7 +605,7 @@ test("analysis rendering explains target differences and preserves zero metrics"
           pressure: { timeWeightedMae: 0 },
           flow: { timeWeightedMae: 0.25 },
           mixTemperature: { timeWeightedMae: 0 },
-          groupTemperature: { timeWeightedMae: 0.1 },
+          groupTemperature: { timeWeightedMae: null },
         },
         scale: { finalMeasuredWeightG: 40, brewFlowGPerSec: 2, warnings: ["partial scale data"] },
         annotations: { actualYieldToMeasuredBeanDoseRatio: 0 },
@@ -614,6 +617,7 @@ test("analysis rendering explains target differences and preserves zero metrics"
   );
   await ui.analysis.onsubmit({ preventDefault() {}, target: ui.analysis });
   assert.match(ui.output.textContent, /Average pressure difference from target: 0\.00 bar/);
+  assert.match(ui.output.textContent, /Average group temperature difference from target: unavailable °C/);
   assert.match(ui.output.textContent, /Measured bean ratio: 0/);
   assert.match(ui.output.textContent, /Warnings: sample gap \| partial scale data/);
   assert.match(ui.output.textContent, /These are descriptive differences/);

@@ -1,0 +1,11 @@
+flowchart TD
+A[Evidence and optional inputs] --> B{Purpose}
+ B -->|Trace| C{Timestamped points available?}
+ C -->|No| U[Show unavailable]
+ C -->|Yes| D[Separate sensor panels; stop at gaps and invalid samples]
+ B -->|Profile reference| E[Describe reference; retain saved controller steps]
+ B -->|Calculations| F[Build independent enabled cases]
+ F --> G{Case computed?}
+ G -->|No| H[Show unavailable or invalid reason]
+ G -->|Yes| I[Show result, units, inputs and state]
+ J[Evidence changes] --> K[Invalidate stale answer]

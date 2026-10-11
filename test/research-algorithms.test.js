@@ -232,11 +232,46 @@ test("manual DF guidance abstains on conflicting time and taste signals", () => 
   const result = algorithms.recommendManual({
     targetTimeSec: 30,
     actualTimeSec: 20,
-    flavor: "bitter",
+    flavor: "too bitter",
     finerDirection: "clockwise",
   });
   assert.equal(result.direction, "none");
   assert.equal(result.requiresConfirmation, true);
+});
+
+test("manual taste guidance requires explicit intent and never interprets free-text negation", () => {
+  const input = { profile: "df64_gen2", targetTimeSec: 30, actualTimeSec: 30,
+    currentDial: 15, stepMarks: 1, numericFinerDelta: -1 };
+  for (const flavor of ["pleasant acidity", "not bitter", "not sour", "sour", "bitter", "astringent", "sweet and acidic"]) {
+    const result = algorithms.recommendManual({ ...input, flavor });
+    assert.equal(result.direction, "none", flavor);
+    assert.equal(result.proposedDial, null, flavor);
+    assert.equal(result.confidence, "none");
+  }
+  for (const [flavor, direction, proposedDial] of [
+    ["too sour", "finer", 14], ["too acidic", "finer", 14],
+    ["too bitter", "coarser", 16], ["too astringent", "coarser", 16],
+    ["under-extracted", "finer", 14], ["over-extracted", "coarser", 16],
+  ]) {
+    const result = algorithms.recommendManual({ ...input, flavor });
+    assert.equal(result.direction, direction, flavor);
+    assert.equal(result.proposedDial, proposedDial, flavor);
+    assert.equal(result.confidence, "heuristic");
+    assert.equal(result.legacyScore, 0.55);
+    assert.match(result.legacyScoreProvenance, /not a probability/);
+    assert.match(result.provenance, /not a measured extraction diagnosis/);
+  }
+});
+
+test("manual timing stays tied to the supplied target and balanced taste retains the setting", () => {
+  const input = { profile: "df64_gen2", actualTimeSec: 20, flavor: "not bitter" };
+  assert.equal(algorithms.manual({ ...input, targetTimeSec: 30 }).direction, "finer");
+  assert.equal(algorithms.manual({ ...input, targetTimeSec: 15 }).direction, "coarser");
+  assert.equal(algorithms.manual({ ...input, targetTimeSec: 20 }).direction, "none");
+  const balanced = algorithms.manual({ ...input, targetTimeSec: 30, flavor: "balanced" });
+  assert.equal(balanced.direction, "none");
+  assert.equal(balanced.legacyScore, 0);
+  assert.match(balanced.reasons.join(" "), /retain the setting/);
 });
 
 test("invalid adjustment does not mutate caller state", () => {
@@ -314,4 +349,30 @@ test("hand-grinder settings retain full rotations instead of wrapping the dial",
   assert.throws(() => algorithms.clicksFromTurns({model: "1Zpresso X-Pro", turns: 0, clicks: 60}), /whole counts/);
   assert.throws(() => algorithms.clicksFromTurns({model: "1Zpresso K series", turns: 1.5, clicks: 0}), /whole counts/);
   assert.throws(() => algorithms.clicksFromTurns({model: "DF64", turns: 1, clicks: 1}), /reviewed clicks/);
+});
+
+test("side-by-side comparison keeps each algorithm case isolated and labels missing cases", () => {
+  const comparison = algorithms.compareAll({
+    cases: {
+      GbS1: {
+        state: algorithms.createState("GbS1"),
+        input: input({ actualBrewTimeMs: 30000 }),
+      },
+      manual: { actualTimeSec: 30, targetTimeSec: 30, profile: "df54" },
+    },
+  });
+  assert.equal(comparison.schemaVersion, 1);
+  assert.equal(comparison.results.length, 10);
+  assert.equal(comparison.results.find((item) => item.algorithm === "GbS1").status, "computed");
+  assert.equal(comparison.results.find((item) => item.algorithm === "GbS2").status, "unavailable");
+  assert.match(comparison.provenance, /separate caller supplied cases/);
+});
+
+
+test("DdEff convenience replay enforces both call-count bounds", () => {
+  for (const calls of [-2147483648, -1, 65])
+    assert.throws(() => algorithms.ddEff(1000, calls), /between 0 and 64/);
+  assert.equal(algorithms.ddEff(1000, 0).length, 0);
+  assert.equal(algorithms.ddEff(1000, 64).length, 64);
+  assert.deepEqual(Array.from(algorithms.ddEff(1000, 7)), [1000, 1000, 1000, 1000, 1000, 1000, 800]);
 });

@@ -1,0 +1,10 @@
+flowchart TD
+A[Feedback and optional bean-dose capture] --> B{Schema and provenance valid?}
+ B -->|No| X[Reject]
+ B -->|Yes| C{Historical confirmation agrees?}
+ C -->|No| X
+ C -->|Yes| D[Queue local feedback update and invalidate cache]
+ D --> E[Write host storage]
+ E --> F{Acknowledged before 5 s timeout?}
+ F -->|Yes| G[Return saved]
+ F -->|No| H[Rollback memory; fail closed until reload]

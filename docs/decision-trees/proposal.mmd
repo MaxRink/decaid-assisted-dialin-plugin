@@ -1,0 +1,10 @@
+flowchart TD
+A[Direction decided] --> B{Numeric setting, positive step, finer sign and valid bounds?}
+ B -->|No| C[Direction only with missing-calibration warning]
+ B -->|Yes| D[Calculate one owner step]
+ D --> E{Result finite and within bounds?}
+ E -->|No| F[Abstain]
+ E -->|Yes| G[Proposed setting with owner-step provenance]
+ G --> H{Native conversion available?}
+ H -->|Yes| I[Show physical coordinate and provenance]
+ H -->|No| J[Show coordinate only; mapping withheld]

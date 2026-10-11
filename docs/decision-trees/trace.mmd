@@ -1,0 +1,11 @@
+flowchart TD
+A[Adjacent trace points] --> B{Finite endpoints and gap at most 5 s?}
+ B -->|No| C[Skip interval; report gap where applicable]
+ B -->|Yes| D[Integrate machine flow or derive scale mass rate]
+ D --> E{At least 5 flow values and 2 s coverage?}
+ E -->|No| F[Insufficient coverage]
+ E -->|Yes| G{Flow jump exceeds heuristic threshold?}
+ G -->|Yes| H[Possible irregularity; cause unknown]
+ G -->|No| I[No irregularity flag under this rule]
+ H --> J[Do not infer channeling or puck preparation]
+ I --> J

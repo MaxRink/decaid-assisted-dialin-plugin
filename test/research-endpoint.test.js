@@ -73,6 +73,19 @@ async function request(plugin, body) {
   return { response, body: JSON.parse(response.body) };
 }
 
+test("research comparison endpoint returns isolated algorithm rows", async () => {
+  const h = load();
+  const body = valid({
+    operation: "compare",
+    input: { cases: {} },
+  });
+  const result = await request(h.plugin, body);
+  assert.equal(result.response.status, 200);
+  assert.equal(result.body.results.length, 10);
+  assert.equal(result.body.results.every((item) => item.status === "unavailable"), true);
+  assert.match(result.body.provenance, /separate caller supplied cases/);
+});
+
 test("adjust returns a reusable state envelope and accepts it on the next call", async () => {
   const h = load();
   const first = await request(h.plugin, valid());

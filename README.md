@@ -67,13 +67,25 @@ claims a learned slope and requires current bean catalog context. The endpoint
 uses up to six recent shots with saved feedback no older than
 `EvidenceMaxAgeDays` (14 by default), and abstains when the context, setting
 unit, calibration epoch or time/taste evidence is missing or contradictory. An
-explicitly supplied operator `brewTimeSec` takes precedence; otherwise the
-plugin fetches the full shot and derives elapsed time from saved machine
-timestamps. Each source is disclosed. Suggestions also expose matched reviewed
+explicit positive `TargetTimeSec` is required; there is no default espresso time.
+`TargetTimeClock` selects `pump` (preinfusion plus pouring, the default clock),
+`pouring` (main pouring only), or `recording` (the whole saved recording,
+which can include preheat and settling). Native pump/pouring durations require
+observed start/end state transitions and complete telemetry coverage.
+An operator `brewTimeSec` takes precedence only when its `brewTimeClock`
+matches the target. Legacy explicit operator times with no clock label use
+`pump`; new feedback should supply the clock. Missing native boundaries require
+an operator-confirmed matching time, rather than borrowing recording duration.
+Shots ended by an error or disconnection are excluded. Every manual stop
+requires `manualStopConfirmed: true`, affirming that the actual result completed
+the intended recipe and is suitable for comparison; no universal gram tolerance
+is assumed. Each source and confirmation is disclosed. Suggestions also expose matched reviewed
 reference facts and URLs as contextual provenance only; those references never
 alter the direction or numeric proposal. Suggestions report the matched
 evidence, direction, confidence, reasons and whether a numeric proposal was
-withheld.
+withheld. Descriptive acidity, bitterness and astringency intensities do not imply
+an unwanted taste or an extraction diagnosis. Direction requires an explicit
+actionable taste choice or the operator’s overall assessment.
 
 Numeric proposals require `CurrentSetting`, `SettingUnit`, a positive
 `StepSize`, and an owner-confirmed `NumericFinerDelta` of `-1` or `+1`.
@@ -83,9 +95,15 @@ without them, the first-shot result can offer a direction but withholds a number
 The result remains an operator-confirmation prompt and never becomes a device
 command. `confirmedContext` is an explicit per-shot historical confirmation. It only fills fields missing from that saved shot, after fetching and checking the full record; any conflict is rejected. Current plugin settings never fill historical fields.
 
-The manual DF54/DF64 rules are separate from the E64 firmware model:
-below-target time or under-extracted taste suggests finer, above-target time or
-over-extracted taste suggests coarser, and conflicting signals abstain.
+The manual DF54/DF64 rules are separate from the E64 firmware model.
+They use the owner's explicit time target and exact assessments: `too sour`,
+`too acidic` or `under-extracted` support a finer experiment; `too bitter`,
+`too astringent` or `over-extracted` support a coarser experiment. These are
+subjective assessments, not extraction measurements. Bare taste words and free
+prose such as “pleasant acidity” or “not bitter” supply no direction. Conflicting
+signals abstain; `balanced` retains the setting even outside the time target.
+Confidence is labelled `heuristic` or `none`. `legacyScore` preserves the old
+community rule score for comparison; it is not a probability or measured confidence.
 Physical direction and numeric sign remain per-unit calibration data.
 
 ## Beans, roast and post-brew flavour
@@ -106,13 +124,20 @@ Example feedback body:
 
 `POST analysis` with `{"shotId":"your-shot-id"}` fetches the saved full shot. The UI has a dedicated analysis form; rich suggestions also include per-source analysis.
 
-- Elapsed shot time starts at the shot timestamp, including preinfusion. Machine and scale timestamps remain separate.
+- `elapsedSec` is recording duration and can include preheat and settling. `timing.pump`, `timing.pouring` and `timing.preinfusion` separately report durations only when native state boundaries and coverage are complete. Machine and scale timestamps remain separate.
 - Pressure, machine flow, mix/group temperatures show minimum, maximum, mean and time-weighted absolute error against recorded targets, with coverage. Profile-frame segments include the same tracking summaries.
 - Scale analysis reports ending measured weight when available, last positive weight separately, mass gain, reported weight flow, timestamp-derived average mass flow, first weight increase and sampling gap. Ratio against the recipe dose and deviation from recipe yield are labelled comparisons to targets.
 - Recipe dose/yield/ratio remain separate from saved annotations (actual-dose/yield fields, TDS, extraction yield and enjoyment). Annotation origin may be a recipe fallback, derived value or operator input; it is not silently promoted to a verified measurement.
 - Recorded volume stays in millilitres. Machine flow/volume are never converted into beverage grams. Invalid, duplicate/non-monotonic, missing or partial samples are disclosed; scans are bounded to 20,000 measurements.
 
 Tracking errors are descriptive evidence. The plugin does not claim pressure/flow curves alone prove channeling, extraction chemistry or an optimal grind. Missing metrics remain unavailable and do not become fabricated readings.
+
+Observed profile-frame transitions take precedence over scheduled phase maxima.
+Schedule-only labels remain inferred, especially for weight-triggered D-Flow
+infusion. Flow-controlled, hybrid and unknown controller modes cannot use the
+generic time-to-grind rule. Measured brewing temperature, its saved target and
+optional tasting-temperature context remain separate; acidity or bitterness
+does not establish a temperature correction or measured extraction yield.
 
 ## Research replay
 
@@ -143,6 +168,10 @@ DF54/DF64 heuristics, see the [GBS algorithm guide](docs/GBS_GUIDE.md).
 
 Start with the guide's everyday explanations, then view the
 [algorithm graphs and pass-by-pass examples](docs/algorithm-plots/README.md).
+The [decision-flow gallery](docs/decision-trees/) explains every main decision path
+with offline diagrams, plain-language summaries and expandable exact conditions.
+The [full decision reference](docs/DECISION_TREES.md) and
+[machine-readable branch map](docs/research/decision-tree-map.json) pin the reviewed source.
 The examples run the actual plugin calculations with clearly labeled synthetic
 inputs. The [grinder and burr research](docs/GRINDER_RESEARCH.md) separates
 published calibration facts from missing measurements and compares MARO and

@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const { timedMeasurements } = require("./shot-fixtures");
 
 const source = fs.readFileSync("plugin.js", "utf8");
 const profile = {
@@ -37,18 +38,8 @@ function shot(id, { beanType, roastLevel, seconds = 22 } = {}) {
     id,
     timestamp,
     workflow,
-    measurements: [
-      {
-        machine: {
-          timestamp: new Date(
-            Date.parse(timestamp) + seconds * 1000,
-          ).toISOString(),
-          flow: 2,
-          pressure: 9,
-        },
-        scale: { weight: 36 },
-      },
-    ],
+    measurements: timedMeasurements(timestamp, seconds).map(sample => ({ ...sample,
+      scale: { timestamp: sample.machine.timestamp, weight: 36 } })),
     annotations: { actualDoseWeight: 18, actualYield: 36 },
   };
   return { id, timestamp, workflow, full };
@@ -321,13 +312,14 @@ test("derives flavour guidance conservatively", async () => {
     [{ overall: "over-extracted" }, "coarser"],
     [{ overall: "balanced" }, null],
     [{ overall: "uncertain" }, null],
-    [{ bitterness: 4 }, "coarser"],
-    [{ astringency: 5 }, "coarser"],
+    [{ bitterness: 4 }, null],
+    [{ astringency: 5 }, null],
     [{ acidity: 5 }, null],
   ];
-  for (const [flavour, expected] of cases) {
+  for (const [flavour, expected, seconds] of cases.flatMap(([flavour, expected]) =>
+    (expected ? [30] : [20, 30, 40]).map(seconds => [flavour, expected, seconds]))) {
     const entries = [0, 1, 2].map((index) =>
-      shot(`guidance-${JSON.stringify(flavour)}-${index}`, { seconds: 30 }),
+      shot(`guidance-${JSON.stringify(flavour)}-${index}`, { seconds }),
     );
     const { plugin } = await load({ shots: entries });
     for (const entry of entries) {

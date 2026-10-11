@@ -1,0 +1,1807 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-11T10:25:11.337245+00:00",
+  "scope": "Product decision branches, grouped validation predicates and recovered algorithm state transitions; not instrumented JavaScript branch coverage.",
+  "reviewedBaseCommit": "c9b9998decab2c5aa9733c1a540c3190c3aa4bba",
+  "sourceState": "working tree; source hashes identify the reviewed snapshot",
+  "sourceSha256": {
+    "plugin.js": "6affa70e987e1786f56c032c5e7f827b6cf9a37b0daf52d9c3d321ecb4803bff",
+    "simulator/app.js": "0ac84026a55095265b1230e3d30f90ae6a1ee27ae562f15df3620a7c4cd9efb0",
+    "simulator/index.html": "2e711bf354e16be73e48581b873bc693b3b3ae1bf9b253b6f26dd6fa14af34cf",
+    "simulator/engine.js": "746ef739b48183f49073c498371e49ada941f35471d9b331f2c5076ac0324b7a",
+    "scripts/update-coffee-catalog.py": "692b082fc97e2c255e0e4019eb4809098ae64bffa50f6447fde67909b307fcbe",
+    "data/coffee-catalog.json": "7b3b8795bfa9e389a9a3a76b1e56023db19cd675d09e71e363bc2a4186fdba0f",
+    "data/decent-profiles.json": "4af5ff6734887dcea7a2bd813de661202a9dd425c9c560920019b58c7a60c9b5"
+  },
+  "sections": [
+    {
+      "id": "entry",
+      "title": "Choose the kind of answer",
+      "functions": [
+        "createPlugin.handleHttpRequest",
+        "recommendation",
+        "suggestion",
+        "analysis",
+        "research"
+      ],
+      "why": "The app has separate ways to recall a good shot, suggest a next experiment, describe a saved trace, and replay recovered calculations. A calculated number does not become a machine command.",
+      "branches": [
+        {
+          "id": "entry.1",
+          "condition": "GET recommendation",
+          "outcome": "Recall most recent comparable marked-good setting."
+        },
+        {
+          "id": "entry.2",
+          "condition": "GET suggestion",
+          "outcome": "Run current-context, historical-evidence and sensory gates."
+        },
+        {
+          "id": "entry.3",
+          "condition": "POST analysis with shotId",
+          "outcome": "Describe saved full-shot telemetry and local feedback."
+        },
+        {
+          "id": "entry.4",
+          "condition": "POST research",
+          "outcome": "Validate isolated caller inputs and replay the requested calculation."
+        },
+        {
+          "id": "entry.5",
+          "condition": "inactive plugin or failed host/storage dependency",
+          "outcome": "Return unavailable; never invent a replacement answer."
+        },
+        {
+          "id": "entry.6",
+          "condition": "unknown endpoint or method",
+          "outcome": "404."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Request] --> B{Purpose}\n B -->|Recall a good setting| C[recommendation]\n B -->|Next experiment| D[suggestion]\n B -->|Describe a saved shot| E[analysis]\n B -->|Expert calculation| F[research]\n C --> G[Display answer and its provenance]\n D --> G\n E --> G\n F --> G\n G --> H[Operator decides what to do]\n",
+      "tests": [
+        "test/plugin.test.js",
+        "test/analysis-endpoint.test.js",
+        "test/research-endpoint.test.js"
+      ]
+    },
+    {
+      "id": "metrics",
+      "title": "Measurements, missing values and units",
+      "functions": [
+        "createBrewMetrics.analyze",
+        "samples",
+        "ordered",
+        "scaleMetrics",
+        "timedMetric"
+      ],
+      "why": "A recipe is an intended amount; an annotation can be manually entered; the scale records mass. Keeping these separate prevents an intended yield from appearing to be measured.",
+      "branches": [
+        {
+          "id": "metrics.1",
+          "condition": "shot is not an object, more than 20000 measurements, or non-finite result",
+          "outcome": "Reject analysis."
+        },
+        {
+          "id": "metrics.2",
+          "condition": "timestamp invalid or not strictly increasing within one signal",
+          "outcome": "Exclude sample and warn; machine and scale clocks are processed separately."
+        },
+        {
+          "id": "metrics.3",
+          "condition": "finite positive recipe dose and finite non-negative recipe yield",
+          "outcome": "Expose targets and their ratio; never rename targets as measurements."
+        },
+        {
+          "id": "metrics.4",
+          "condition": "finite saved actualDoseWeight/actualYield",
+          "outcome": "Expose annotations with origin unverified."
+        },
+        {
+          "id": "metrics.5",
+          "condition": "last ordered scale sample has finite weight > 0",
+          "outcome": "Expose finalMeasuredWeightG; otherwise null even if an earlier positive value exists."
+        },
+        {
+          "id": "metrics.6",
+          "condition": "at least two valid scale samples and positive elapsed time",
+          "outcome": "Report mass gain divided by scale elapsed time in g/s."
+        },
+        {
+          "id": "metrics.7",
+          "condition": "finite measured value and target at both interval endpoints, with 0 < dt <=5000 ms",
+          "outcome": "Accumulate left-sample-held time-weighted absolute target error; missing values/targets and longer gaps do not contribute."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Saved snapshot] --> B{Object and sample bounds valid?}\n B -->|No| X[Reject]\n B -->|Yes| C[Order each signal independently; warn and skip invalid times]\n C --> D[Machine pressure, flow and temperatures]\n C --> E[Scale mass in grams]\n C --> F[Recipe targets and unverified annotations remain separate]\n E --> G{Final scale sample positive and finite?}\n G -->|Yes| H[Final measured weight]\n G -->|No| I[Final yield unavailable]\n D --> J[Descriptive metrics; no extraction diagnosis]\n H --> J\n I --> J\n F --> J\n",
+      "tests": [
+        "test/brew-metrics.test.js",
+        "test/analysis-endpoint.test.js"
+      ]
+    },
+    {
+      "id": "trace",
+      "title": "Trace coverage and descriptive irregularity",
+      "functions": [
+        "traceMetrics.integrate",
+        "traceMetrics.massRate",
+        "traceMetrics"
+      ],
+      "why": "A missing interval is a gap in evidence. Machine inlet flow in ml/s and beverage mass flow in g/s are different quantities.",
+      "branches": [
+        {
+          "id": "trace.1",
+          "condition": "adjacent finite endpoints and interval 0 < dt <= 5000 ms",
+          "outcome": "Trapezoidal machine-flow integral; scale mass difference divided by elapsed time."
+        },
+        {
+          "id": "trace.2",
+          "condition": "dt > 5000 ms",
+          "outcome": "Count a gap and exclude interval from integration."
+        },
+        {
+          "id": "trace.3",
+          "condition": "missing/non-finite endpoint or negative scale mass",
+          "outcome": "Skip derivative interval; do not bridge it."
+        },
+        {
+          "id": "trace.4",
+          "condition": "at least five finite machine flow samples and >=2 seconds covered",
+          "outcome": "Report observed_trace; possibleIrregularity means at least one adjacent finite flow change within the same frame and a gap <=5 s exceeds max(0.5 ml/s, abs(current targetFlow)*0.5), using target 1 when unavailable. This is an implementation heuristic."
+        },
+        {
+          "id": "trace.5",
+          "condition": "scale mass decreases across an otherwise usable interval",
+          "outcome": "Count observed weight decrease and exclude that interval from beverage-rate integration; do not diagnose a reset or puck cause."
+        },
+        {
+          "id": "trace.6",
+          "condition": "less coverage",
+          "outcome": "Report insufficient_trace_coverage and null irregularity/preparation inference."
+        },
+        {
+          "id": "trace.7",
+          "condition": "more than 600 timestamp-merged graph points",
+          "outcome": "Return first 600 sorted points and truncation warning."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Adjacent trace points] --> B{Finite endpoints and gap at most 5 s?}\n B -->|No| C[Skip interval; report gap where applicable]\n B -->|Yes| D[Integrate machine flow or derive scale mass rate]\n D --> E{At least 5 flow values and 2 s coverage?}\n E -->|No| F[Insufficient coverage]\n E -->|Yes| G{Flow jump exceeds heuristic threshold?}\n G -->|Yes| H[Possible irregularity; cause unknown]\n G -->|No| I[No irregularity flag under this rule]\n H --> J[Do not infer channeling or puck preparation]\n I --> J\n",
+      "tests": [
+        "test/brew-metrics.test.js",
+        "test/suggestions.test.js"
+      ]
+    },
+    {
+      "id": "phases",
+      "title": "Observed phases and inferred roles",
+      "functions": [
+        "frameRuns",
+        "profileSegments",
+        "traceMetrics",
+        "stateTiming"
+      ],
+      "why": "Recorded frame changes establish observation windows. A saved step name or volume-count boundary can label the window, but does not prove puck saturation. Programmed maximum durations are never substituted for observed phase timing.",
+      "branches": [
+        {
+          "id": "phases.1",
+          "condition": "any machine sample contains integer profileFrame or substate",
+          "outcome": "Prefer recorded frame/substate runs; do not fall back to explicit phase arrays for unmapped runs."
+        },
+        {
+          "id": "phases.2",
+          "condition": "same non-negative integer frame and same substate, adjacent gap <=5000ms",
+          "outcome": "Continue run; at a contiguous transition close previous run at the transition timestamp; a longer gap starts a separate run."
+        },
+        {
+          "id": "phases.3",
+          "condition": "known substate other than preinfusion/pouring",
+          "outcome": "Role outside_pump, without a pump mapping."
+        },
+        {
+          "id": "phases.4",
+          "condition": "substate preinfusion",
+          "outcome": "Role preinfusion with recorded_machine_substate provenance."
+        },
+        {
+          "id": "phases.5",
+          "condition": "valid saved step pump flow/pressure at recorded frame",
+          "outcome": "Map saved step; role preinfusion when index is below positive integer target_volume_count_start or name matches pre.?infus/infus/bloom/soak/fill; otherwise extraction."
+        },
+        {
+          "id": "phases.6",
+          "condition": "frame unmapped or unsupported saved step",
+          "outcome": "Keep role unknown and mapping unknown."
+        },
+        {
+          "id": "phases.7",
+          "condition": "no frame/substate observations",
+          "outcome": "Use first nonempty explicit phase array in phases/phaseEvents/profilePhases/annotations.phases/workflow.phases order."
+        },
+        {
+          "id": "phases.8",
+          "condition": "explicit phase has finite 0<=start<=end<=last machine elapsed",
+          "outcome": "Use recorded_phase_boundary; infusion-like name supplies preinfusion role, other roles remain unknown."
+        },
+        {
+          "id": "phases.9",
+          "condition": "no observed phase boundary",
+          "outcome": "Phase unavailable; no schedule-duration fallback."
+        },
+        {
+          "id": "phases.10",
+          "condition": "preinfusion phases available",
+          "outcome": "Report observed window sum; extractionElapsedSec comes only from complete recorded pouring-substate timing."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Saved machine samples] --> B{Any recorded frame or substate?}\n B -->|Yes| C[Split runs at frame, substate or long-gap changes]\n C --> D{Known non-pump substate?}\n D -->|Yes| E[Outside pump]\n D -->|No| F{Preinfusion substate or valid saved step mapping?}\n F -->|Yes| G[Label role and its recorded or profile-intent provenance]\n F -->|No| H[Unknown role and mapping]\n B -->|No| I{Explicit boundaries valid and inside recording?}\n I -->|Yes| J[Recorded boundaries; role inferred only from name]\n I -->|No| K[Phase unavailable]\n G --> L[Never replace missing timing with programmed maximum durations]\n H --> L\n J --> L\n K --> L\n",
+      "tests": [
+        "test/brew-metrics.test.js",
+        "test/analysis-endpoint.test.js"
+      ]
+    },
+    {
+      "id": "timing",
+      "title": "Recording, pump and pouring clocks",
+      "functions": [
+        "stateTiming",
+        "stateTiming.window",
+        "createBrewMetrics.analyze"
+      ],
+      "why": "A file can include heating or a tail after pumping stops. Recording elapsed time, pump duration and pouring duration are reported as different clocks.",
+      "branches": [
+        {
+          "id": "timing.1",
+          "condition": "recording start and machine end are valid",
+          "outcome": "elapsedSec describes recording duration; it does not become pump duration."
+        },
+        {
+          "id": "timing.2",
+          "condition": "state.state is espresso and substate belongs to requested active set",
+          "outcome": "Count as active: pump uses preinfusion+pouring, pouring only pouring, preinfusion only preinfusion."
+        },
+        {
+          "id": "timing.3",
+          "condition": "first/last active observation lacks a nearby known inactive boundary",
+          "outcome": "Duration unknown; availability and observed start/coverage remain visible."
+        },
+        {
+          "id": "timing.4",
+          "condition": "gap >5000ms, missing next substate, or non-active sample interrupts active span",
+          "outcome": "Window incomplete; do not publish a complete duration."
+        },
+        {
+          "id": "timing.5",
+          "condition": "any machine sample was excluded for invalid, duplicate or non-monotonic timestamp",
+          "outcome": "All pump/pouring/preinfusion windows have complete false, durationSec null and timestampIntegrity excluded_samples."
+        },
+        {
+          "id": "timing.6",
+          "condition": "both boundaries observed, no excluded machine timestamp and no gap/interruption",
+          "outcome": "durationSec is first following inactive timestamp minus first active timestamp."
+        },
+        {
+          "id": "timing.7",
+          "condition": "complete pouring window unavailable",
+          "outcome": "Preinfusion extractionElapsedSec remains null, rather than subtracting guessed preinfusion from total recording."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Choose pump, pouring or preinfusion active substates] --> B{Any active observation?}\n B -->|No| C[Unavailable]\n B -->|Yes| D{Both nearby inactive boundaries observed?}\n D -->|No| E[Incomplete; duration unknown]\n D -->|Yes| F{No excluded timestamps, long gap or interruption?}\n F -->|No| E\n F -->|Yes| G[Complete observed duration]\n E --> H[Expose coverage and boundary provenance]\n G --> H\n",
+      "tests": [
+        "test/brew-metrics.test.js",
+        "test/analysis-endpoint.test.js"
+      ]
+    },
+    {
+      "id": "control",
+      "title": "Control mode and the time-only advice gate",
+      "functions": [
+        "traceMetrics",
+        "suggestion"
+      ],
+      "why": "Under flow control or a positive opposite-variable limiter, elapsed time can be a profile outcome rather than a simple sign of grind resistance. Saved controls, rather than profile title, determine the classification.",
+      "branches": [
+        {
+          "id": "control.1",
+          "condition": "any saved step pump is not exactly flow or pressure",
+          "outcome": "Control mode unknown; title alone never classifies it."
+        },
+        {
+          "id": "control.2",
+          "condition": "positive numeric step.limiter.value and recognized controls",
+          "outcome": "mixed_dynamic_flow when any pressure step exists; otherwise flow when a flow step exists."
+        },
+        {
+          "id": "control.3",
+          "condition": "pressure and flow steps and flow outside preinfusion classification",
+          "outcome": "mixed_dynamic_flow."
+        },
+        {
+          "id": "control.4",
+          "condition": "pressure and flow steps, flow only preinfusion",
+          "outcome": "mixed_preinfusion_flow."
+        },
+        {
+          "id": "control.5",
+          "condition": "only flow steps",
+          "outcome": "flow if any extraction step, otherwise flow_preinfusion_only."
+        },
+        {
+          "id": "control.6",
+          "condition": "only pressure steps without positive limiter",
+          "outcome": "pressure."
+        },
+        {
+          "id": "control.7",
+          "condition": "no recognized control steps",
+          "outcome": "unknown."
+        },
+        {
+          "id": "control.8",
+          "condition": "preinfusion classification",
+          "outcome": "Index below positive integer target_volume_count_start, or step name matching pre.?infus/infus/bloom/soak/fill; numeric strings are accepted for profile numeric fields."
+        },
+        {
+          "id": "control.9",
+          "condition": "any selected evidence control mode other than pressure or mixed_preinfusion_flow",
+          "outcome": "Abstain before taste-based numeric advice."
+        },
+        {
+          "id": "control.10",
+          "condition": "mixed_preinfusion_flow or pressure",
+          "outcome": "This controller gate allows continuation; all other evidence and sensory gates still apply."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Saved profile controls] --> B{Unsupported pump value?}\n B -->|Yes| U[Unknown]\n B -->|No| C{Positive opposite-variable limiter?}\n C -->|Yes| F[flow or mixed_dynamic_flow]\n C -->|No| D{Flow during extraction?}\n D -->|Yes| F\n D -->|No| E{Flow only during preinfusion?}\n E -->|Yes| P{Pressure extraction exists?}\n P -->|No| Q[flow_preinfusion_only]\n Q --> I\n P -->|Yes| R[mixed_preinfusion_flow]\n R --> J[Continue evidence and sensory gates]\n H --> J\n E -->|No| G{Pressure step exists?}\n G -->|Yes| H[pressure]\n G -->|No| U\n F --> I[Abstain from elapsed-time grind suggestion]\n U --> I\n",
+      "tests": [
+        "test/brew-metrics.test.js",
+        "test/suggestions.test.js"
+      ]
+    },
+    {
+      "id": "context",
+      "title": "Current context and historical matching",
+      "functions": [
+        "contextOf",
+        "profileContent",
+        "canonical",
+        "historicalContext",
+        "compare"
+      ],
+      "why": "An old shot must keep its old identity. Current settings can fill current setup fields, but are never silently copied into historical shots.",
+      "branches": [
+        {
+          "id": "context.1",
+          "condition": "current workflow field absent and useSettings true",
+          "outcome": "Allow configured current fallback and report userSuppliedCurrentFields."
+        },
+        {
+          "id": "context.2",
+          "condition": "historical field absent and explicit confirmedContext supplied",
+          "outcome": "Fill only confirmed missing field."
+        },
+        {
+          "id": "context.3",
+          "condition": "historical field already present and differs from confirmation",
+          "outcome": "Reject conflicting historical confirmation."
+        },
+        {
+          "id": "context.4",
+          "condition": "profile has no nonempty steps",
+          "outcome": "Profile execution identity unavailable."
+        },
+        {
+          "id": "context.5",
+          "condition": "execution content exists",
+          "outcome": "Canonicalize selected execution fields with sorted object keys; display title is not identity."
+        },
+        {
+          "id": "context.6",
+          "condition": "comparison field missing on one side",
+          "outcome": "Exclude as missing."
+        },
+        {
+          "id": "context.7",
+          "condition": "comparison field differs",
+          "outcome": "Exclude as mismatched."
+        },
+        {
+          "id": "context.8",
+          "condition": "comparison field missing on both sides",
+          "outcome": "Report unavailable; rich suggestion permits this for beanType, roastLevel, grinderRpm, machineId and machineFlowCalibration."
+        },
+        {
+          "id": "context.9",
+          "condition": "known RPM, machine identity or recorded flow-calibration strings differ",
+          "outcome": "Exclude; unavailable optional metadata is not proof of matching physical conditions."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Current setup] --> B[Workflow first; configured fallbacks labelled]\n C[Historical shot] --> D{Confirmation conflicts with saved value?}\n D -->|Yes| X[Exclude]\n D -->|No| E[Fill only confirmed absent fields]\n B --> F[Compare identities, execution profile, recipe and units]\n E --> F\n F --> G{One-sided missing or differing value?}\n G -->|Yes| X\n G -->|No| H{Required fields missing on both sides?}\n H -->|Yes for rich advice| X\n H -->|No| I[Eligible context]\n",
+      "tests": [
+        "test/suggestions.test.js",
+        "test/first-shot.test.js",
+        "test/grinder-instances.test.js",
+        "test/plugin.test.js"
+      ]
+    },
+    {
+      "id": "cohort",
+      "title": "Select evidence before suggesting a change",
+      "functions": [
+        "suggestion",
+        "fetchShots",
+        "fullShot"
+      ],
+      "why": "The assistant selects up to six comparable observations at the current intended setting. More unrelated shots do not make a suggestion stronger.",
+      "branches": [
+        {
+          "id": "cohort.1",
+          "condition": "current required setup/setting absent, dose/yield not positive, target outside (0,600], tolerance outside [0,target), or maxAge outside (0,365] days",
+          "outcome": "Abstain."
+        },
+        {
+          "id": "cohort.2",
+          "condition": "unmarked or duplicate shot",
+          "outcome": "Skip."
+        },
+        {
+          "id": "cohort.3",
+          "condition": "shot age invalid, future, or older than EvidenceMaxAgeDays (default 14)",
+          "outcome": "Exclude."
+        },
+        {
+          "id": "cohort.4",
+          "condition": "context or intended setting differs",
+          "outcome": "Exclude; numeric setting strings compare numerically when both parse."
+        },
+        {
+          "id": "cohort.5",
+          "condition": "full snapshot context/timestamp differs from summary",
+          "outcome": "Exclude to prevent a mixed historical snapshot."
+        },
+        {
+          "id": "cohort.6",
+          "condition": "operator brewTimeSec supplied",
+          "outcome": "Require operator brewTimeClock (legacy default pump) equals target clock; use that confirmed time."
+        },
+        {
+          "id": "cohort.7",
+          "condition": "no operator time",
+          "outcome": "Require complete observed pump/pouring boundaries, or valid recording endpoints when recording clock explicitly selected; otherwise exclude."
+        },
+        {
+          "id": "cohort.8",
+          "condition": "TargetTimeSec absent/non-finite/non-positive or TargetTimeClock invalid",
+          "outcome": "Abstain; target is explicit and its clock is pump by default, optionally pouring or recording."
+        },
+        {
+          "id": "cohort.9",
+          "condition": "elapsed time missing or outside (0,600]",
+          "outcome": "Exclude."
+        },
+        {
+          "id": "cohort.10",
+          "condition": "cache generation changed or plugin unloaded during await",
+          "outcome": "Fail stale request."
+        },
+        {
+          "id": "cohort.11",
+          "condition": "six accepted evidence shots",
+          "outcome": "Stop collecting; history scan is at most 5 pages of 50 records, cached for 5 seconds."
+        },
+        {
+          "id": "cohort.12",
+          "condition": "stopReason matches error, disconnected or stopping.?backstop",
+          "outcome": "Exclude interrupted shot from timing evidence."
+        },
+        {
+          "id": "cohort.13",
+          "condition": "stopReason matches api.?stop/app.?stop and manualStopConfirmed is not true",
+          "outcome": "Exclude until operator confirms that the manual stop completed the intended recipe; never infer completion from a sensor tolerance."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Load acknowledged storage, history and current workflow] --> B{Current setup and settings valid?}\n B -->|No| X[Abstain]\n B -->|Yes| C[Newest marked shot not yet seen]\n C --> D{Fresh and same context plus setting?}\n D -->|No| Y[Exclude with reason]\n D -->|Yes| E[Fetch full shot]\n E --> F{Same snapshot, valid time and eligible stop?}\n F -->|No| Y\n F -->|Yes| G[Accept evidence]\n G --> H{Six accepted or history exhausted?}\n H -->|No| C\n H -->|Yes| I[Check generation and continue to advice gates]\n",
+      "tests": [
+        "test/suggestions.test.js",
+        "test/first-shot.test.js",
+        "test/lifecycle.test.js"
+      ]
+    },
+    {
+      "id": "taste",
+      "title": "Taste, timing and uncertainty",
+      "functions": [
+        "tasteSignals",
+        "suggestion"
+      ],
+      "why": "Taste supplies an operator assessment, not a chemical measurement. Tasting temperature and brewing temperature are distinct optional records. The engine never computes a brew-temperature correction from sourness.",
+      "branches": [
+        {
+          "id": "taste.1",
+          "condition": "no selected evidence",
+          "outcome": "Abstain."
+        },
+        {
+          "id": "taste.2",
+          "condition": "current bean catalog cannot be fetched/validated when evidence exists",
+          "outcome": "Abstain or dependency failure; do not backfill historical beans."
+        },
+        {
+          "id": "taste.3",
+          "condition": "one or two comparable shots",
+          "outcome": "Return confidence provisional; direction only unless an owner-calibrated numeric step is available."
+        },
+        {
+          "id": "taste.4",
+          "condition": "three to six comparable shots",
+          "outcome": "Return confidence heuristic, not calibrated probability."
+        },
+        {
+          "id": "taste.5",
+          "condition": "mark.taste supplied",
+          "outcome": "Use controlled operator-selected taste label; sour contributes finer, bitter/astringent coarser. This is a taste heuristic, not a measured extraction diagnosis."
+        },
+        {
+          "id": "taste.6",
+          "condition": "flavour.overall supplied",
+          "outcome": "Map under-extracted to sour, over-extracted to bitter and balanced to balanced; this is the same operator assessment, not independent evidence."
+        },
+        {
+          "id": "taste.7",
+          "condition": "flavour acidity, bitterness or astringency intensity supplied",
+          "outcome": "Descriptive only; no intensity threshold becomes a finer/coarser direction."
+        },
+        {
+          "id": "taste.8",
+          "condition": "temperatures, descriptors, sweetness/body or sinceBrewMin supplied",
+          "outcome": "Store as descriptive feedback; no formula converts them into a grind or temperature correction."
+        },
+        {
+          "id": "taste.9",
+          "condition": "channeling or weak feedback",
+          "outcome": "Abstain and ask for preparation/extraction evidence."
+        },
+        {
+          "id": "taste.10",
+          "condition": "both finer/coarser sensory directions, or balanced plus directional feedback",
+          "outcome": "Abstain on conflict."
+        },
+        {
+          "id": "taste.11",
+          "condition": "no sensory direction",
+          "outcome": "Retain balanced setting or request structured feedback."
+        },
+        {
+          "id": "taste.12",
+          "condition": "configured TargetTimeSec is finite and median < target-tolerance",
+          "outcome": "Timing direction finer; median > target+tolerance means coarser; equality is within window."
+        },
+        {
+          "id": "taste.13",
+          "condition": "no explicit target time configured",
+          "outcome": "Abstain before collecting the advice cohort; no silent 30-second fallback."
+        },
+        {
+          "id": "taste.14",
+          "condition": "sensory and non-null timing direction disagree",
+          "outcome": "Abstain."
+        },
+        {
+          "id": "taste.15",
+          "condition": "sensory direction exists and timing agrees or is in window",
+          "outcome": "Continue to bounded proposal."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Selected evidence] --> B{Any evidence and current bean catalog?}\n B -->|No| X[Abstain]\n B -->|Yes| C{Channeling or weak feedback?}\n C -->|Yes| X\n C -->|No| D{Sensory direction absent or conflicting?}\n D -->|Yes| X\n D -->|No| E{Median timing gives opposite direction?}\n E -->|Yes| X\n E -->|No| F{Evidence count below 3?}\n F -->|Yes| G[Provisional next experiment]\n F -->|No| H[Heuristic next experiment]\n G --> I[Owner step and bounds gate]\n H --> I\n",
+      "tests": [
+        "test/bean-flavour.test.js",
+        "test/first-shot.test.js",
+        "test/suggestions.test.js"
+      ]
+    },
+    {
+      "id": "proposal",
+      "title": "Direction, bounded number and physical display",
+      "functions": [
+        "suggestion",
+        "dialNumber",
+        "dialReferenceFor"
+      ],
+      "why": "A direction can be meaningful while a physical number is unavailable. A numeric proposal requires the owner to define one safe step and the usable limits.",
+      "branches": [
+        {
+          "id": "proposal.1",
+          "condition": "current setting is not a plain decimal number; step <=0; sign not +/-1; bounds non-finite/not increasing; current outside bounds",
+          "outcome": "Keep direction-only proposal with warning."
+        },
+        {
+          "id": "proposal.2",
+          "condition": "all numeric prerequisites hold",
+          "outcome": "next = current + step * sign * (finer ? 1 : -1)."
+        },
+        {
+          "id": "proposal.3",
+          "condition": "next non-finite or outside inclusive bounds",
+          "outcome": "Abstain; do not clamp to a boundary."
+        },
+        {
+          "id": "proposal.4",
+          "condition": "next valid",
+          "outcome": "Round representation to 12 significant digits; identify as one owner-calibrated step."
+        },
+        {
+          "id": "proposal.5",
+          "condition": "physical conversion unavailable or invalid",
+          "outcome": "Keep research coordinate separate and explain withheld physical mapping."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Direction decided] --> B{Numeric setting, positive step, finer sign and valid bounds?}\n B -->|No| C[Direction only with missing-calibration warning]\n B -->|Yes| D[Calculate one owner step]\n D --> E{Result finite and within bounds?}\n E -->|No| F[Abstain]\n E -->|Yes| G[Proposed setting with owner-step provenance]\n G --> H{Native conversion available?}\n H -->|Yes| I[Show physical coordinate and provenance]\n H -->|No| J[Show coordinate only; mapping withheld]\n",
+      "tests": [
+        "test/suggestions.test.js",
+        "test/first-shot.test.js",
+        "test/grinder-instances.test.js"
+      ]
+    },
+    {
+      "id": "recall",
+      "title": "Recall a marked-good setting",
+      "functions": [
+        "recommendation",
+        "compare",
+        "historicalContext"
+      ],
+      "why": "Recall returns a recorded setting rather than inventing an adjustment. This path has weaker completeness requirements than rich advice and reports unavailable comparison fields.",
+      "branches": [
+        {
+          "id": "recall.1",
+          "condition": "current beanBatchId, grinderId or execution profile missing",
+          "outcome": "Abstain."
+        },
+        {
+          "id": "recall.2",
+          "condition": "feedback.good is not true",
+          "outcome": "Ignore shot."
+        },
+        {
+          "id": "recall.3",
+          "condition": "historical confirmation conflicts, profile absent, or setting absent",
+          "outcome": "Exclude."
+        },
+        {
+          "id": "recall.4",
+          "condition": "compare returns ok",
+          "outcome": "Consider; both-side missing fields remain warnings."
+        },
+        {
+          "id": "recall.5",
+          "condition": "no candidates",
+          "outcome": "Abstain, mentioning history bound when truncated."
+        },
+        {
+          "id": "recall.6",
+          "condition": "candidates exist",
+          "outcome": "Return newest timestamped candidate setting, recordedValue true, sourceShotId and warnings."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Current bean, grinder and profile] --> B{Required identity present?}\n B -->|No| X[Abstain]\n B -->|Yes| C[Marked-good historical shots]\n C --> D{Context matches and recorded setting exists?}\n D -->|No| E[Exclude with reason]\n D -->|Yes| F[Sort eligible shots newest first]\n F --> G{Any eligible shot?}\n G -->|No| X\n G -->|Yes| H[Recall recorded setting with missing-field warnings]\n",
+      "tests": [
+        "test/plugin.test.js",
+        "test/edge_cases.test.js"
+      ]
+    },
+    {
+      "id": "dial",
+      "title": "Convert a grinder coordinate",
+      "functions": [
+        "createGrinderDialTools.normalize",
+        "createGrinderDialTools.toGrinderDial",
+        "anchors",
+        "checkCalibrationRange",
+        "boundedDd"
+      ],
+      "why": "Printed marks, clicks, mechanical gap and research dD are not interchangeable. A manufacturer step size alone does not identify an absolute zero.",
+      "branches": [
+        {
+          "id": "dial.1",
+          "condition": "model unsupported",
+          "outcome": "Return unsupported without algorithm/native coordinate."
+        },
+        {
+          "id": "dial.2",
+          "condition": "input explicitly dD",
+          "outcome": "Accept bounded signed 32-bit integer coordinate; no physical interpretation."
+        },
+        {
+          "id": "dial.3",
+          "condition": "native micrometre profile has algorithmScale10",
+          "outcome": "Convert um *10 to dD or dD /10 to native units."
+        },
+        {
+          "id": "dial.4",
+          "condition": "unit does not match profile or stepped input not whole step",
+          "outcome": "Reject."
+        },
+        {
+          "id": "dial.5",
+          "condition": "no native scale and no owner anchors",
+          "outcome": "Return calibration-required."
+        },
+        {
+          "id": "dial.6",
+          "condition": "anchors identity/model/burr/epoch/unit mismatch, non-finite or coincident anchors, invalid bounds",
+          "outcome": "Reject."
+        },
+        {
+          "id": "dial.7",
+          "condition": "requested value outside configured bounds OR outside interval spanned by anchors",
+          "outcome": "Reject extrapolation."
+        },
+        {
+          "id": "dial.8",
+          "condition": "valid anchors and interpolation",
+          "outcome": "Apply affine slope (ddB-ddA)/(dialB-dialA)."
+        },
+        {
+          "id": "dial.9",
+          "condition": "inverse value falls between physical steps",
+          "outcome": "Return achievable false and warning; do not silently round to a hardware click."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Model, unit and value] --> B{Known profile?}\n B -->|No| X[Unsupported]\n B -->|Yes| C{Explicit research dD?}\n C -->|Yes| D[Bounded research coordinate only]\n C -->|No| E{Native micrometre scale?}\n E -->|Yes| F[Apply scale 10]\n E -->|No| G{Owner anchors supplied and identity matches?}\n G -->|No| H[Calibration required or invalid]\n G -->|Yes| I{Inside bounds and anchor interval?}\n I -->|No| J[Reject extrapolation]\n I -->|Yes| K[Affine interpolation; flag unachievable steps]\n",
+      "tests": [
+        "test/research-algorithms.test.js",
+        "test/grinder-instances.test.js"
+      ]
+    },
+    {
+      "id": "grinders",
+      "title": "Host grinder records and owner profiles",
+      "functions": [
+        "validateGrinderProfile",
+        "grinderProfilesEndpoint",
+        "dialReferenceFor",
+        "saveGrinder",
+        "selectGrinder"
+      ],
+      "why": "A model name describes a product family. The stable host ID identifies the individual unit whose burrs and zero were calibrated.",
+      "branches": [
+        {
+          "id": "grinders.1",
+          "condition": "host response lacks a nonempty stable ID",
+          "outcome": "Reject UI save/load result."
+        },
+        {
+          "id": "grinders.2",
+          "condition": "local profile has unknown fields, invalid ID, missing label/model/host ID/burr/epoch/source or invalid anchors",
+          "outcome": "Reject."
+        },
+        {
+          "id": "grinders.3",
+          "condition": "creating profile when already 100 exist",
+          "outcome": "Reject; updates remain allowed."
+        },
+        {
+          "id": "grinders.4",
+          "condition": "owner profile mismatches current host grinder, model, burr identity or epoch",
+          "outcome": "Withhold its calibration."
+        },
+        {
+          "id": "grinders.5",
+          "condition": "host create/update succeeds but local save fails",
+          "outcome": "Report failure; the already saved host record may exist."
+        },
+        {
+          "id": "grinders.6",
+          "condition": "profile selection POST succeeds",
+          "outcome": "Read settings back and require selected ID matches."
+        },
+        {
+          "id": "grinders.7",
+          "condition": "delete/upsert/selection persistence fails",
+          "outcome": "Restore prior in-memory profile/selection; report error."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Choose or edit individual grinder] --> B{Known model and owner fields valid?}\n B -->|No| X[Reject]\n B -->|Yes| C[Create or update host grinder]\n C --> D{Stable host ID returned?}\n D -->|No| X\n D -->|Yes| E[Save local profile bound to host ID]\n E --> F{Storage acknowledged?}\n F -->|No| G[Restore local memory; report failure]\n F -->|Yes| H[Select profile and read back settings]\n H --> I{Current unit and calibration identity match?}\n I -->|No| J[Withhold calibration]\n I -->|Yes| K[Owner conversion may be used]\n",
+      "tests": [
+        "test/grinder-instances.test.js",
+        "test/ui.test.js",
+        "test/lifecycle.test.js"
+      ]
+    },
+    {
+      "id": "feedback",
+      "title": "Feedback, bean dose and persistence",
+      "functions": [
+        "validateFlavour",
+        "validateMeasuredBeanDose",
+        "validateConfirmedContext",
+        "timingFeedback",
+        "feedbackFromStorage",
+        "persist",
+        "loadStorage"
+      ],
+      "why": "Feedback is kept beside a shot. The dose captured on an auxiliary bean scale is only accepted with explicit operator confirmation and source identity.",
+      "branches": [
+        {
+          "id": "feedback.1",
+          "condition": "flavour intensity outside 0..5, temperatures outside 0..150 C, sinceBrewMin outside 0..10080, unsupported field or invalid descriptor list",
+          "outcome": "Reject feedback; descriptors limited 12 entries each 64 characters."
+        },
+        {
+          "id": "feedback.2",
+          "condition": "measured bean dose lacks auxiliary role, beans purpose, grams unit, positive finite weight, deviceId, valid ISO timestamps or userConfirmed true",
+          "outcome": "Reject; sampleTimestamp can explicitly be null."
+        },
+        {
+          "id": "feedback.3",
+          "condition": "confirmed context conflicts with saved shot",
+          "outcome": "Reject."
+        },
+        {
+          "id": "feedback.4",
+          "condition": "brewTimeClock without valid brewTimeSec, unsupported clock, or non-boolean manualStopConfirmed",
+          "outcome": "Reject; legacy time feedback without clock migrates to pump."
+        },
+        {
+          "id": "feedback.5",
+          "condition": "taste or flavour.overall supplied",
+          "outcome": "Validate controlled taste labels and explicit under-extracted/over-extracted/balanced/uncertain overall assessment; descriptive intensities do not supply intent."
+        },
+        {
+          "id": "feedback.6",
+          "condition": "valid timing feedback",
+          "outcome": "Persist brewTimeSec, brewTimeClock and boolean manualStopConfirmed; manual-stop confirmation is separate from elapsed time."
+        },
+        {
+          "id": "feedback.7",
+          "condition": "valid feedback",
+          "outcome": "Serialize writes; change cache generation; await host storage acknowledgment before saved:true."
+        },
+        {
+          "id": "feedback.8",
+          "condition": "storage read invalid, write/read times out after 5000ms, or plugin unloaded",
+          "outcome": "Fail closed; restore prior in-memory entry on failed write."
+        },
+        {
+          "id": "feedback.9",
+          "condition": "late storage acknowledgment after timeout",
+          "outcome": "Do not recover the broken stream silently; reload is recovery boundary."
+        },
+        {
+          "id": "feedback.10",
+          "condition": "measured bean dose plus final measured beverage mass",
+          "outcome": "Compute beverage-mass / confirmed-bean-dose ratio, not extraction yield."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Feedback and optional bean-dose capture] --> B{Schema and provenance valid?}\n B -->|No| X[Reject]\n B -->|Yes| C{Historical confirmation agrees?}\n C -->|No| X\n C -->|Yes| D[Queue local feedback update and invalidate cache]\n D --> E[Write host storage]\n E --> F{Acknowledged before 5 s timeout?}\n F -->|Yes| G[Return saved]\n F -->|No| H[Rollback memory; fail closed until reload]\n",
+      "tests": [
+        "test/bean-flavour.test.js",
+        "test/lifecycle.test.js",
+        "test/analysis-endpoint.test.js"
+      ]
+    },
+    {
+      "id": "research",
+      "title": "Research request and isolated comparison",
+      "functions": [
+        "research",
+        "createResearchAlgorithms.compareAll",
+        "validateState",
+        "checkInput",
+        "adjust"
+      ],
+      "why": "These calculations replay a particular recovered firmware model. They do not inherit the rich assistant's context/taste protection. A valid calculation is not evidence that it is suitable for a physical grinder.",
+      "branches": [
+        {
+          "id": "research.1",
+          "condition": "invalid object, missing operation/input, request >32768 serialized characters",
+          "outcome": "Reject research request."
+        },
+        {
+          "id": "research.2",
+          "condition": "operation other than manual without exact firmwareBuild and deci-micrometre acknowledgment",
+          "outcome": "Reject."
+        },
+        {
+          "id": "research.3",
+          "condition": "adjust without full grinderId/beanBatchId/burrIdentity/calibrationEpoch/profile scope",
+          "outcome": "Reject."
+        },
+        {
+          "id": "research.4",
+          "condition": "state envelope algorithm/build/unit/scope/version differs",
+          "outcome": "Reject mixed state."
+        },
+        {
+          "id": "research.5",
+          "condition": "invalid timing integers, algorithm-specific history/state bounds, or non-finite/out-of-int32 result",
+          "outcome": "Reject."
+        },
+        {
+          "id": "research.6",
+          "condition": "compare case missing",
+          "outcome": "Unavailable result for that algorithm."
+        },
+        {
+          "id": "research.7",
+          "condition": "compare case invalid",
+          "outcome": "Invalid result with reason; other isolated cases still run."
+        },
+        {
+          "id": "research.8",
+          "condition": "compare case valid",
+          "outcome": "Computed per-case result and separate state; comparable is computational availability, not common physical meaning."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Research request] --> B{Shape, size and acknowledgments valid?}\n B -->|No| X[400 invalid research input]\n B -->|Yes| C{Operation}\n C -->|adjust| D{Scope and state envelope match?}\n D -->|No| X\n D -->|Yes| E[Validate and dispatch algorithm]\n C -->|calculator or manual| F[Validate operation-specific input]\n C -->|compare| G[One isolated case per algorithm]\n G --> H{Case supplied and valid?}\n H -->|No| I[Unavailable or invalid row with reason]\n H -->|Yes| J[Computed row; independent state and units]\n",
+      "tests": [
+        "test/research-endpoint.test.js",
+        "test/research-algorithms.test.js",
+        "test/research-parity.test.js"
+      ]
+    },
+    {
+      "id": "gbs1",
+      "title": "GbS1 smoothing and commit",
+      "functions": [
+        "newState",
+        "v1",
+        "adjust"
+      ],
+      "why": "Two separate decisions occur: update a candidate from recent time history, then decide whether to return it. Being inside the caller tolerance holds the previous result.",
+      "branches": [
+        {
+          "id": "gbs1.1",
+          "condition": "history entry age >=3",
+          "outcome": "Drop before incrementing remaining ages; empty history seeds four copies ages 0..3."
+        },
+        {
+          "id": "gbs1.2",
+          "condition": "absolute central time error <=0.5 s",
+          "outcome": "Keep candidate; no correction."
+        },
+        {
+          "id": "gbs1.3",
+          "condition": "central error >0.5 s",
+          "outcome": "correction = clamp(-(32768/(central-5)^3+0.2)*(target-central), -5,5); singular central 5 rejects."
+        },
+        {
+          "id": "gbs1.4",
+          "condition": "continuous outside previous quantized +/-0.16 um, or no previous quantized value",
+          "outcome": "Quantize to 0.2 um using half-away rounding; continuous lower bound 1 um."
+        },
+        {
+          "id": "gbs1.5",
+          "condition": "absolute raw timing error >= caller tolerance",
+          "outcome": "Commit candidate; equality commits."
+        },
+        {
+          "id": "gbs1.6",
+          "condition": "raw error below tolerance",
+          "outcome": "Return previous committed result, initialized from estimatedDdDum."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Age history and append current time] --> B[Sort and average central pair]\n B --> C{Central error greater than 0.5 s?}\n C -->|No| D[Keep candidate]\n C -->|Yes| E[Bound correction to plus or minus 5; floor continuous at 1]\n E --> F{Beyond 0.16 hysteresis or first quantization?}\n F -->|Yes| G[Quantize to 0.2 um]\n F -->|No| D\n G --> H{Raw error at least tolerance?}\n D --> H\n H -->|Yes| I[Commit candidate]\n H -->|No| J[Return previous result]\n",
+      "tests": [
+        "test/research-algorithms.test.js",
+        "test/research-parity.test.js",
+        "test/research-golden.json"
+      ]
+    },
+    {
+      "id": "gbs2",
+      "title": "GbS2 regression and shared inverse regression",
+      "functions": [
+        "v2",
+        "inverseRegression",
+        "blend"
+      ],
+      "why": "The recovered model uses a negative setting/time slope. Its fallback and slope cap are replay constants, not a proof about every grinder.",
+      "branches": [
+        {
+          "id": "gbs2.1",
+          "condition": "input points count not 1..6 or non-finite coordinate/time",
+          "outcome": "Reject."
+        },
+        {
+          "id": "gbs2.2",
+          "condition": "one point or x-variance <=0.001",
+          "outcome": "Use slope -2."
+        },
+        {
+          "id": "gbs2.3",
+          "condition": "more than one point and x-variance >0.001",
+          "outcome": "Fit slope; cap any slope greater than -0.5 at -0.5."
+        },
+        {
+          "id": "gbs2.4",
+          "condition": "GbS2 step",
+          "outcome": "Append current setpoint/time; keep last 6; invert fitted line at target."
+        },
+        {
+          "id": "gbs2.5",
+          "condition": "normal GbS2 prediction",
+          "outcome": "Blend10% current,90% prediction with same-sign bounding; round output to dD."
+        },
+        {
+          "id": "gbs2.6",
+          "condition": "raw absolute timing error >= tolerance",
+          "outcome": "Commit; otherwise retain last result initialized from estimate."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Append setting and time; keep last six] --> B{More than one point and variance above 0.001?}\n B -->|No| C[Fallback slope -2]\n B -->|Yes| D[Fit slope; cap at -0.5]\n C --> E[Invert line at target]\n D --> E\n E --> F[Blend current 10 percent and prediction 90 percent]\n F --> G{Raw error at least tolerance?}\n G -->|Yes| H[Commit rounded candidate]\n G -->|No| I[Return previous result]\n",
+      "tests": [
+        "test/research-algorithms.test.js",
+        "test/research-parity.test.js"
+      ]
+    },
+    {
+      "id": "gbs34",
+      "title": "GbS3/GbS4 cancellation, phases and locks",
+      "functions": [
+        "family",
+        "newState",
+        "validateState"
+      ],
+      "why": "Phase selection changes how much of the recent fitted trend contributes. Startup holds and the special GbS4 lock take precedence over the ordinary phase boundaries.",
+      "branches": [
+        {
+          "id": "gbs34.1",
+          "condition": "previous target/adjustment exist and abs(estimate-lastTarget)>500 dD",
+          "outcome": "Cancel: update lastTarget, return previous adjustment locked, no normal update."
+        },
+        {
+          "id": "gbs34.2",
+          "condition": "GbS4 error <3 s and history length >2",
+          "outcome": "Lock near and return prior adjustment; exactly 3 does not lock."
+        },
+        {
+          "id": "gbs34.3",
+          "condition": "GbS3 error <=nearThresholdSec (default 2) and history length >2",
+          "outcome": "Near; reset hold counter (default 2)."
+        },
+        {
+          "id": "gbs34.4",
+          "condition": "otherwise holdCyclesRemaining >0",
+          "outcome": "Decrement counter and choose near."
+        },
+        {
+          "id": "gbs34.5",
+          "condition": "otherwise error <=5 s, or GbS3 keepMediumIntervalWidth true and error <=nearThreshold+3",
+          "outcome": "Mid."
+        },
+        {
+          "id": "gbs34.6",
+          "condition": "otherwise",
+          "outcome": "Far and clear history."
+        },
+        {
+          "id": "gbs34.7",
+          "condition": "phase not far",
+          "outcome": "Append pair; keep last 6."
+        },
+        {
+          "id": "gbs34.8",
+          "condition": "filtered effective coordinate unset",
+          "outcome": "Initialize estimate_um*actual_s; otherwise retention filter(default 0.5)."
+        },
+        {
+          "id": "gbs34.9",
+          "condition": "fewer than 2 history points",
+          "outcome": "Hyperbolic prediction only; otherwise regression blended 40% current 60% prediction."
+        },
+        {
+          "id": "gbs34.10",
+          "condition": "phase factor",
+          "outcome": "Interpolate hyperbolic to linear with far 0/mid 0.5/near 1 defaults."
+        },
+        {
+          "id": "gbs34.11",
+          "condition": "raw error >= tolerance",
+          "outcome": "Commit candidate; otherwise keep previous adjustment."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Current error and previous state] --> B{Estimate jump greater than 500 dD?}\n B -->|Yes| X[Cancel and lock previous adjustment]\n B -->|No| C{GbS4 error below 3 s and history at least 3?}\n C -->|Yes| Y[Near lock]\n C -->|No| D{GbS3 within near threshold and history at least 3?}\n D -->|Yes| E[Near; reset hold counter]\n D -->|No| F{Hold counter positive?}\n F -->|Yes| G[Near; decrement hold]\n F -->|No| H{Inside middle boundary?}\n H -->|Yes| I[Mid]\n H -->|No| J[Far; clear history]\n E --> K[Filter effective coordinate and mix predictions]\n G --> K\n I --> K\n J --> K\n K --> L{Raw error at least tolerance?}\n L -->|Yes| M[Commit candidate]\n L -->|No| N[Return previous adjustment]\n",
+      "tests": [
+        "test/research-algorithms.test.js",
+        "test/research-parity.test.js",
+        "test/research-golden.json"
+      ]
+    },
+    {
+      "id": "calculators",
+      "title": "DdEff, effectiveDd, grindTime and starting wizard",
+      "functions": [
+        "adjust",
+        "ddEff",
+        "effectiveDdPrediction",
+        "adjustGrindTime",
+        "proposedDd"
+      ],
+      "why": "These helpers answer different mathematical questions. Their outputs have different units and cannot be ranked as competing grind recommendations.",
+      "branches": [
+        {
+          "id": "calculators.1",
+          "condition": "DdEff call",
+          "outcome": "Return initial+[0,-200,+200][floor(calls/6)%3], increment calls; no timing/taste adaptation; state count must remain 0..64."
+        },
+        {
+          "id": "calculators.2",
+          "condition": "ddEff convenience helper calls missing or supplied",
+          "outcome": "Default18; explicit signed integer must be0..64; zero returns no values."
+        },
+        {
+          "id": "calculators.3",
+          "condition": "effectiveDd has no residue",
+          "outcome": "Initialize residue to grindDdDum/10 and return starting dD."
+        },
+        {
+          "id": "calculators.4",
+          "condition": "effectiveDd has residue",
+          "outcome": "Require finite caller baseline; use k=ln(2)/1.85, a=1-exp(-kt), b=0 when t0 else 1-a/(kt); update residue with a, output baseline+(x-baseline)*b."
+        },
+        {
+          "id": "calculators.5",
+          "condition": "grindTime mode !=3",
+          "outcome": "Return adjustedTimeMs null, optional false."
+        },
+        {
+          "id": "calculators.6",
+          "condition": "grindTime mode 3 with valid inputs",
+          "outcome": "round((1+0.0022017*recipeUm)/(1+0.0022017*targetDum/10)*recipeTimeMs)."
+        },
+        {
+          "id": "calculators.7",
+          "condition": "proposedDd known model/roast and weightMg >=0",
+          "outcome": "trunc(offset+coefficient*weightMg/1000+0.5): model coefficients E64 3.5/E65 4/E80 6; roast offsets light-20/medium 0/dark 20."
+        },
+        {
+          "id": "calculators.8",
+          "condition": "proposedDd output",
+          "outcome": "coordinateUnit unknown; never assume micrometres or copy into a native dial."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Choose supporting calculation] --> B{Calculation}\n B -->|DdEff| C[Six calls each: initial, initial minus 200, initial plus 200]\n B -->|effectiveDd| D{Residue initialized?}\n D -->|No| E[Initialize and return start]\n D -->|Yes| F[Require baseline; apply duration formula]\n B -->|grindTime| G{Mode equals 3?}\n G -->|No| H[Optional value unavailable]\n G -->|Yes| I[Apply recovered velocity ratio]\n B -->|proposedDd wizard| J{Known model, roast and non-negative dose?}\n J -->|No| K[Reject]\n J -->|Yes| L[Table coordinate; output unit unknown]\n",
+      "tests": [
+        "test/research-algorithms.test.js",
+        "test/research-parity.test.js"
+      ]
+    },
+    {
+      "id": "simulation",
+      "title": "Replay observations and separate algorithm states",
+      "functions": [
+        "createSimulationEngine.validateScenario",
+        "runOne",
+        "run",
+        "deserialize",
+        "replayRichSuggestions"
+      ],
+      "why": "Simulation is an explanation tool. Explicit observations and fictional plant observations are labelled separately, and each recovered algorithm gets its own state.",
+      "branches": [
+        {
+          "id": "simulation.1",
+          "condition": "invalid schema, unknown fields, invalid signed 32-bit values, more than 100 shots or input JSON over 256KiB",
+          "outcome": "Reject at the relevant scenario boundary."
+        },
+        {
+          "id": "simulation.2",
+          "condition": "first shot, explicit reset true, or any scope identity changes",
+          "outcome": "Create fresh algorithm state and reset current coordinate to scenario initial setting."
+        },
+        {
+          "id": "simulation.3",
+          "condition": "planned actual time supplied",
+          "outcome": "Replay that observation unchanged as explicit input."
+        },
+        {
+          "id": "simulation.4",
+          "condition": "actual time absent and synthetic plant supplied",
+          "outcome": "Generate synthetic-plant observation; otherwise reject."
+        },
+        {
+          "id": "simulation.5",
+          "condition": "setpoint or estimate outside scenario bounds",
+          "outcome": "Reject."
+        },
+        {
+          "id": "simulation.6",
+          "condition": "algorithm result outside simulator bounds",
+          "outcome": "Keep raw output for inspection and clamp applied simulation setting separately; this is not the rich suggestion path."
+        },
+        {
+          "id": "simulation.7",
+          "condition": "algorithm run",
+          "outcome": "Consume time/coordinate/tolerance; report beanType, roastLevel, taste and flavour as ignored by the recovered arithmetic."
+        },
+        {
+          "id": "simulation.8",
+          "condition": "rich suggestion replay requested",
+          "outcome": "Run the shipped plugin against mock pressure-profile records, explicit pump-clock feedback and an isolated mock host; this exercises software logic, not hardware."
+        },
+        {
+          "id": "simulation.9",
+          "condition": "planned.overall explicitly supplied",
+          "outcome": "Accept only under-extracted, over-extracted, balanced or uncertain; never derive overall assessment from sour/bitter/astringent labels."
+        },
+        {
+          "id": "simulation.10",
+          "condition": "synthetic duration",
+          "outcome": "Simulator labels it as synthetic or caller-supplied pump duration; it is not a measured machine clock."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Validated scenario] --> B[Start separate state for each algorithm]\n B --> C{First shot, explicit reset or changed scope?}\n C -->|Yes| D[Fresh state and initial setting]\n C -->|No| E[Continue prior state]\n D --> F{Explicit observed time?}\n E --> F\n F -->|Yes| G[Use recorded input]\n F -->|No| H{Synthetic plant available?}\n H -->|No| X[Reject]\n H -->|Yes| I[Generate labelled fictional observation]\n G --> J[Run shipped algorithm]\n I --> J\n J --> K[Retain raw result; bound applied simulator setting]\n",
+      "tests": [
+        "test/simulator.test.js",
+        "test/simulator-ui.test.js"
+      ]
+    },
+    {
+      "id": "reference",
+      "title": "Reviewed facts and photo rights",
+      "functions": [
+        "reviewedReferenceContext",
+        "createReferenceCatalog.matchReferences",
+        "renderReferenceDetails",
+        "renderDialReference",
+        "renderDialPanel",
+        "reusableImage"
+      ],
+      "why": "A reference can explain a grinder or coffee without changing a recommendation. A link to a photograph is not permission to embed that photograph.",
+      "branches": [
+        {
+          "id": "reference.1",
+          "condition": "exact supported grinder/burr/bean match",
+          "outcome": "Return scoped offline references, deduplicated by source ID; reference facts do not change the suggestion."
+        },
+        {
+          "id": "reference.2",
+          "condition": "reference URL is not credential-free HTTPS",
+          "outcome": "Do not make it a usable external source link."
+        },
+        {
+          "id": "reference.3",
+          "condition": "photo renderAllowed is true, safe HTTPS URL/license URL exist, and license is allowlisted reusable",
+          "outcome": "Display the photo with attribution/license."
+        },
+        {
+          "id": "reference.4",
+          "condition": "photo rights unverified or URL invalid",
+          "outcome": "Use a local schematic where the UI supports it; retain source link rather than embedding the image."
+        },
+        {
+          "id": "reference.5",
+          "condition": "external allowed image fails to load in simulator",
+          "outcome": "Fall back to the repository schematic."
+        },
+        {
+          "id": "reference.6",
+          "condition": "no native coordinate conversion",
+          "outcome": "Display research/recorded coordinate and unavailable conversion explanation."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Matched reference or grinder image] --> B{Contextual source fact or image?}\n B -->|Fact| C[Display scope, facts and provenance]\n C --> D[Does not alter calculation or historical record]\n B -->|Image| E{Explicit reusable rights and safe image/license URLs?}\n E -->|Yes| F[Display photo with credit]\n E -->|No| G[Schematic or source link]\n F --> H{Image fails in simulator?}\n H -->|Yes| G\n H -->|No| I[Keep photo]\n",
+      "tests": [
+        "test/reference-data.test.js",
+        "test/ui.test.js",
+        "test/simulator-ui.test.js"
+      ]
+    },
+    {
+      "id": "catalog-data",
+      "title": "Offline coffee catalog normalization",
+      "functions": [
+        "scripts/update-coffee-catalog.py.normalize_shopify",
+        "normalize_jsonld",
+        "validate",
+        "main"
+      ],
+      "why": "Catalog records preserve product identity and source coverage. They do not prove stock, roast freshness, a recommended grind, or species. Missing facts remain unknown.",
+      "branches": [
+        {
+          "id": "catalog-data.1",
+          "condition": "Shopify export lacks products list or source URL is not credential-free HTTPS",
+          "outcome": "Reject."
+        },
+        {
+          "id": "catalog-data.2",
+          "condition": "Shopify record lacks title/handle or product_type is not kaffee/coffee/caf\u00e9/cafe",
+          "outcome": "Skip record."
+        },
+        {
+          "id": "catalog-data.3",
+          "condition": "Shopify tags identify green coffee, bundle, capsule or ground coffee",
+          "outcome": "Classify that form; otherwise keep format unknown. Bundle also includes an abo substring in the title."
+        },
+        {
+          "id": "catalog-data.4",
+          "condition": "JSON-LD record is not Product/ProductGroup or lacks name/url",
+          "outcome": "Skip record."
+        },
+        {
+          "id": "catalog-data.5",
+          "condition": "JSON-LD name/URL contains set, capsule/kapsel, drip bag, cold brew, cascara, advent calendar/adventskalender, multipack, probierset, entdecker or geschenkabo",
+          "outcome": "Classify capsule when capsule/kapsel appears, otherwise bundle; unmatched records remain unknown."
+        },
+        {
+          "id": "catalog-data.6",
+          "condition": "normalized form is whole-bean",
+          "outcome": "Set beanEligible true only for whole-bean; parser default unknown is false. Reviewed catalog enrichment is distinct from this conservative parser."
+        },
+        {
+          "id": "catalog-data.7",
+          "condition": "explicit decaf evidence present",
+          "outcome": "Set true; absence remains null."
+        },
+        {
+          "id": "catalog-data.8",
+          "condition": "invalid envelope/schema, duplicate IDs, unsafe URL, invalid category/form/eligibility or missing source link",
+          "outcome": "Reject catalog."
+        },
+        {
+          "id": "catalog-data.9",
+          "condition": "updating one source",
+          "outcome": "Replace that source and its products; retain other sources; validate before writing."
+        },
+        {
+          "id": "catalog-data.10",
+          "condition": "--check",
+          "outcome": "Compare deterministic serialization and fail drift without changing file."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Offline source export] --> B{Shopify or JSON-LD?}\n B -->|Shopify| C[Require coffee product type, title and handle]\n B -->|JSON-LD| D[Require Product or ProductGroup with name and URL]\n C --> E[Apply source-specific product-form rules]\n D --> E\n E --> F[Preserve known facts; unknown values stay null]\n F --> G{Catalog schema, identities and safe URLs valid?}\n G -->|No| X[Reject]\n G -->|Yes| H{Check mode?}\n H -->|Yes| I[Verify deterministic representation]\n H -->|No| J[Write validated offline catalog]\n",
+      "tests": [
+        "test/coffee-catalog.test.js"
+      ]
+    },
+    {
+      "id": "ui-modes",
+      "title": "Four steps and Simple/Expert presentation",
+      "functions": [
+        "showNativeWizardStep",
+        "showWizardStep",
+        "simulator/app.js.init",
+        "modeToggle.onclick"
+      ],
+      "why": "The wizard controls which task panel is visible. Simple and Expert change how much detail is shown; changing presentation mode does not make evidence more reliable.",
+      "branches": [
+        {
+          "id": "ui-modes.1",
+          "condition": "Back, Next or direct step selected",
+          "outcome": "Clamp step to 1..4 and hide other step panels; update aria-current and step status."
+        },
+        {
+          "id": "ui-modes.2",
+          "condition": "first step",
+          "outcome": "Disable Back."
+        },
+        {
+          "id": "ui-modes.3",
+          "condition": "fourth step and Next",
+          "outcome": "Remain at results; do not wrap or mutate experiment."
+        },
+        {
+          "id": "ui-modes.4",
+          "condition": "native Expert toggle",
+          "outcome": "Show expert-panel elements and update aria-pressed/help text; Simple hides them."
+        },
+        {
+          "id": "ui-modes.5",
+          "condition": "simulator mode",
+          "outcome": "Persist simple/expert preference in localStorage when available; simple-mode CSS hides expert-only elements."
+        },
+        {
+          "id": "ui-modes.6",
+          "condition": "algorithm selection changes",
+          "outcome": "Reset experiment rather than mix algorithm histories."
+        },
+        {
+          "id": "ui-modes.7",
+          "condition": "setup context or individual grinder changes",
+          "outcome": "Reset affected experiment so observations are not silently reassigned to new equipment/beans."
+        },
+        {
+          "id": "ui-modes.8",
+          "condition": "helper wizard selected",
+          "outcome": "Expose model/roast/dose input for proposedDd; label unknown output unit."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Open task] --> B[Step 1: coffee and equipment]\n B --> C[Step 2: recipe and profile or brew model]\n C --> D[Step 3: trace and taste]\n D --> E[Step 4: compare results]\n E -->|Next| E\n F[Simple or Expert toggle] --> G{Expert?}\n G -->|Yes| H[Expose technical controls and details]\n G -->|No| I[Hide expert details]\n J[Algorithm or experiment context changed] --> K[Reset experiment history]\n",
+      "tests": [
+        "test/ui.test.js",
+        "test/simulator-ui.test.js"
+      ]
+    },
+    {
+      "id": "manual",
+      "title": "Manual DF54/DF64 experiment",
+      "functions": [
+        "recommendManual"
+      ],
+      "why": "This helper accepts a caller-selected time target and explicit taste intent. It does not diagnose extraction from arbitrary prose or infer that acidity is undesirable.",
+      "branches": [
+        {
+          "id": "manual.1",
+          "condition": "profile not df54/df64_gen1/df64_gen2; invalid positive target/actual time or non-negative tolerance; invalid direction/sign/step/range",
+          "outcome": "Reject."
+        },
+        {
+          "id": "manual.2",
+          "condition": "actual < target-tolerance",
+          "outcome": "Add finer time direction; actual > target+tolerance adds coarser; equality is inside tolerance."
+        },
+        {
+          "id": "manual.3",
+          "condition": "trimmed lowercase flavor exactly too sour, too acidic or under-extracted",
+          "outcome": "Add finer sensory-test direction."
+        },
+        {
+          "id": "manual.4",
+          "condition": "flavor exactly too bitter, too astringent or over-extracted",
+          "outcome": "Add coarser sensory-test direction."
+        },
+        {
+          "id": "manual.5",
+          "condition": "other free text, including bare sour/bitter or negation",
+          "outcome": "Ignore as taste evidence; an out-of-window time signal can still supply a direction."
+        },
+        {
+          "id": "manual.6",
+          "condition": "flavor balanced OR conflicting finer/coarser directions OR no direction",
+          "outcome": "Return direction none."
+        },
+        {
+          "id": "manual.7",
+          "condition": "one agreed direction",
+          "outcome": "Return confidence heuristic; legacyScore is 0.55 plus 0.15 per extra agreeing reason capped 0.9, explicitly not probability."
+        },
+        {
+          "id": "manual.8",
+          "condition": "direction plus currentDial, positive stepMarks and numericFinerDelta +/-1",
+          "outcome": "Calculate one numeric step; DF64 reference interval is 0..90."
+        },
+        {
+          "id": "manual.9",
+          "condition": "candidate outside model reference range",
+          "outcome": "Withhold proposedDial and explain; keep directional result."
+        },
+        {
+          "id": "manual.10",
+          "condition": "physical turn",
+          "outcome": "DF54 default finer counterclockwise; DF64 default finer clockwise; explicit valid override wins; coarser reverses it."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Explicit target, observed time and optional taste intent] --> B{All input and profile checks pass?}\n B -->|No| X[Reject]\n B -->|Yes| C[Collect out-of-window time direction and exact taste intent]\n C --> D{Balanced, conflict or no direction?}\n D -->|Yes| E[No adjustment]\n D -->|No| F[Heuristic finer or coarser experiment]\n F --> G{Current dial, calibrated numeric sign and step present?}\n G -->|No| H[Direction only]\n G -->|Yes| I{Candidate inside reference range?}\n I -->|No| J[Withhold numeric setting]\n I -->|Yes| K[Show one-step proposed dial]\n",
+      "tests": [
+        "test/research-algorithms.test.js",
+        "test/research-endpoint.test.js",
+        "test/simulator-ui.test.js"
+      ]
+    },
+    {
+      "id": "scenario-import",
+      "title": "Import a simulator experiment",
+      "functions": [
+        "simulator/app.js.importFile",
+        "simulator/app.js.validateScenario",
+        "validImportNumber",
+        "validProfile"
+      ],
+      "why": "An imported experiment carries its own historical grinder identity and recipe. Validation protects those associations before replaying the recovered calculations.",
+      "branches": [
+        {
+          "id": "scenario-import.1",
+          "condition": "file missing",
+          "outcome": "Do nothing."
+        },
+        {
+          "id": "scenario-import.2",
+          "condition": "file >256KiB, invalid JSON, version !=1, unknown envelope/setup/shot fields or more than 100 shots",
+          "outcome": "Reject import."
+        },
+        {
+          "id": "scenario-import.3",
+          "condition": "setup numbers outside supported ranges",
+          "outcome": "Reject: target 1..600 s; start 0..100000 integer dD; tolerance 0..60 s; plant 0.2..2; noise 0..10; pressure 0..15 bar; flow 0..20; dose 1..100 g; yield 1..200 g; optional preinfusion 0..30 s and pressure 0..15 bar."
+        },
+        {
+          "id": "scenario-import.4",
+          "condition": "required setup text empty/too long, unsupported algorithm/mode, invalid calibration or current native mapping",
+          "outcome": "Reject."
+        },
+        {
+          "id": "scenario-import.5",
+          "condition": "grinderInstances supplied",
+          "outcome": "Require 1..100 valid profiles, unique IDs, no conflicting existing same-ID unit and active ID present in imported list."
+        },
+        {
+          "id": "scenario-import.6",
+          "condition": "shot invalid",
+          "outcome": "Reject: integer setting 0..100000; target 1..600; actual empty planned row or 0.1..600 s; valid pressure/flow/phase fields; controlled taste and optional explicit overall assessment enums; bounded historical context."
+        },
+        {
+          "id": "scenario-import.7",
+          "condition": "legacy dialCalibration lacks grinderId",
+          "outcome": "Bind it to imported activeGrinderInstanceId, imported grinderId or current active ID before validation."
+        },
+        {
+          "id": "scenario-import.8",
+          "condition": "schema validation succeeds",
+          "outcome": "Preflight the completed rows through simulationEngine.run before applying setup/profiles."
+        },
+        {
+          "id": "scenario-import.9",
+          "condition": "preflight replay fails",
+          "outcome": "Reject without applying imported setup or profiles."
+        },
+        {
+          "id": "scenario-import.10",
+          "condition": "preflight succeeds",
+          "outcome": "Apply imported setup/profiles, bind selected calibration and replay completed rows."
+        },
+        {
+          "id": "scenario-import.11",
+          "condition": "imported or existing active profile is absent",
+          "outcome": "Use first available profile under current import code."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Selected scenario file] --> B{Size and JSON valid?}\n B -->|No| X[Reject]\n B -->|Yes| C{Schema, ranges and allowed fields valid?}\n C -->|No| X\n C -->|Yes| D{Profile IDs unique and existing-unit identities consistent?}\n D -->|No| X\n D -->|Yes| E{Historical rows and calibration valid?}\n E -->|No| X\n E -->|Yes| G{Preflight replay succeeds?}\n G -->|Yes| F[Apply imported experiment and replay completed rows]\n F --> H[Display replayed results]\n G -->|No| X\n",
+      "tests": [
+        "test/simulator-ui.test.js",
+        "test/simulator.test.js"
+      ]
+    },
+    {
+      "id": "catalog-import",
+      "title": "Preview and explicitly import a coffee",
+      "functions": [
+        "native page.renderCoffeeCatalog",
+        "safeReferenceUrl",
+        "simulator/app.js.renderCoffeeCatalog"
+      ],
+      "why": "A product reference is not a bean batch. The host import previews the record, asks for missing product facts, checks existing records, and confirms the saved identity.",
+      "branches": [
+        {
+          "id": "catalog-import.1",
+          "condition": "native catalog load fails or products is not an array",
+          "outcome": "Show unavailable or no entries; no bean write."
+        },
+        {
+          "id": "catalog-import.2",
+          "condition": "catalog search or Show more",
+          "outcome": "Native and simulator show10 more matches at a time; native search covers name, publisher, origin, process and format."
+        },
+        {
+          "id": "catalog-import.3",
+          "condition": "first native import click",
+          "outcome": "Show preview only; do not POST."
+        },
+        {
+          "id": "catalog-import.4",
+          "condition": "format is capsule, ready-to-drink, bundle, green-bean or ground",
+          "outcome": "Disable host import as reference-only."
+        },
+        {
+          "id": "catalog-import.5",
+          "condition": "beanEligible is not truthy and format is not blocked",
+          "outcome": "Require owner confirmation of roasted whole beans."
+        },
+        {
+          "id": "catalog-import.6",
+          "condition": "decaf is null or absent",
+          "outcome": "Require explicit yes/no selection; preserve original unknown and owner confirmation in extras."
+        },
+        {
+          "id": "catalog-import.7",
+          "condition": "required confirmation missing or import already pending",
+          "outcome": "Do not write."
+        },
+        {
+          "id": "catalog-import.8",
+          "condition": "catalog identity missing or GET beans?includeArchived=true fails",
+          "outcome": "Abort import."
+        },
+        {
+          "id": "catalog-import.9",
+          "condition": "returned host record extras.catalogId matches exactly",
+          "outcome": "Reuse existing record without POST."
+        },
+        {
+          "id": "catalog-import.10",
+          "condition": "no returned host record matches",
+          "outcome": "POST catalog fields and source provenance; species/process/country/roast remain explicit or null; sourceOrigin stays metadata."
+        },
+        {
+          "id": "catalog-import.11",
+          "condition": "save returns stable ID",
+          "outcome": "GET bean by ID; require matching ID and extras.catalogId before success."
+        },
+        {
+          "id": "catalog-import.12",
+          "condition": "host ID or readback identity missing/mismatched",
+          "outcome": "Display error."
+        },
+        {
+          "id": "catalog-import.13",
+          "condition": "simulator product.beanEligible is not exactly true",
+          "outcome": "Refuse local setup application; retain reference."
+        },
+        {
+          "id": "catalog-import.14",
+          "condition": "simulator eligible Use explicit fields",
+          "outcome": "Reset experiment and apply available name/species/roast/publisher only; do not create a host bean or infer species from type."
+        },
+        {
+          "id": "catalog-import.15",
+          "condition": "published recipe reference is espresso-scoped with brewTimeSec",
+          "outcome": "Separate starting-point button applies available dose/yield/time; ranges use arithmetic midpoint and absent fields stay unchanged."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Catalog reference] --> B{Host import or local setup?}\n B -->|Local| C{beanEligible exactly true?}\n C -->|No| X[Reference only]\n C -->|Yes| V[Reset local experiment and apply explicit fields]\n B -->|Host| D[First click: preview]\n D --> E{Unsupported product format?}\n E -->|Yes| X\n E -->|No| F{Whole-bean and decaf facts confirmed?}\n F -->|No| W[Wait for missing owner confirmation]\n F -->|Yes| G[Lock action; fetch host beans including archived]\n G --> H{Lookup succeeds and catalog ID exists?}\n H -->|No| Y[Show error]\n H -->|Yes| I{Matching catalog ID returned?}\n I -->|Yes| J[Reuse host record]\n I -->|No| K[Create host bean]\n J --> L[Read back host ID and catalog identity]\n K --> L\n L --> M{Identity matches?}\n M -->|No| Y\n M -->|Yes| N[Confirm import; batch details remain separate]\n",
+      "tests": [
+        "test/coffee-catalog.test.js",
+        "test/ui.test.js",
+        "test/ui-integration-audit.test.js",
+        "test/simulator-ui.test.js"
+      ]
+    },
+    {
+      "id": "ui-evidence",
+      "title": "Display measured evidence and independent comparisons",
+      "functions": [
+        "createDialinUiTools.renderTrace",
+        "createDialinUiTools.profilePicker",
+        "createDialinUiTools.supplementalInputs",
+        "createDialinUiTools.renderComparisons",
+        "simulator/app.js.compareAllCalculators"
+      ],
+      "why": "The graph keeps each sensor in its own units. Profile references explain a recipe family without replacing the saved controller. Each calculation needs its own measurements.",
+      "branches": [
+        {
+          "id": "ui-evidence.1",
+          "condition": "metrics.trace has no finite timestamp points",
+          "outcome": "Show unavailable instead of drawing a trace."
+        },
+        {
+          "id": "ui-evidence.2",
+          "condition": "trace contains machine flow, pressure or beverage mass flow",
+          "outcome": "Draw separate numeric panels in ml/s, bar and g/s; temperature measurements have separate degree-C panels."
+        },
+        {
+          "id": "ui-evidence.3",
+          "condition": "sensor sample is explicitly invalid or next same-sensor gap exceeds5 seconds",
+          "outcome": "End line segment; unrelated sensor timestamps do not break the line."
+        },
+        {
+          "id": "ui-evidence.4",
+          "condition": "observed phase role preinfusion",
+          "outcome": "Shade its recorded boundaries and list phase source; no scheduled duration becomes observed shading."
+        },
+        {
+          "id": "ui-evidence.5",
+          "condition": "profile reference selected",
+          "outcome": "Display family, controls, maximum durations, exits and pinned source; saved shot steps remain authoritative."
+        },
+        {
+          "id": "ui-evidence.6",
+          "condition": "supplemental calculator checkbox disabled",
+          "outcome": "Omit that calculation case; missing required inputs remain unavailable or invalid."
+        },
+        {
+          "id": "ui-evidence.7",
+          "condition": "supplemental calculator enabled",
+          "outcome": "Build isolated inputs; proposedDd converts dose grams to weightMg; inverseRegression uses two entered points; effectiveDd has separate residue state."
+        },
+        {
+          "id": "ui-evidence.8",
+          "condition": "imported shot used for recovered comparisons",
+          "outcome": "Require integer current coordinate with explicit deci-micrometre unit and positive selected-clock time before constructing GbS1\u20134/DdEff cases."
+        },
+        {
+          "id": "ui-evidence.9",
+          "condition": "synthetic completed rows used for comparisons",
+          "outcome": "Replay each algorithm independently to construct its state before the final shot."
+        },
+        {
+          "id": "ui-evidence.10",
+          "condition": "comparison row not computed",
+          "outcome": "Display status and reason."
+        },
+        {
+          "id": "ui-evidence.11",
+          "condition": "comparison row computed",
+          "outcome": "Show calculation-specific units and result with expandable raw inputs/state; wizard output unit remains unknown."
+        },
+        {
+          "id": "ui-evidence.12",
+          "condition": "evidence changes or async response generation is stale",
+          "outcome": "Invalidate previous assistant result; stale result does not overwrite the new evidence."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Evidence and optional inputs] --> B{Purpose}\n B -->|Trace| C{Timestamped points available?}\n C -->|No| U[Show unavailable]\n C -->|Yes| D[Separate sensor panels; stop at gaps and invalid samples]\n B -->|Profile reference| E[Describe reference; retain saved controller steps]\n B -->|Calculations| F[Build independent enabled cases]\n F --> G{Case computed?}\n G -->|No| H[Show unavailable or invalid reason]\n G -->|Yes| I[Show result, units, inputs and state]\n J[Evidence changes] --> K[Invalidate stale answer]\n",
+      "tests": [
+        "test/ui-integration-audit.test.js",
+        "test/ui.test.js",
+        "test/simulator-ui.test.js"
+      ]
+    },
+    {
+      "id": "trace-import",
+      "title": "Import an actual saved shot and feedback",
+      "functions": [
+        "simulator/app.js.importShotTrace",
+        "useImportedClock",
+        "currentImportedFeedback",
+        "runImportedAssistant",
+        "clearImportedTrace"
+      ],
+      "why": "A real saved shot is a separate evidence source from fictional simulator passes. Its controller steps and timestamps are analysed by the same metrics factory as the plugin.",
+      "branches": [
+        {
+          "id": "trace-import.1",
+          "condition": "file missing",
+          "outcome": "Do nothing."
+        },
+        {
+          "id": "trace-import.2",
+          "condition": "file exceeds4MiB, cannot be read, invalid JSON/object/timestamp, measurements missing or more than 20000",
+          "outcome": "Reject; retain existing imported trace."
+        },
+        {
+          "id": "trace-import.3",
+          "condition": "createBrewMetrics.analyze yields no timestamped trace points",
+          "outcome": "Reject; retain existing trace."
+        },
+        {
+          "id": "trace-import.4",
+          "condition": "saved feedback invalid",
+          "outcome": "Reject: unsupported taste/overall, tasting temperature outside 0..150 C, delay outside 0..10080 minutes, brew time not positive <=600 seconds, unsupported clock or non-boolean manualStopConfirmed."
+        },
+        {
+          "id": "trace-import.5",
+          "condition": "validation succeeds and import generation is still current",
+          "outcome": "Retain actual saved shot; render metrics; restore valid feedback; leave synthetic pass history separate."
+        },
+        {
+          "id": "trace-import.6",
+          "condition": "selected clock pump/pouring is complete, or recording has finite duration",
+          "outcome": "Prefill corresponding measured duration."
+        },
+        {
+          "id": "trace-import.7",
+          "condition": "selected clock unavailable or incomplete",
+          "outcome": "Leave time input blank; do not replace it with recording duration."
+        },
+        {
+          "id": "trace-import.8",
+          "condition": "saved explicit brewTimeSec exists",
+          "outcome": "Restore it with brewTimeClock, default legacy pump."
+        },
+        {
+          "id": "trace-import.9",
+          "condition": "manual-stop checkbox or saved feedback confirmation",
+          "outcome": "Restore, export and submit boolean manualStopConfirmed separately from time; clear resets it and edits invalidate prior assessment."
+        },
+        {
+          "id": "trace-import.10",
+          "condition": "run actual-shot assessment",
+          "outcome": "Use shipped plugin with isolated mock host holding actual saved workflow/shot and explicit feedback; missing host bean/calibration stays unavailable."
+        },
+        {
+          "id": "trace-import.11",
+          "condition": "clear, reset or newer import occurs while async work is pending",
+          "outcome": "Invalidate generation; ignore stale import/assistant completion."
+        },
+        {
+          "id": "trace-import.12",
+          "condition": "export saved trace",
+          "outcome": "Download actual shot and current feedback together as JSON."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Saved-shot file] --> B{Size, JSON, timestamp and measurements valid?}\n B -->|No| X[Reject; retain existing trace]\n B -->|Yes| C[Analyse with createBrewMetrics]\n C --> D{Trace and optional feedback valid?}\n D -->|No| X\n D -->|Yes| E{Still current import generation?}\n E -->|No| Y[Ignore stale result]\n E -->|Yes| F[Store real shot and render evidence]\n F --> G{Selected measured clock available?}\n G -->|Yes| H[Prefill its duration]\n G -->|No| I[Leave time blank]\n H --> J[Explicit saved time may restore matching clock]\n I --> J\n J --> K[Run shipped assessment or export shot and feedback]\n",
+      "tests": [
+        "test/ui-integration-audit.test.js",
+        "test/simulator-ui.test.js",
+        "test/brew-metrics.test.js"
+      ]
+    }
+  ]
+}

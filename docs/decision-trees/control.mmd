@@ -1,0 +1,19 @@
+flowchart TD
+A[Saved profile controls] --> B{Unsupported pump value?}
+ B -->|Yes| U[Unknown]
+ B -->|No| C{Positive opposite-variable limiter?}
+ C -->|Yes| F[flow or mixed_dynamic_flow]
+ C -->|No| D{Flow during extraction?}
+ D -->|Yes| F
+ D -->|No| E{Flow only during preinfusion?}
+ E -->|Yes| P{Pressure extraction exists?}
+ P -->|No| Q[flow_preinfusion_only]
+ Q --> I
+ P -->|Yes| R[mixed_preinfusion_flow]
+ R --> J[Continue evidence and sensory gates]
+ H --> J
+ E -->|No| G{Pressure step exists?}
+ G -->|Yes| H[pressure]
+ G -->|No| U
+ F --> I[Abstain from elapsed-time grind suggestion]
+ U --> I

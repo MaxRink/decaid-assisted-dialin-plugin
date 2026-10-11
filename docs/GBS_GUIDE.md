@@ -231,9 +231,15 @@ recipe-time adjustment for its supported mode, not a taste algorithm.
 ## Manual DF54 and DF64 guidance
 
 The manual `df54`, `df64_gen1`, and `df64_gen2` profiles are community
-time/taste heuristics, separate from native E64 firmware research. Below-target
-time or under-extracted taste suggests finer; above-target time or
-over-extracted taste suggests coarser. Conflicting signals abstain. Numeric
+time/taste heuristics, separate from native E64 firmware research. The supplied
+time target supports a bounded experiment, not a universal espresso time.
+Exact assessments `too sour`, `too acidic` or `under-extracted` support a finer
+test; `too bitter`, `too astringent` or `over-extracted` support a coarser test.
+Those assessments do not measure extraction. Bare taste words and free prose,
+including “pleasant acidity” and “not bitter,” are ignored as directional evidence.
+Conflicting signals abstain, and `balanced` retains the setting. Confidence is
+`heuristic` or `none`; `legacyScore` is an old community rule score, not a
+probability or validated confidence estimate. Numeric
 direction requires owner-confirmed per-unit calibration, including the finer
 sign, step marks, zero, burr identity, and optional bounds. The profiles do
 not claim a universal dial range or physical direction.

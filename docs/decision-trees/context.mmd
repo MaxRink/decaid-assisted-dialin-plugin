@@ -1,0 +1,12 @@
+flowchart TD
+A[Current setup] --> B[Workflow first; configured fallbacks labelled]
+ C[Historical shot] --> D{Confirmation conflicts with saved value?}
+ D -->|Yes| X[Exclude]
+ D -->|No| E[Fill only confirmed absent fields]
+ B --> F[Compare identities, execution profile, recipe and units]
+ E --> F
+ F --> G{One-sided missing or differing value?}
+ G -->|Yes| X
+ G -->|No| H{Required fields missing on both sides?}
+ H -->|Yes for rich advice| X
+ H -->|No| I[Eligible context]

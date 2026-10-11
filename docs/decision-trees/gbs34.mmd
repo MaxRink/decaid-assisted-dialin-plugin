@@ -1,0 +1,19 @@
+flowchart TD
+A[Current error and previous state] --> B{Estimate jump greater than 500 dD?}
+ B -->|Yes| X[Cancel and lock previous adjustment]
+ B -->|No| C{GbS4 error below 3 s and history at least 3?}
+ C -->|Yes| Y[Near lock]
+ C -->|No| D{GbS3 within near threshold and history at least 3?}
+ D -->|Yes| E[Near; reset hold counter]
+ D -->|No| F{Hold counter positive?}
+ F -->|Yes| G[Near; decrement hold]
+ F -->|No| H{Inside middle boundary?}
+ H -->|Yes| I[Mid]
+ H -->|No| J[Far; clear history]
+ E --> K[Filter effective coordinate and mix predictions]
+ G --> K
+ I --> K
+ J --> K
+ K --> L{Raw error at least tolerance?}
+ L -->|Yes| M[Commit candidate]
+ L -->|No| N[Return previous adjustment]

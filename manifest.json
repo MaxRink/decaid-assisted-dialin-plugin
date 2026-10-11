@@ -76,9 +76,14 @@
     },
     "TargetTimeSec": {
       "type": "number",
-      "default": 30,
       "label": "Target brew time (seconds)",
-      "description": "Default target used by rich suggestions."
+      "description": "Required owner-selected time target for this recipe and the selected clock. No universal time target is assumed."
+    },
+    "TargetTimeClock": {
+      "type": "string",
+      "default": "pump",
+      "label": "Target time clock",
+      "description": "pump: preinfusion plus pouring; pouring: main pouring only; recording: includes recorded preheat and settling. Evidence must use this same clock."
     },
     "TimeToleranceSec": {
       "type": "number",
@@ -180,6 +185,16 @@
     },
     {
       "id": "references",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "coffee-catalog",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "profiles",
       "type": "http",
       "data": {}
     }

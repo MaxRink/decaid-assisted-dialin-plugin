@@ -1,0 +1,13 @@
+flowchart TD
+A[Load acknowledged storage, history and current workflow] --> B{Current setup and settings valid?}
+ B -->|No| X[Abstain]
+ B -->|Yes| C[Newest marked shot not yet seen]
+ C --> D{Fresh and same context plus setting?}
+ D -->|No| Y[Exclude with reason]
+ D -->|Yes| E[Fetch full shot]
+ E --> F{Same snapshot, valid time and eligible stop?}
+ F -->|No| Y
+ F -->|Yes| G[Accept evidence]
+ G --> H{Six accepted or history exhausted?}
+ H -->|No| C
+ H -->|Yes| I[Check generation and continue to advice gates]
