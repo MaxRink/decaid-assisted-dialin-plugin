@@ -1703,7 +1703,7 @@ function createDialinUiTools(document) {
         let previous = null;
         points.forEach(point => { if (!Object.hasOwn(point, key)) return; if (!Number.isFinite(point[key])) { flush(); previous = null; return; } if (previous != null && point.tSec - previous > 5) flush(); segment.push(point); previous = point.tSec; }); flush();
         (trace.phases || []).filter(phase => phase.role === 'preinfusion' && Number.isFinite(phase.startSec) && Number.isFinite(phase.endSec)).forEach(phase => svg.appendChild(make('rect', {x: x(phase.startSec), y: top, width: Math.max(1, x(phase.endSec) - x(phase.startSec)), height: 125, fill: '#8b5cf6', opacity: .1})));
-        [0, .5, 1].forEach(fraction => svg.appendChild(make('text', {x: x(maxT * fraction), y: bottom + 20, fill: 'currentColor', 'font-size': 11}, (maxT * fraction).toFixed(1) + ' s')));
+        [0, .5, 1].forEach(fraction => svg.appendChild(make('text', {x: x(maxT * fraction), y: bottom + 20, fill: 'currentColor', 'font-size': 11, 'text-anchor': fraction === 1 ? 'end' : fraction === 0 ? 'start' : 'middle'}, (maxT * fraction).toFixed(1) + ' s')));
       }); parent.appendChild(svg);
     }
     chart(series, holder);

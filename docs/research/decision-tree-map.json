@@ -5,7 +5,7 @@
   "reviewedBaseCommit": "c9b9998decab2c5aa9733c1a540c3190c3aa4bba",
   "sourceState": "working tree; source hashes identify the reviewed snapshot",
   "sourceSha256": {
-    "plugin.js": "e069919c81e289981b09e210af7c636bd77141bf3d0c77e2a0c6367ab9b875d2",
+    "plugin.js": "56277d05b1a199e12a6377504cd3542ee4bbe0065aaebb116c7fda72b11ee455",
     "simulator/app.js": "0ac84026a55095265b1230e3d30f90ae6a1ee27ae562f15df3620a7c4cd9efb0",
     "simulator/index.html": "2e711bf354e16be73e48581b873bc693b3b3ae1bf9b253b6f26dd6fa14af34cf",
     "simulator/engine.js": "746ef739b48183f49073c498371e49ada941f35471d9b331f2c5076ac0324b7a",
