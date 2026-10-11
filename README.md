@@ -234,3 +234,7 @@ and are marked as static, build-specific research rather than vendor source.
 The effective-DD calculation interpolates the caller-selected baseline toward `grindDdDum * 0.1` using the recovered factor `b`. The residue updates independently using `a`. The research does not establish which caller field supplies that second baseline: this calculator requires it explicitly and does not claim automatic firmware state coupling. Baseline/residue inputs use micrometres; result uses deci-micrometres.
 
 Golden vectors can be regenerated independently with `PYTHONPATH=/path/to/mahlkoenig-e64ws-local-research python3 ci/generate-research-vectors.py`. Check out research revision `efcf12fb5366d628468ce02117f5905c32474b41` first. CI uses the committed vectors and does not fetch an evolving oracle.
+
+### Grinder display units and calibration
+
+The [grinder dial guide](docs/GRINDER_DIALS.md) separates native micron displays, printed collar marks and multi-turn click counts from the research algorithms’ internal dD coordinate. The lab displays native values only after a documented unit conversion or explicitly scoped owner calibration. Matching control references include original offline illustrations and linked manufacturer photographs. Changing grinder, burr identity or calibration epoch invalidates a local dial mapping.

@@ -42,8 +42,9 @@ class Element {
 }
 
 function uiFixture(catalog = { schemaVersion: 1, sources: [] }) {
+  const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
-    "notice", "theme", "algorithm", "grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "export", "import", "catalog-status", "catalog-search", "catalog",
+    "notice", "theme", "algorithm", "grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
@@ -105,13 +106,14 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }) {
     Promise,
     URL,
     URLSearchParams,
+    location: { href: "https://example.test/simulator/" },
     document,
     window: null,
     globalThis: null,
     setTimeout,
     clearTimeout,
     queueMicrotask,
-    fetch: async () => ({ ok: true, json: async () => catalog }),
+    fetch: async (url) => ({ ok: true, json: async () => String(url).includes("grinder-dials") ? dialData : catalog }),
     Blob: BlobFixture,
     FileReader: FileReaderFixture,
   };
@@ -134,6 +136,54 @@ test("simulator UI runs a first shot and renders every comparison algorithm", ()
   assert.ok(ui.elements.get("chart").children.length > 0);
   assert.match(ui.elements.get("chart").textContent, /Brew time \(seconds\)|Algorithm setting \(dD\)/);
   assert.match(ui.elements.get("notice").textContent, /first shot/i);
+});
+
+test("simulator keeps research dD separate and saves owner dial anchors", () => {
+  const ui = uiFixture();
+  assert.match(ui.elements.get("dial-panel").textContent, /calibration required|dial mark/i);
+  ui.elements.get("next").click();
+  ui.elements.get("export").click();
+  const saved = JSON.parse(ui.downloads[0].parts.join(""));
+  saved.setup.dialCalibration = { model: "DF64 Gen 2", burrIdentity: "stock burrs · zero 0 · epoch 1", calibrationEpoch: "epoch 1", dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 300, dialB: 90, ddDumB: 1200 };
+  ui.elements.get("reset").click();
+  ui.elements.get("import").dispatch("change", { target: { files: [{ size: JSON.stringify(saved).length, text: JSON.stringify(saved) }] } });
+  assert.match(ui.elements.get("dial-panel").textContent, /500 dD → 20 marks/);
+  assert.match(ui.elements.get("shots").textContent, /Native: 20 marks/);
+});
+
+function panelInput(ui, label) {
+  const walk = (node) => { if (node && node.attributes?.["aria-label"] === label) return node; for (const child of node?.children || []) { const found = walk(child); if (found) return found; } return null; };
+  return walk(ui.elements.get("dial-panel"));
+}
+
+test("simulator uses shipped E64 micrometre normalization and exposes all dial profiles", async () => {
+  const ui = uiFixture();
+  await new Promise(setImmediate);
+  assert.equal(ui.elements.get("grinder").children.length, 16);
+  ui.elements.get("grinder").value = "E64 WS";
+  ui.elements.get("grinder").dispatch("change");
+  await new Promise(setImmediate);
+  assert.match(ui.elements.get("dial-panel").textContent, /500 dD → 50 micrometres/);
+  const native = panelInput(ui, "native grinder setting"); native.value = "55"; native.dispatch("change");
+  assert.equal(ui.elements.get("start").value, "550");
+  assert.match(ui.elements.get("dial-panel").textContent, /550 dD → 55 micrometres/);
+  assert.ok(ui.elements.get("dial-panel").children.some(child => child.tagName === "FIGURE"));
+});
+
+test("simulator applies, rejects, and clears a scoped DF64 calibration without losing the active mapping", () => {
+  const ui = uiFixture();
+  const values = { "Native dial minimum": 0, "Native dial maximum": 90, "Native dial at anchor 1": 0, "Research dD at anchor 1": 0, "Native dial at anchor 2": 90, "Research dD at anchor 2": 3000 };
+  Object.entries(values).forEach(([label, value]) => { const input = panelInput(ui, label); input.value = String(value); input.dispatch("change"); });
+  const apply = ui.elements.get("dial-panel").children.flatMap(node => node.children || []).find(node => node.textContent === "Apply owner calibration");
+  apply.click();
+  assert.match(ui.elements.get("dial-panel").textContent, /500 dD → 15 marks/);
+  const bad = panelInput(ui, "Research dD at anchor 2"); bad.value = ""; bad.dispatch("change"); apply.click();
+  assert.match(ui.elements.get("dial-panel").textContent, /500 dD → 15 marks/);
+  const clear = ui.elements.get("dial-panel").children.flatMap(node => node.children || []).find(node => node.textContent === "Reset dial calibration");
+  clear.click();
+  assert.match(ui.elements.get("dial-panel").textContent, /calibration required/);
+  ui.elements.get("burrs").value = "SSP HU"; ui.elements.get("burrs").dispatch("change");
+  assert.match(ui.elements.get("dial-panel").textContent, /calibration required/);
 });
 
 test("simulator UI replays, resets, and exposes the shipped supporting calculators", () => {

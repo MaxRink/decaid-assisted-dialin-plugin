@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "reference-catalog.json"
 PLUGIN = ROOT / "plugin.js"
+DIAL_DATA = ROOT / "data" / "grinder-dials.json"
 START = "/* GENERATED REFERENCE CATALOG START */"
 END = "/* GENERATED REFERENCE CATALOG END */"
 ALLOWED_SOURCE_KEYS = {"id", "title", "url", "publisher", "kind", "scope", "facts", "notes", "reuse"}
@@ -117,6 +118,7 @@ function createReferenceCatalog() {{
     schemaVersion: catalog.schemaVersion,
     reviewedAt: catalog.reviewedAt,
     sources: catalog.sources,
+    grinderDials: catalog.grinderDials,
     matchReferences(query = {{}}) {{
       if (!query || typeof query !== "object" || Array.isArray(query)) return [];
       return catalog.sources.filter((source) => matches(source, query));
@@ -133,6 +135,31 @@ def main():
     args = parser.parse_args()
     catalog = json.loads(DATA.read_text())
     validate_catalog(catalog)
+    dials = json.loads(DIAL_DATA.read_text())
+    validate_json(dials, "grinderDials")
+    if dials.get("schemaVersion") != 1 or not isinstance(dials.get("models"), list):
+        fail("grinderDials schema is invalid")
+    ids = set()
+    for model in dials["models"]:
+        if model.get("id") in ids or not re.fullmatch(r"[a-z0-9]+", model.get("id", "")):
+            fail("grinderDials model id must be unique and safe")
+        ids.add(model["id"])
+        for key in ("model", "unit", "control", "markings", "zero"):
+            if not isinstance(model.get(key), str) or not 1 <= len(model[key]) <= 1000:
+                fail(f"grinderDials {key} is invalid")
+        if model.get("schematicUrl") != "../docs/grinder-dials/" + model["id"] + ".svg":
+            fail("grinderDials schematic path is invalid")
+        if not (ROOT / "docs" / "grinder-dials" / (model["id"] + ".svg")).is_file():
+            fail("grinderDials schematic is missing")
+        links = model.get("sources", [])
+        image = model.get("image")
+        if image:
+            links = links + [{"url": image.get("url")}, {"url": image.get("sourceUrl")}]
+        for link in links:
+            parsed = urlparse(link.get("url", ""))
+            if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+                fail("grinderDials link must be HTTPS without credentials")
+    catalog["grinderDials"] = dials
     source = PLUGIN.read_text()
     block = generated(catalog)
     if START in source or END in source:

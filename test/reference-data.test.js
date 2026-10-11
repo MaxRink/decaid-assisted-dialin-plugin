@@ -106,3 +106,28 @@ test("references endpoint returns bounded offline catalog with attribution", asy
   assert.equal(typeof body.sources[0].url, "string");
   plugin.onUnload();
 });
+
+
+test("known dial references are available offline and keep physical models separate", () => {
+  const context = { JSON, Object, Array, String, Set, Number, Math };
+  vm.createContext(context);
+  vm.runInContext(`${source}\nthis.catalog = createReferenceCatalog(); this.dials = createGrinderDialTools();`, context);
+  const models = context.catalog.grinderDials.models;
+  assert.equal(models.length, 16);
+  for (const model of models) {
+    assert.ok(context.dials.profileFor(model.model), `missing shipped profile: ${model.model}`);
+    assert.ok(fs.existsSync(path.join(root, "docs/grinder-dials", model.id + ".svg")));
+    assert.match(model.zero, /./);
+    if (model.image) {
+      const url = new URL(model.image.url);
+      assert.equal(url.protocol, "https:");
+      assert.equal(url.username + url.password, "");
+      assert.match(model.image.caption, /./);
+      assert.match(model.image.owner, /./);
+    }
+  }
+  const df64 = models.filter(model => /^DF64/.test(model.model));
+  assert.equal(df64.length, 2);
+  assert.notEqual(df64[0].id, df64[1].id);
+  assert.ok(context.catalog.sources.some(source => source.id === "mahlkoenig-e64ws-native-distance"));
+});

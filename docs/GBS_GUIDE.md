@@ -280,3 +280,7 @@ mapping. See the primary research documents:
 - [`GBS_TRACK_C_EXACT_REVERSAL.md`](https://github.com/MaxRink/mahlkoenig-e64ws-local-research/blob/efcf12fb5366d628468ce02117f5905c32474b41/docs/GBS_TRACK_C_EXACT_REVERSAL.md)
 - [`DF64_DF54_GBS_APPLET.md`](https://github.com/MaxRink/mahlkoenig-e64ws-local-research/blob/efcf12fb5366d628468ce02117f5905c32474b41/docs/DF64_DF54_GBS_APPLET.md)
 
+
+## Use the number your grinder shows
+
+See [Read the number on your grinder](GRINDER_DIALS.md) for native micron displays, numbered collars, clicks, calibration and illustrated control references. A unit conversion does not certify a recovered algorithm for that grinder.

@@ -1,7 +1,7 @@
 # Reference catalog and recipe evidence
 
 The machine-readable catalog is [`data/reference-catalog.json`](../data/reference-catalog.json).
-It contains 42 reviewed sources as of 2026-10-11. Each record states the
+It contains 43 reviewed sources as of 2026-10-11. Each record states the
 publisher, source type, exact scope, numeric facts where the source publishes
 them, and a reuse boundary. A recipe is evidence for that named coffee,
 roaster, brewer or grinder configuration; it is not a universal target.

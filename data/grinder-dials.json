@@ -1,0 +1,440 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-11",
+  "models": [
+    {
+      "id": "e64ws",
+      "model": "E64 WS",
+      "unit": "µm",
+      "control": "screen",
+      "markings": "Electronic disc-distance value; no universal range verified",
+      "zero": "On-screen disk-distance calibration",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "E64 WS manufacturer or manual reference",
+          "url": "https://www.mahlkoenig.com/products/e64-ws-espresso-home-grinder"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/e64ws.svg",
+      "image": {
+        "url": "https://www.mahlkoenig.us/cdn/shop/files/E64-WS-Black-square_700x700.webp?v=1763414639",
+        "sourceUrl": "https://www.mahlkoenig.com/products/e64-ws-espresso-home-grinder",
+        "caption": "E64 WS front product view; electronic adjustment/display is part of the unit",
+        "owner": "Mahlkönig",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "e65sgbw",
+      "model": "E65S GbW",
+      "unit": "µm (DDD readout only)",
+      "control": "screen",
+      "markings": "Use verified DDD distance, not an unmeasured adjustment-lever position",
+      "zero": "Manufacturer DDD calibration",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "E65S GbW manufacturer or manual reference",
+          "url": "https://www.mahlkoenig.com/products/e65s-gbw"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/e65sgbw.svg",
+      "image": {
+        "url": "https://www.mahlkoenig.us/cdn/shop/files/E65S_GbW_-_Black_560x700.webp?v=1761340232",
+        "sourceUrl": "https://www.mahlkoenig.com/products/e65s-gbw",
+        "caption": "E65S GbW product view",
+        "owner": "Mahlkönig",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "e80sgbw",
+      "model": "E80S GbW",
+      "unit": "µm (DDD readout only)",
+      "control": "screen",
+      "markings": "Use verified DDD distance, not an unmeasured adjustment-lever position",
+      "zero": "Manufacturer DDD calibration",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "E80S GbW manufacturer or manual reference",
+          "url": "https://www.mahlkoenig.com/products/e80s-gbw-grinder"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/e80sgbw.svg",
+      "image": {
+        "url": "https://www.mahlkoenig.us/cdn/shop/files/E80S_GbW_-_Black_560x700.webp?v=1761340079",
+        "sourceUrl": "https://www.mahlkoenig.com/products/e80s-gbw-grinder",
+        "caption": "E80S GbW product view",
+        "owner": "Mahlkönig",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "df64gen1",
+      "model": "DF64 Gen 1",
+      "unit": "dial marks",
+      "control": "collar",
+      "markings": "Common 0–90-ish printed reference scale; owner-confirmed scale, not operating bounds",
+      "zero": "Owner-confirmed zero; printed zero may be offset",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "DF64 Gen 1 manufacturer or manual reference",
+          "url": "https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/df64gen1.svg",
+      "image": {
+        "url": "https://df64coffee.com/cdn/shop/products/IMG_8737.png?v=1626712036&width=1445",
+        "sourceUrl": "https://df64coffee.com/products/df64-single-dose-coffee-grinder",
+        "caption": "DF64 original-generation product photograph with numbered adjustment collar visible; not a calibration measurement",
+        "owner": "DF64 Coffee",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "df64gen2",
+      "model": "DF64 Gen 2",
+      "unit": "dial marks",
+      "control": "collar",
+      "markings": "Common 0–90-ish printed reference scale; owner-confirmed scale, not operating bounds",
+      "zero": "Movable indicator and burr changes require a fresh zero epoch",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "DF64 Gen 2 manufacturer or manual reference",
+          "url": "https://df64coffee.com/products/df64-gen-2-single-dose-coffee-grinder"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/df64gen2.svg",
+      "image": {
+        "url": "https://dfgrinders.com/cdn/shop/files/dial1_30fc9883-d06c-40d7-a2a2-2bf1d8cfe2d3.png?v=1759799433&width=416",
+        "sourceUrl": "https://dfgrinders.com/products/df64-metal-dial-indicator",
+        "caption": "DF64 Gen 2 premium dial indicator close-up (optional Gen 2 accessory; not a factory-scale specification)",
+        "owner": "DF Grinders",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "df54",
+      "model": "DF54",
+      "unit": "dial marks",
+      "control": "collar",
+      "markings": "Numbered stepless collar; confirm actual markings on your unit",
+      "zero": "Owner-confirmed indicator/zero",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "DF54 manufacturer or manual reference",
+          "url": "https://dfgrinders.com/products/df54-metal-dial-indicator"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/df54.svg",
+      "image": {
+        "url": "https://dfgrinders.com/cdn/shop/files/dial1.png?v=1759799419&width=416",
+        "sourceUrl": "https://dfgrinders.com/products/df54-metal-dial-indicator",
+        "caption": "DF Grinders premium dial indicator ring; dial close-up (optional DF54 accessory; not a factory-scale specification)",
+        "owner": "DF Grinders",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "nichezero",
+      "model": "Niche Zero",
+      "unit": "dial marks",
+      "control": "collar",
+      "markings": "Stepless numbered collar; manufacturer examples are recipes, not safe limits",
+      "zero": "Follow Niche calibration after relevant disassembly",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "Niche Zero manufacturer or manual reference",
+          "url": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-calibrate-your-grinder-for-optimum-performance"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/nichezero.svg",
+      "image": {
+        "url": "https://cdn.shopify.com/s/files/1/0081/2076/2450/files/White_Niche_Zero_and_coffee_machine.jpg?v=1760088418",
+        "sourceUrl": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-dial-in-your-niche-zero",
+        "caption": "Niche Zero with dial visible in the manufacturer's dial-in guide",
+        "owner": "Niche Coffee",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "encoreesp",
+      "model": "Baratza Encore ESP",
+      "unit": "numbered settings",
+      "control": "collar",
+      "markings": "1–40; 1–20 espresso, 21–40 coarser/filter; steps have two resolution bands",
+      "zero": "Shim/burr installation is calibration context",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "Baratza Encore ESP manufacturer or manual reference",
+          "url": "https://www.baratza.com/en-dk/product/zcg495"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/encoreesp.svg",
+      "image": {
+        "url": "https://assets.breville.com/cdn-cgi/image/width%3D333%2Cformat%3Dauto%2Cquality%3D75/ZCG495/ZCG495_Carousel1.png",
+        "sourceUrl": "https://www.baratza.com/en-us/product/encoretm-esp-zcg495",
+        "caption": "Encore ESP product/carousel view; official page describes the numbered adjustment collar",
+        "owner": "Baratza / Breville",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "sculptor064s",
+      "model": "Timemore Sculptor 064S",
+      "unit": "dial marks",
+      "control": "wheel",
+      "markings": "Stepless S model; do not substitute non-S burr/scale",
+      "zero": "Exact model, burr and RPM; reset after zero changes",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "Timemore Sculptor 064S manufacturer or manual reference",
+          "url": "https://www.timemore.com/pages/sculptor-related-faq"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/sculptor064s.svg",
+      "image": {
+        "url": "https://www.timemore.com/cdn/shop/files/064S.jpg?v=1713171847",
+        "sourceUrl": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
+        "caption": "Sculptor 064S product view; official product page variant image",
+        "owner": "Timemore",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "sculptor078s",
+      "model": "Timemore Sculptor 078S",
+      "unit": "dial marks",
+      "control": "wheel",
+      "markings": "Stepless S model; do not substitute non-S burr/scale",
+      "zero": "Exact model, burr and RPM; reset after zero changes",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "Timemore Sculptor 078S manufacturer or manual reference",
+          "url": "https://www.timemore.com/pages/sculptor-related-faq"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/sculptor078s.svg",
+      "image": {
+        "url": "https://www.timemore.com/cdn/shop/files/078S.jpg?v=1713171847",
+        "sourceUrl": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
+        "caption": "Sculptor 078S product view; official product page variant image",
+        "owner": "Timemore",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "lagom01",
+      "model": "LAGOM 01",
+      "unit": "micro-ticks",
+      "control": "wheel",
+      "markings": "7.5 µm per micro tick for the documented configuration; not grounds diameter",
+      "zero": "Configuration-specific zero, competition reference ±2 ticks",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "LAGOM 01 manufacturer or manual reference",
+          "url": "https://www.option-o.com/guide-lagom-01"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/lagom01.svg",
+      "image": {
+        "url": "https://images.squarespace-cdn.com/content/v1/5b125642ec4eb782ce4f9947/1693535581758-AKATHPG9RWQ6M071BF8O/lagom%2B01.jpg",
+        "sourceUrl": "https://www.option-o.com/lagom-01",
+        "caption": "LAGOM 01 official product image",
+        "owner": "Option-O",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "lagomp64",
+      "model": "LAGOM P64",
+      "unit": "dial micro-ticks",
+      "control": "wheel",
+      "markings": "Do not substitute LAGOM 01 pitch; local conversion required",
+      "zero": "Recalibrate after burr replacement; generation matters",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "LAGOM P64 manufacturer or manual reference",
+          "url": "https://www.option-o.com/lagomp64userguide"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/lagomp64.svg",
+      "image": {
+        "url": "https://images.squarespace-cdn.com/content/v1/5b125642ec4eb782ce4f9947/8e408f57-ffa3-4196-bd61-4d2aab5671cf/LAGOM%2BP64.jpg",
+        "sourceUrl": "https://www.option-o.com/lagom-p64",
+        "caption": "LAGOM P64 official product image",
+        "owner": "Option-O",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    },
+    {
+      "id": "xpro",
+      "model": "1Zpresso X-Pro",
+      "unit": "clicks from zero",
+      "control": "ring",
+      "markings": "60 clicks/rotation; 12.5 µm mechanical movement per click",
+      "zero": "Manual zero procedure; multi-turn count must be retained",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "1Zpresso X-Pro manufacturer or manual reference",
+          "url": "https://1zpresso.coffee/manual-xpro-en/"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/xpro.svg",
+      "image": {
+        "url": "https://i0.wp.com/1zpresso.coffee/wp-content/uploads/2022/08/3-1.jpg?fit=731%2C386&ssl=1",
+        "sourceUrl": "https://1zpresso.coffee/manual-xpro-en/",
+        "caption": "X-Pro official adjustment instruction image",
+        "owner": "1Zpresso",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "jmax",
+      "model": "1Zpresso J-Max",
+      "unit": "clicks from zero",
+      "control": "ring",
+      "markings": "90 clicks/rotation; 8.8 µm mechanical movement per click",
+      "zero": "Manual zero procedure; multi-turn count must be retained",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder."
+      ],
+      "sources": [
+        {
+          "title": "1Zpresso J-Max manufacturer or manual reference",
+          "url": "https://1zpresso.coffee/manual-jmax-en/"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/jmax.svg",
+      "image": {
+        "url": "https://i0.wp.com/1zpresso.coffee/wp-content/uploads/2021/07/J-Max-grinder-w-closeup.jpg?fit=1333%2C1000&ssl=1",
+        "sourceUrl": "https://1zpresso.coffee/j/",
+        "caption": "J-Max product image with external adjustment ring",
+        "owner": "1Zpresso",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "kseries",
+      "model": "1Zpresso K series",
+      "unit": "clicks from zero",
+      "control": "ring",
+      "markings": "90 clicks/rotation for reviewed K-Pro/K-Max/K-Plus; 22 µm/click; not K-Ultra",
+      "zero": "Model-specific zero; retain complete turns and clicks",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder.",
+        "The reviewed 22 µm/click specification covers K-Pro/K-Max/K-Plus, not K-Ultra or every K-branded revision."
+      ],
+      "sources": [
+        {
+          "title": "1Zpresso K series manufacturer or manual reference",
+          "url": "https://1zpresso.coffee/k/"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/kseries.svg",
+      "image": {
+        "url": "https://i0.wp.com/1zpresso.coffee/wp-content/uploads/2021/06/KPRO-new.png?fit=1000%2C800&ssl=1",
+        "sourceUrl": "https://1zpresso.coffee/k/",
+        "caption": "K-series external adjustment ring product image",
+        "owner": "1Zpresso",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+    },
+    {
+      "id": "odegen2",
+      "model": "Fellow Ode Gen 2",
+      "unit": "dial positions",
+      "control": "wheel",
+      "markings": "Printed 1–11 dial with intermediate clicks; brewed-coffee grinder, not espresso",
+      "zero": "Stock and SSP calibration procedures differ",
+      "notes": [
+        "Mechanical gap and particle size are different measurements.",
+        "A unit conversion does not validate recovered GBS formulas for this grinder.",
+        "Fellow Ode is a brewed-coffee grinder and is not a supported espresso grinder recommendation."
+      ],
+      "sources": [
+        {
+          "title": "Fellow Ode Gen 2 manufacturer or manual reference",
+          "url": "https://fellowproducts.com/pages/gear-guide-ode"
+        }
+      ],
+      "schematicUrl": "../docs/grinder-dials/odegen2.svg",
+      "image": {
+        "url": "https://fellowproducts.com/cdn/shop/files/Web_PDP_OdeBrewGrinderGen2_Black_1_b979089a-570a-4024-99e7-dc5fcac0c69c.png?v=1780523585&width=1200",
+        "sourceUrl": "https://fellowproducts.com/collections/grind-brew/products/ode-brew-grinder-gen-2?variant=40978992463972",
+        "caption": "Ode Gen 2 official product image with large grind dial",
+        "owner": "Fellow",
+        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+      },
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+    }
+  ]
+}

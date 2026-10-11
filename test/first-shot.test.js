@@ -78,6 +78,9 @@ test('new bean gets a bean-aware provisional first-shot suggestion without mixin
   assert.deepEqual(body.currentBeanCatalog.bean.variety, ['Bourbon']);
   assert.equal(body.currentBeanCatalog.bean.processing, 'washed');
   assert.equal(body.currentBeanCatalog.batch.roastLevel, 'light');
+  assert.equal(body.dialReference.model, 'DF64');
+  assert.equal(body.dialReference.displayUnit, 'marks');
+  assert.equal(body.dialReference.coordinateOnly, false);
   assert.match(body.currentBeanCatalog.provenance, /current.*catalog|historical.*not|not.*historical/i);
   assert.ok(body.reviewedReferences.matches.some((source) => source.id === 'df64-clive'));
   assert.match(body.reviewedReferences.matches.find((source) => source.id === 'df64-clive').url, /^https:\/\//);
@@ -96,6 +99,42 @@ test('first-shot path excludes recipe or calibration changes and never backfills
   assert.equal(body.sourceShotIds.length, 0);
   assert.ok(body.excluded.some((item) => item.shotId === 'changed'));
   assert.ok(body.excluded.some((item) => item.shotId === 'missing-bean'));
+});
+
+test('research dD setting is surfaced as a research coordinate, never a physical dial', async () => {
+  const fresh = shot('fresh-dd', context({beanType: 'washed', roastLevel: 'light', grinderSetting: '500', grinderSettingUnit: 'deci-micrometre'}), 20);
+  const current = {context: context({beanType: 'washed', roastLevel: 'light', grinderSetting: '500', grinderSettingUnit: 'deci-micrometre'}), profile};
+  const plugin = await load({current, entries: [fresh]});
+  await mark(plugin, fresh.id);
+  const {body} = await suggest(plugin);
+  assert.equal(body.dialReference.coordinateOnly, true);
+  assert.equal(body.dialReference.displayUnit, 'deci-micrometre');
+  assert.match(body.dialReference.direction, /research coordinate/);
+});
+
+test('E64 WS converts researched dD to its native micrometre display', async () => {
+  const fresh = shot('fresh-e64', context({grinderModel: 'E64 WS', grinderSetting: '500', grinderSettingUnit: 'deci-micrometre', beanType: 'washed', roastLevel: 'light'}), 20);
+  const current = {context: context({grinderModel: 'E64 WS', grinderSetting: '500', grinderSettingUnit: 'deci-micrometre', beanType: 'washed', roastLevel: 'light'}), profile};
+  const plugin = await load({current, entries: [fresh], settings: {StepSize: 10, NumericFinerDelta: -1, MinSetting: 0, MaxSetting: 1000}});
+  await mark(plugin, fresh.id);
+  const {body} = await suggest(plugin);
+  assert.deepEqual(body.dialReference.currentNative, {value: 50, unit: 'micrometres', achievable: true});
+  assert.deepEqual(body.dialReference.proposedNative, {value: 49, unit: 'micrometres', achievable: true});
+});
+
+test('DF64 owner calibration exposes native marks and withholds stale epochs', async () => {
+  const calibration = JSON.stringify({model: 'DF64', burrIdentity: 'stock', calibrationEpoch: 'cal-1', dialA: 10, ddDumA: 100, dialB: 30, ddDumB: 300, dialMin: 0, dialMax: 90});
+  const fresh = shot('fresh-df64-cal', context({grinderSetting: '200', grinderSettingUnit: 'deci-micrometre', beanType: 'washed', roastLevel: 'light'}), 20);
+  const current = {context: context({grinderSetting: '200', grinderSettingUnit: 'deci-micrometre', beanType: 'washed', roastLevel: 'light'}), profile};
+  const plugin = await load({current, entries: [fresh], settings: {DialCalibration: calibration}});
+  await mark(plugin, fresh.id);
+  const {body} = await suggest(plugin);
+  assert.deepEqual(body.dialReference.currentNative, {value: 20, unit: 'marks', achievable: true});
+  const stale = await load({current, entries: [fresh], settings: {DialCalibration: calibration.replace('cal-1', 'cal-old')}});
+  await mark(stale, fresh.id);
+  const staleResult = await suggest(stale);
+  assert.equal(staleResult.body.dialReference.currentNative, null);
+  assert.equal(staleResult.body.dialReference.nativeStatus, 'invalid-calibration');
 });
 
 test('first-shot numeric proposal is direction-only without owner calibration and catalog failures are safe', async () => {
@@ -122,4 +161,18 @@ test('unknown grinder identity abstains before provisional catalog guidance', as
   const {body} = await suggest(plugin);
   assert.equal(body.status, 'abstain', JSON.stringify(body));
   assert.ok(body.missingData.includes('grinderId'));
+});
+
+
+test('verified GbW DDD micron readouts use the same native unit recognition', async () => {
+  for (const model of ['E65S GbW', 'E80S GbW']) {
+    const fresh = shot('native-'+model, context({grinderModel: model, grinderSetting: '50', grinderSettingUnit: 'µm', beanType: 'washed', roastLevel: 'light'}), 20);
+    const current = {context: context({grinderModel: model, grinderSetting: '50', grinderSettingUnit: 'µm', beanType: 'washed', roastLevel: 'light'}), profile};
+    const plugin = await load({current, entries: [fresh]});
+    await mark(plugin, fresh.id);
+    const {body} = await suggest(plugin);
+    assert.equal(body.dialReference.nativeStatus, 'available');
+    assert.equal(body.dialReference.currentNative.value, 50);
+    assert.match(body.dialReference.currentNative.unit, /DDD readout/);
+  }
 });

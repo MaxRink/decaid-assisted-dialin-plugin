@@ -15,6 +15,44 @@
   let algorithms;
   let simulationEngine;
   let rows = [];
+  let dialCalibration = null;
+  let dialMetadata = {};
+  const safeHttps = (value) => { try { const url = new URL(value, window.location.href); return url.protocol === "https:" && !url.username && !url.password ? url.href : null; } catch (_) { return null; } };
+  function dialProfile() {
+    const name = config().grinder;
+    const shipped = algorithms && typeof algorithms.profileForGrinder === "function" ? algorithms.profileForGrinder(name) : algorithms && algorithms.grinderDialProfiles ? Object.values(algorithms.grinderDialProfiles).find(profile => profile.model === name) : null;
+    const metadata = dialMetadata[name] || Object.values(dialMetadata).find(profile => profile.model === name) || {};
+    return shipped ? { ...metadata, ...shipped, image: metadata.image, schematicUrl: metadata.schematicUrl, sources: metadata.sources } : metadata;
+  }
+  function dialConversion(dd) {
+    if (!algorithms || typeof algorithms.toGrinderDial !== "function") return { status: "unsupported", visible: null, warnings: ["shipped grinder helper unavailable"] };
+    try { return algorithms.toGrinderDial({ model: config().grinder, ddDum: dd, burrIdentity: config().burrs, calibrationEpoch: config().calibration, calibration: dialCalibration }); } catch (error) { return { status: "error", visible: null, warnings: [error.message] }; }
+  }
+  function nativeDisplay(dd) {
+    const profile = dialProfile() || {}, result = dialConversion(dd), value = result.visible && result.visible.value;
+    if (value == null) return { value: null, label: result.status === "error" ? "calibration invalid" : "calibration required", unit: profile.visibleUnit || profile.unit || "native dial" };
+    const rounded = Number.isFinite(value) ? Number(value.toFixed(3)) : value;
+    const count = profile.clicksPerRotation && Number.isInteger(value) && value >= 0
+      ? " (" + Math.floor(value / profile.clicksPerRotation) + " full turns + " + value % profile.clicksPerRotation + " clicks from zero)" : "";
+    return { value: rounded, label: String(rounded) + count + (result.achievable === false ? " (between physical steps; choose a neighboring step)" : ""), unit: result.visible.unit || profile.visibleUnit || profile.unit || "native dial" };
+  }
+  function renderDialPanel() {
+    const holder = $("dial-panel"); if (!holder) return;
+    holder.replaceChildren();
+    const profile = dialProfile() || {}, heading = document.createElement("strong"); text(heading, "Physical dial view · " + (profile.model || config().grinder));
+    const info = document.createElement("p"); info.className = "hint"; text(info, (profile.visibleUnit || profile.unit || "native dial") + ". " + (profile.provenance || "Research dD remains the algorithm input.")); holder.append(heading, info);
+    const image = profile.image || profile.photo, externalImage = image && safeHttps(image.url), imageUrl = externalImage || (typeof profile.schematicUrl === "string" ? profile.schematicUrl : null); if (imageUrl) { const figure = document.createElement("figure"), img = document.createElement("img"), caption = document.createElement("figcaption"); img.src = imageUrl; img.alt = image?.caption || (profile.model || config().grinder) + " dial schematic"; img.loading = "lazy"; if (externalImage && profile.schematicUrl) img.addEventListener("error", () => { img.src = profile.schematicUrl; img.alt = (profile.model || config().grinder) + " dial schematic"; }); text(caption, image?.caption || "Reference dial schematic"); figure.append(img, caption); if (image && safeHttps(image.sourceUrl)) { const link = document.createElement("a"); link.href = safeHttps(image.sourceUrl); link.target = "_blank"; link.rel = "noopener noreferrer"; text(link, "Image source · " + (image.owner || "external reference")); figure.append(link); } holder.append(figure); }
+    const current = nativeDisplay(config().start), native = document.createElement("p"); text(native, "Current research coordinate " + config().start + " dD → " + current.label + " " + current.unit); holder.append(native);
+    const nativeField = document.createElement("label"); text(nativeField, "Native grinder setting (editable)"); const nativeInput = document.createElement("input"); nativeInput.type = "number"; nativeInput.step = "any"; nativeInput.value = current.value == null ? "" : current.value; nativeInput.setAttribute("aria-label", "native grinder setting"); nativeInput.addEventListener("change", () => { if (nativeInput.value === "") return; try { const converted = algorithms.normalizeGrinderSetting({ model: config().grinder, value: Number(nativeInput.value), burrIdentity: config().burrs, calibrationEpoch: config().calibration, calibration: dialCalibration }); if (converted.status !== "normalized") throw new Error((converted.warnings || ["native setting needs calibration"])[0]); $("start").value = String(converted.algorithm.ddDum); if (rows.length) reset(); else renderDialPanel(); setNotice("Native setting converted to the research coordinate using the shipped grinder profile."); } catch (error) { setNotice(error.message, true); renderDialPanel(); } }); nativeField.append(nativeInput); holder.append(nativeField);
+    {
+      const details = document.createElement("details"), summary = document.createElement("summary"); text(summary, "Enter two measured anchors for this grinder"); details.append(summary);
+      const draft = dialCalibration ? { ...dialCalibration } : { model: config().grinder, burrIdentity: config().burrs, calibrationEpoch: config().calibration };
+      const inputs = {};
+      [["model", "Grinder model", draft.model], ["burrIdentity", "Burr identity", draft.burrIdentity], ["calibrationEpoch", "Calibration epoch", draft.calibrationEpoch], ["dialMin", "Native dial minimum", draft.dialMin ?? ""], ["dialMax", "Native dial maximum", draft.dialMax ?? ""], ["dialA", "Native dial at anchor 1", draft.dialA ?? ""], ["ddDumA", "Research dD at anchor 1", draft.ddDumA ?? ""], ["dialB", "Native dial at anchor 2", draft.dialB ?? ""], ["ddDumB", "Research dD at anchor 2", draft.ddDumB ?? ""]].forEach(([key, label, value]) => { const field = document.createElement("label"); text(field, label); const input = document.createElement("input"); input.type = key === "model" || key === "burrIdentity" || key === "calibrationEpoch" ? "text" : "number"; input.step = "any"; input.value = value; input.readOnly = key === "model" || key === "burrIdentity" || key === "calibrationEpoch"; input.setAttribute("aria-label", label); inputs[key] = input; field.append(input); details.append(field); });
+      const apply = document.createElement("button"); apply.type = "button"; text(apply, "Apply owner calibration"); apply.addEventListener("click", () => { try { const candidate = Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.type === "number" ? Number(input.value) : input.value])); if (Object.entries(inputs).some(([key, input]) => input.type === "number" && input.value === "")) throw new Error("all calibration numbers are required"); const checked = algorithms.toGrinderDial({ model: config().grinder, ddDum: config().start, burrIdentity: config().burrs, calibrationEpoch: config().calibration, calibration: candidate }); if (checked.status !== "normalized") throw new Error((checked.warnings || ["two valid anchors are required"])[0]); dialCalibration = candidate; reset(); setNotice("Owner calibration applied and scoped to this grinder, burr set, and epoch."); } catch (error) { setNotice(error.message, true); } }); details.append(apply);
+      const clear = document.createElement("button"); clear.type = "button"; text(clear, "Reset dial calibration"); clear.addEventListener("click", () => { dialCalibration = null; reset(); setNotice("Dial calibration cleared; research-only coordinates remain available."); }); details.append(clear); holder.append(details);
+    }
+  }
   const text = (node, value) => { node.textContent = String(value); };
   const number = (id, fallback) => {
     const value = Number($(id).value);
@@ -38,6 +76,7 @@
     burrs: $("burrs").value,
     dose: number("dose", 18),
     yield: number("yield", 36)
+    ,dialCalibration
   });
   function setNotice(message, error) {
     const node = $("notice");
@@ -114,7 +153,8 @@
     const box = $("result"); box.replaceChildren();
     if (!result) { const p = document.createElement("p"); text(p, "Run a shot to see the first recommendation."); box.append(p); return; }
     const dl = document.createElement("dl");
-    [["Phase", result.phase], ["Candidate", result.candidateDdDum + " dD"], ["Returned", result.returnedDdDum + " dD"], ["Decision", result.locked ? "hold / locked" : result.committed ? "committed" : "available"]].forEach(([key, value]) => { const dt = document.createElement("dt"); const dd = document.createElement("dd"); text(dt, key); text(dd, value); dl.append(dt, dd); });
+    const candidateNative = nativeDisplay(result.candidateDdDum), returnedNative = nativeDisplay(result.returnedDdDum);
+    [["Phase", result.phase], ["Candidate", result.candidateDdDum + " dD · native " + candidateNative.label + " " + candidateNative.unit], ["Returned", result.returnedDdDum + " dD · native " + returnedNative.label + " " + returnedNative.unit], ["Decision", result.locked ? "hold / locked" : result.committed ? "committed" : "available"]].forEach(([key, value]) => { const dt = document.createElement("dt"); const dd = document.createElement("dd"); text(dt, key); text(dd, value); dl.append(dt, dd); });
     box.append(dl);
     const trace = engineRun(config().algorithm);
     if (trace && trace.shots.length) {
@@ -135,6 +175,7 @@
       const tr = document.createElement("tr");
       [index + 1].forEach((value) => { const td = document.createElement("td"); text(td, value); tr.append(td); });
       [["setting", row.setting], ["actual", row.actual], ["target", row.target], ["pressure", row.pressure], ["flow", row.flow]].forEach(([key, value]) => { const td = document.createElement("td"); const input = document.createElement("input"); input.type = "number"; input.value = value; input.step = key === "setting" ? "1" : "0.1"; input.setAttribute("aria-label", key + " for shot " + (index + 1)); input.addEventListener("change", () => { row[key] = input.value === "" ? "" : Number(input.value); row.result = null; }); td.append(input); tr.append(td); });
+      const settingCell = tr.children[1], native = nativeDisplay(row.setting), nativeLine = document.createElement("small"); text(nativeLine, "Native: " + native.label + " " + native.unit); nativeLine.className = native.value == null ? "unmapped" : "mapped"; nativeLine.setAttribute("aria-label", "native dial for shot " + (index + 1)); settingCell.append(document.createElement("br"), nativeLine);
       const tasteCell = document.createElement("td"); const taste = document.createElement("select"); ["none", "balanced", "sour", "bitter", "astringent", "weak", "channeling"].forEach((value) => { const option = document.createElement("option"); option.value = value; text(option, value === "none" ? "No taste signal" : value); taste.append(option); }); taste.value = row.taste || "none"; taste.setAttribute("aria-label", "taste for shot " + (index + 1)); taste.addEventListener("change", () => { row.taste = taste.value; }); tasteCell.append(taste); tr.append(tasteCell);
       const result = document.createElement("td"); text(result, row.result ? row.result.phase + " → " + row.result.returnedDdDum + " dD" : "planned"); tr.append(result);
       const action = document.createElement("td"); const button = document.createElement("button"); button.type = "button"; text(button, "Remove"); button.addEventListener("click", () => { rows.splice(index, 1); rows.forEach((r, i) => { if (r.actual !== "") consumeRow(r, i); }); render(); }); action.append(button); tr.append(action); body.append(tr);
@@ -169,14 +210,15 @@
       if (!trace) return;
       const points = trace.shots.map((pass, shotIndex) => [80 + shotIndex * width, 510 - (pass.output.returnedDdDum - low) / (high - low) * 190]);
       if (points.length > 1) svg.append(svgNode("polyline", { points: points.map(point => point.join(",")).join(" "), fill: "none", stroke: colors[index], "stroke-width": 2 }));
-      points.forEach(([cx, cy], shotIndex) => { const dot = svgNode("circle", { cx, cy, r: 3, fill: colors[index] }); const title = svgNode("title", {}); title.textContent = algorithmNames[index] + " shot " + (shotIndex + 1) + ": " + trace.shots[shotIndex].output.returnedDdDum + " dD"; dot.append(title); svg.append(dot); });
+      points.forEach(([cx, cy], shotIndex) => { const dot = svgNode("circle", { cx, cy, r: 3, fill: colors[index] }); const title = svgNode("title", {}), returned = trace.shots[shotIndex].output.returnedDdDum, native = nativeDisplay(returned); title.textContent = algorithmNames[index] + " shot " + (shotIndex + 1) + ": " + returned + " dD · native " + native.label + " " + native.unit; dot.append(title); svg.append(dot); });
     });
     holder.append(svg);
+    renderDialPanel();
   }
   function compare() {
     const holder = $("compare"); holder.replaceChildren(); text($("comparison-count"), rows.length + " passes");
     if (!rows.length) { const p = document.createElement("p"); p.className = "hint"; text(p, "Run one or more shots to compare them."); holder.append(p); return; }
-    algorithmNames.forEach((name) => { const engineTrial = engineRun(name); const trial = engineTrial && engineTrial.shots.length ? engineTrial.shots[engineTrial.shots.length - 1].output : null; const card = document.createElement("article"); const h = document.createElement("h3"); text(h, name); const p = document.createElement("p"); text(p, trial ? "Next: " + trial.returnedDdDum + " dD · " + trial.phase : "Needs a completed shot"); card.append(h, p); holder.append(card); });
+    algorithmNames.forEach((name) => { const engineTrial = engineRun(name); const trial = engineTrial && engineTrial.shots.length ? engineTrial.shots[engineTrial.shots.length - 1].output : null; const card = document.createElement("article"); const h = document.createElement("h3"); text(h, name); const p = document.createElement("p"); const native = trial ? nativeDisplay(trial.returnedDdDum) : null; text(p, trial ? "Next: " + trial.returnedDdDum + " dD · native " + native.label + " " + native.unit + " · " + trial.phase : "Needs a completed shot"); card.append(h, p); holder.append(card); });
   }
   let catalogSources = [];
   const factLabels = { doseG: "Dose (g)", yieldG: "Beverage yield (g)", waterG: "Water (g)", brewTimeSec: "Brew time (s)", temperatureC: "Temperature (°C)", brewRatio: "Brew ratio", rpm: "RPM", burrDiameterMm: "Burr diameter (mm)", tastingNotes: "Roaster tasting notes" };
@@ -199,6 +241,9 @@
   }
   function loadCatalog() {
     fetch("../data/reference-catalog.json", { credentials: "same-origin" }).then((response) => { if (!response.ok) throw new Error("reference catalog unavailable"); return response.json(); }).then((catalog) => { if (!catalog || catalog.schemaVersion !== 1 || !Array.isArray(catalog.sources)) throw new Error("unsupported reference catalog"); catalogSources = catalog.sources.filter((source) => typeof source.url === "string" && source.url.startsWith("https://")); text($("catalog-status"), catalogSources.length + " reviewed"); renderCatalog(); }).catch((error) => { text($("catalog-status"), "Unavailable"); const holder = $("catalog"); const p = document.createElement("p"); p.className = "hint"; text(p, error.message); holder.append(p); });
+  }
+  function loadDialProfiles() {
+    return fetch("../data/grinder-dials.json", { credentials: "same-origin" }).then(response => { if (!response.ok) throw new Error("dial profiles unavailable"); return response.json(); }).then(value => { const list = value && Array.isArray(value.models) ? value.models : []; dialMetadata = Object.fromEntries(list.filter(profile => profile && profile.model).map(profile => [profile.model, profile])); const select = $("grinder"), selected = select && select.value; if (select && list.length) { select.replaceChildren(); list.forEach(profile => { const option = document.createElement("option"); option.value = profile.model; text(option, profile.model + " · " + (profile.unit || "native")); select.append(option); }); select.value = list.some(profile => profile.model === selected) ? selected : list[0].model; } renderDialPanel(); }).catch(() => {});
   }
   function render() { renderTable(); renderChart(); compare(); renderCatalog(); }
   function inputField(id, label, value, step) { const wrapper = document.createElement("label"); text(wrapper, label); const input = document.createElement("input"); input.id = id; input.type = "number"; input.value = value; input.step = step || "1"; wrapper.append(input); return wrapper; }
@@ -233,7 +278,7 @@
       const out = $("assist-result"); out.replaceChildren(); replay.suggestions.forEach((entry) => { const article = document.createElement("article"); const h = document.createElement("h3"); text(h, "Pass " + entry.shotId + " · " + (entry.stage || entry.suggestion?.status || "unavailable")); const p = document.createElement("p"); const suggestion = entry.suggestion || {}; text(p, (suggestion.direction || "retain / gather evidence") + " · confidence " + (suggestion.confidence || "not assigned") + " · evidence " + entry.evidenceCount + " comparable shot(s)"); const bean = document.createElement("p"); bean.className = "hint"; text(bean, "Bean context: " + config().bean + " · " + config().species + " · " + config().roast + ". " + (suggestion.reason || replay.disclaimer)); article.append(h, p, bean); const references = suggestion.reviewedReferences?.matches || []; references.forEach(source => { const link = document.createElement("a"); link.href = source.url; link.target = "_blank"; link.rel = "noopener noreferrer"; text(link, source.title); article.append(link, document.createElement("br")); }); out.append(article); });
     } catch (error) { setNotice(error.message, true); }
   }
-  function watchContextChanges() { ["bean", "roaster", "species", "roast", "calibration", "grinder", "burrs", "dose", "yield", "target", "tolerance", "start"].forEach((id) => $(id).addEventListener("change", () => { if (rows.length) { reset(); setNotice("Setup changed, so the old shot history was reset to keep bean and calibration context honest."); } })); }
+  function watchContextChanges() { ["bean", "roaster", "species", "roast", "calibration", "grinder", "burrs", "dose", "yield", "target", "tolerance", "start"].forEach((id) => $(id).addEventListener("change", () => { if (["calibration", "grinder", "burrs"].includes(id)) dialCalibration = null; reset(); renderDialPanel(); setNotice("Setup changed, so old shot history and dial calibration were reset to keep context honest."); })); }
   function scenario() { return { version: 1, setup: config(), shots: rows.map((row) => ({ setting: row.setting, actual: row.actual, target: row.target, pressure: row.pressure, flow: row.flow, taste: row.taste || "none", context: row.context || null })) }; }
   function download() { const blob = new Blob([JSON.stringify(scenario(), null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "dial-in-scenario.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0); }
   function validImportNumber(value, min, max, integer) {
@@ -241,12 +286,14 @@
   }
   function validateScenario(value) {
     if (!value || Object.keys(value).some(key => !["version", "setup", "shots"].includes(key)) || value.version !== 1 || !value.setup || typeof value.setup !== "object" || Array.isArray(value.setup) || !Array.isArray(value.shots) || value.shots.length > 100) throw new Error("Unsupported scenario format.");
-    const setup = value.setup; const setupKeys = new Set(["algorithm", "target", "tolerance", "start", "plant", "noise", "pressure", "flow", "bean", "roaster", "species", "roast", "calibration", "grinder", "burrs", "dose", "yield"]); if (Object.keys(setup).some((key) => !setupKeys.has(key))) throw new Error("Scenario setup has an unknown field.");
+    const setup = value.setup; const setupKeys = new Set(["algorithm", "target", "tolerance", "start", "plant", "noise", "pressure", "flow", "bean", "roaster", "species", "roast", "calibration", "grinder", "burrs", "dose", "yield", "dialCalibration"]); if (Object.keys(setup).some((key) => !setupKeys.has(key))) throw new Error("Scenario setup has an unknown field.");
     if (!algorithmNames.includes(setup.algorithm) || !validImportNumber(setup.target, 1, 600, false) || !validImportNumber(setup.start, 0, 100000, true) || !validImportNumber(setup.tolerance, 0, 60, false) || !validImportNumber(setup.plant, .2, 2, false) || !validImportNumber(setup.noise, 0, 10, false) || !validImportNumber(setup.pressure, 0, 15, false) || !validImportNumber(setup.flow, 0, 20, false) || !validImportNumber(setup.dose, 1, 100, false) || !validImportNumber(setup.yield, 1, 200, false)) throw new Error("Scenario setup contains an invalid or out-of-range value.");
     ["bean", "species", "roast", "calibration", "grinder", "burrs"].forEach(key => {
       if (typeof setup[key] !== "string" || !setup[key].trim() || setup[key].length > 256) throw new Error("Setup " + key + " must be a non-empty text value.");
     });
     if (setup.roaster != null && (typeof setup.roaster !== "string" || setup.roaster.length > 256)) throw new Error("Invalid roaster name.");
+    if (setup.dialCalibration != null) { const calibration = setup.dialCalibration, textKeys = ["model", "burrIdentity", "calibrationEpoch"], numberKeys = ["dialMin", "dialMax", "dialA", "ddDumA", "dialB", "ddDumB"]; if (typeof calibration !== "object" || Array.isArray(calibration) || Object.keys(calibration).some(key => !textKeys.concat(numberKeys).includes(key)) || textKeys.some(key => typeof calibration[key] !== "string" || !calibration[key].trim() || calibration[key].length > 256) || numberKeys.some(key => !validImportNumber(calibration[key], -2147483648, 2147483647, false)) || calibration.dialA === calibration.dialB || calibration.ddDumA === calibration.ddDumB) throw new Error("Invalid dial calibration anchors."); }
+    if (setup.dialCalibration != null) { try { const mapped = algorithms.toGrinderDial({ model: setup.grinder, ddDum: setup.start, burrIdentity: setup.burrs, calibrationEpoch: setup.calibration, calibration: setup.dialCalibration }); if (mapped.status !== "normalized") throw new Error((mapped.warnings || ["dial calibration cannot map this scenario"])[0]); } catch (error) { throw new Error("Invalid dial calibration: " + error.message); } }
     value.shots.forEach(row => {
       if (row.context != null) {
         const allowed = ["bean", "species", "roast", "grinder", "burrs", "calibration", "dose", "yield"];
@@ -257,7 +304,7 @@
     });
     value.shots.forEach((row) => { if (!row || typeof row !== "object" || Object.keys(row).some((key) => !["setting", "actual", "target", "pressure", "flow", "taste", "context"].includes(key)) || !validImportNumber(row.setting, 0, 100000, true) || !validImportNumber(row.target, 1, 600, false) || !validImportNumber(row.pressure, 0, 15, false) || !validImportNumber(row.flow, 0, 20, false) || (row.actual !== "" && !validImportNumber(row.actual, 0.1, 600, false)) || !["none", "balanced", "sour", "bitter", "astringent", "weak", "channeling"].includes(row.taste || "none") || (row.context != null && (typeof row.context !== "object" || Array.isArray(row.context) || JSON.stringify(row.context).length > 4096))) throw new Error("Scenario contains an invalid shot."); });
   }
-  function importFile(event) { const file = event.target.files && event.target.files[0]; if (!file) return; if (file.size > 256 * 1024) { setNotice("Scenario file is too large.", true); return; } const reader = new FileReader(); reader.onload = () => { try { const value = JSON.parse(String(reader.result)); validateScenario(value); Object.keys(value.setup).forEach((key) => { if ($(key) && typeof value.setup[key] === "string") $(key).value = value.setup[key]; else if ($(key)) $(key).value = String(value.setup[key]); }); rows = value.shots.map((row) => ({ ...row, result: null })); rows.forEach((row, index) => { if (row.actual !== "") consumeRow(row, index); }); render(); showResult(rows.length ? rows[rows.length - 1].result : null); setNotice("Scenario imported and replayed safely."); } catch (error) { setNotice(error.message, true); } }; reader.readAsText(file); }
+  function importFile(event) { const file = event.target.files && event.target.files[0]; if (!file) return; if (file.size > 256 * 1024) { setNotice("Scenario file is too large.", true); return; } const reader = new FileReader(); reader.onload = () => { try { const value = JSON.parse(String(reader.result)); validateScenario(value); dialCalibration = value.setup.dialCalibration || null; Object.keys(value.setup).forEach((key) => { if (key !== "dialCalibration" && $(key) && typeof value.setup[key] === "string") $(key).value = value.setup[key]; else if (key !== "dialCalibration" && $(key)) $(key).value = String(value.setup[key]); }); rows = value.shots.map((row) => ({ ...row, result: null })); rows.forEach((row, index) => { if (row.actual !== "") consumeRow(row, index); }); render(); showResult(rows.length ? rows[rows.length - 1].result : null); setNotice("Scenario imported and replayed safely."); } catch (error) { setNotice(error.message, true); } }; reader.readAsText(file); }
   function init() {
     algorithms = window.createResearchAlgorithms || window.DecaidResearchAlgorithms;
     if (typeof algorithms !== "function") { setNotice("The shipped algorithm factory is not available. Open this page through the plugin package, then reload.", true); return; }
@@ -266,7 +313,7 @@
    
     $("next").addEventListener("click", runNext); $("run").addEventListener("click", runAll); $("reset").addEventListener("click", reset); $("replay").addEventListener("click", replay); $("undo").addEventListener("click", undo); $("export").addEventListener("click", download); $("import").addEventListener("change", importFile); $("add").addEventListener("click", () => { addRow(recommendation(), ""); render(); });
     $("algorithm").addEventListener("change", () => { reset(); setNotice("Algorithm changed, so the experiment was reset to avoid mixing histories."); }); $("theme").addEventListener("click", () => { document.body.classList.toggle("light"); text($("theme"), document.body.classList.contains("light") ? "Dark mode" : "Light mode"); });
-    $("catalog-search").addEventListener("input", renderCatalog); render(); loadCatalog(); setNotice("Ready. The first shot uses your starting setting and bean-aware fictional plant.");
+    $("catalog-search").addEventListener("input", renderCatalog); render(); loadCatalog(); loadDialProfiles(); setNotice("Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-taste").addEventListener("change", () => { const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
     $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges();
   }

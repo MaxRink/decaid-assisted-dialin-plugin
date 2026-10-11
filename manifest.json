@@ -63,6 +63,12 @@
       "label": "Setting unit",
       "description": "Unit or coordinate system for the current setting, such as a dial mark or deci-micrometre."
     },
+    "DialCalibration": {
+      "type": "string",
+      "default": "",
+      "label": "Dial calibration (JSON)",
+      "description": "Optional owner-supplied JSON with model, burrIdentity, calibrationEpoch, dialA, ddDumA, dialB, ddDumB, dialMin and dialMax. It is used only to display native dial values and must match the current grinder context."
+    },
     "TargetTimeSec": {
       "type": "number",
       "default": 30,

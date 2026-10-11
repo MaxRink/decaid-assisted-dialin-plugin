@@ -50,6 +50,64 @@ test("all nine decoded dial-in rows and numeric selection are available", () => 
   );
 });
 
+test("every canonical grinder dial profile has a production helper profile", () => {
+  const catalog = JSON.parse(fs.readFileSync("data/grinder-dials.json", "utf8"));
+  for (const item of catalog.models) {
+    const profile = algorithms.profileForGrinder(item.model);
+    assert.ok(profile, item.model);
+    assert.equal(profile.model, item.model);
+  }
+  assert.equal(algorithms.profileForGrinder("1Zpresso K series").model, "1Zpresso K series");
+  assert.equal(algorithms.profileForGrinder("Fellow Ode Gen 2").model, "Fellow Ode Gen 2");
+});
+
+test("grinder dial normalization keeps E64 micrometres separate from dD", () => {
+  const e64 = algorithms.normalizeGrinderSetting({ model: "E64 WS", value: 123 });
+  assert.equal(e64.status, "normalized");
+  assert.equal(e64.visible.unit, "micrometres");
+  assert.equal(e64.algorithm.ddDum, 1230);
+  assert.equal(algorithms.toGrinderDial({ model: "E64 WS", ddDum: 1230 }).visible.value, 123);
+});
+
+test("DF64 marks remain visible-only until two owner calibration anchors exist", () => {
+  const raw = algorithms.normalizeGrinderSetting({ model: "DF64 Gen 2", value: 10 });
+  assert.equal(raw.status, "calibration-required");
+  assert.equal(raw.algorithm, null);
+  const calibration = { model: "DF64", burrIdentity: "stock", calibrationEpoch: "cal-1", dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 300, dialB: 90, ddDumB: 1200, finerDialDelta: 1 };
+  const calibrated = algorithms.normalizeGrinderSetting({ model: "DF64", value: 45, burrIdentity: "stock", calibrationEpoch: "cal-1", calibration });
+  assert.equal(calibrated.status, "normalized");
+  assert.equal(calibrated.algorithm.ddDum, 750);
+  assert.equal(algorithms.toGrinderDial({ model: "DF64", ddDum: 750, burrIdentity: "stock", calibrationEpoch: "cal-1", calibration }).visible.value, 45);
+});
+
+test("dial normalization validates ranges and refuses ambiguous anchors", () => {
+  assert.equal(algorithms.normalizeGrinderSetting({ model: "DF64", value: 91 }).status, "calibration-required");
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "DF64", value: 10, burrIdentity: "stock", calibrationEpoch: "cal-1", calibration: { model: "DF64", burrIdentity: "stock", calibrationEpoch: "cal-1", dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 1, dialB: 0, ddDumB: 2 } }), /distinct/);
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "DF64", value: 10, unit: "bananas" }), /unit does not match/);
+  assert.equal(algorithms.normalizeGrinderSetting({ model: "unknown", value: 1 }).status, "unsupported");
+});
+
+test("calibration is scoped to burr and epoch and supports a reversed physical slope", () => {
+  const calibration = { model: "DF64 Gen 1", burrIdentity: "SSP HU", calibrationEpoch: "2026-10-11", dialMin: 5, dialMax: 85, dialA: 20, ddDumA: 1200, dialB: 70, ddDumB: 300 };
+  assert.equal(algorithms.normalizeGrinderSetting({ model: "DF64 Gen 1", value: 45, burrIdentity: "SSP HU", calibrationEpoch: "2026-10-11", calibration }).algorithm.ddDum, 750);
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "DF64 Gen 1", value: 45, burrIdentity: "stock", calibrationEpoch: "2026-10-11", calibration }), /burr identity/);
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "DF64 Gen 1", value: 45, burrIdentity: "SSP HU", calibrationEpoch: "new", calibration: { ...calibration, calibrationEpoch: "old" } }), /calibration epoch/);
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "DF64 Gen 1", value: 86, burrIdentity: "SSP HU", calibrationEpoch: "2026-10-11", calibration }), /owner calibration bounds/);
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "DF64 Gen 1", value: 10, burrIdentity: "SSP HU", calibrationEpoch: "2026-10-11", calibration }), /interpolation bounds/);
+});
+
+test("native and calibrated dD results stay within the algorithm integer range", () => {
+  assert.throws(() => algorithms.normalizeGrinderSetting({ model: "E64 WS", value: 1e12 }), /integer range/);
+  assert.throws(() => algorithms.toGrinderDial({ model: "E64 WS", ddDum: 1e12 }), /integer range/);
+});
+
+test("stepped inverse settings are marked unattainable instead of rounded", () => {
+  const calibration = { model: "1Zpresso K series", burrIdentity: "stock", calibrationEpoch: "k-1", dialMin: 0, dialMax: 20, dialA: 0, ddDumA: 100, dialB: 10, ddDumB: 1100 };
+  const result = algorithms.toGrinderDial({ model: "1Zpresso K series", ddDum: 150, burrIdentity: "stock", calibrationEpoch: "k-1", calibration });
+  assert.equal(result.achievable, false);
+  assert.equal(result.visible.value, 0.5);
+});
+
 test("V1 rolling median, correction and hysteretic output stay bounded", () => {
   let state = algorithms.createState("GbS1", {
     continuousUm: 10,
@@ -247,4 +305,13 @@ test("effective DD keeps residue and explicitly selected interpolation baseline 
     ).result,
     500,
   );
+});
+
+
+test("hand-grinder settings retain full rotations instead of wrapping the dial", () => {
+  assert.equal(algorithms.clicksFromTurns({model: "1Zpresso X-Pro", turns: 2, clicks: 14}), 134);
+  assert.equal(algorithms.clicksFromTurns({model: "1Zpresso J-Max", turns: 2, clicks: 14}), 194);
+  assert.throws(() => algorithms.clicksFromTurns({model: "1Zpresso X-Pro", turns: 0, clicks: 60}), /whole counts/);
+  assert.throws(() => algorithms.clicksFromTurns({model: "1Zpresso K series", turns: 1.5, clicks: 0}), /whole counts/);
+  assert.throws(() => algorithms.clicksFromTurns({model: "DF64", turns: 1, clicks: 1}), /reviewed clicks/);
 });

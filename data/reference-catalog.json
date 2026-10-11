@@ -1000,6 +1000,30 @@
         "The index demonstrates that Onyx scopes recipes to named coffees and roast/process metadata; the example is not a universal target."
       ],
       "reuse": "linked factual summary; no copied proprietary datasets"
+    },
+    {
+      "id": "mahlkoenig-e64ws-native-distance",
+      "title": "E64 WS native grinding disk distance and zero calibration",
+      "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Original_instructions_EN.pdf",
+      "publisher": "Mahlkönig",
+      "kind": "manufacturer",
+      "scope": {
+        "grinderModel": "E64 WS",
+        "applicability": "native displayed disk distance, not particle diameter or validation of recovered algorithms"
+      },
+      "facts": {
+        "displayUnit": "µm",
+        "finerDirection": "smaller displayed disk distance",
+        "coarserDirection": "larger displayed disk distance",
+        "control": "electronic recipe grinding degree operated through display and rotary knob",
+        "calibration": "manufacturer fine grinding disk distance calibration procedure"
+      },
+      "notes": [
+        "Original operating instructions page 13 defines the µm unit and direction; page 26 covers fine disk-distance calibration.",
+        "The internal research coordinate is expressed in 0.1 µm: 500 research dD equals 50 µm as a unit conversion. This does not validate firmware behavior, limits or grinder portability.",
+        "No universal user setting range or increment is inferred from the manual."
+      ],
+      "reuse": "linked short factual summary; manufacturer photographs and manual illustrations remain external"
     }
   ]
 }

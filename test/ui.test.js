@@ -93,6 +93,8 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   const returnLink = new Element("returnLink");
   const referenceDetails = new Element("reviewedReferences");
   const referenceList = new Element("referenceList");
+  const dialReference = new Element("dialReference");
+  const dialReferenceBody = new Element("dialReferenceBody");
   analysis.fields = { shotId: "shot-1" };
   form.fields = { shotId: "shot-1", notes: "<img src=x onerror=alert(1)>" };
   form.fields = {
@@ -128,6 +130,8 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
         "#returnLink": returnLink,
         "#reviewedReferences": referenceDetails,
         "#referenceList": referenceList,
+        "#dialReference": dialReference,
+        "#dialReferenceBody": dialReferenceBody,
       }[selector];
     },
     createElement() {
@@ -150,6 +154,8 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
     returnLink,
     referenceDetails,
     referenceList,
+    dialReference,
+    dialReferenceBody,
     context,
   };
 }
@@ -541,4 +547,55 @@ test("matched references render as safe human-readable source details", async ()
   assert.match(item.children[1].textContent, /Brew time \(s\): 20–30 s/);
   assert.match(item.children[1].textContent, /scoped example/);
   assert.equal(item.children[1].innerHTML, "");
+});
+
+test("suggestion renders the physical grinder dial scale and safe photo source", async () => {
+  const ui = await uiFixture(async () =>
+    response({
+      status: "provisional",
+      direction: "finer",
+      evidenceCount: 1,
+      currentSetting: "10",
+      proposedSetting: 11,
+      settingUnit: "marks",
+      dialReference: {
+        model: "DF64",
+        displayUnit: "marks",
+        range: { min: 0, max: 90 },
+        zeroMeaning: "burrs touching",
+        direction: "higher numbers are coarser; lower numbers are finer",
+        calibrationStatus: "owner-calibrated zero; verify after burr changes",
+        nativeStatus: "available",
+        currentNative: { value: 10, unit: "marks" },
+        proposedNative: { value: 11, unit: "marks" },
+        photoUrl: "https://example.test/df64-dial.jpg",
+        sourceUrl: "https://example.test/df64-guide",
+      },
+    }),
+  );
+  await ui.suggestion.onclick();
+  assert.match(ui.output.textContent, /Current physical dial: 10 marks/);
+  assert.match(ui.output.textContent, /Proposed physical dial: 11 marks/);
+  assert.equal(ui.dialReference.hidden, false);
+  assert.match(ui.dialReferenceBody.children[0].textContent, /Reference markings: 0 marks to 90 marks/);
+  assert.match(ui.dialReferenceBody.children[0].textContent, /burrs touching/);
+  assert.equal(ui.dialReferenceBody.children[1].src, "https://example.test/df64-dial.jpg");
+  assert.equal(ui.dialReferenceBody.children[2].href, "https://example.test/df64-guide");
+});
+
+
+test("unmapped dD stays research-only in the primary suggestion output", async () => {
+  const ui = await uiFixture(async () => response({status: "suggestion", evidenceCount: 1, direction: "finer", currentSetting: 500, proposedSetting: 490, settingUnit: "deci-micrometre", dialReference: {model: "DF64", coordinateOnly: true, nativeStatus: "calibration-required", displayUnit: "deci-micrometre"}}));
+  await ui.suggestion.onclick();
+  assert.match(ui.output.textContent, /Current research coordinate: 500 deci-micrometre/);
+  assert.match(ui.output.textContent, /Proposed research coordinate: 490 deci-micrometre/);
+  assert.doesNotMatch(ui.output.textContent, /physical dial/);
+});
+
+test("native micron display uses converted values rather than the raw dD", async () => {
+  const ui = await uiFixture(async () => response({status: "suggestion", evidenceCount: 1, direction: "finer", currentSetting: 500, proposedSetting: 490, settingUnit: "deci-micrometre", dialReference: {model: "E64 WS", coordinateOnly: true, nativeStatus: "available", displayUnit: "deci-micrometre", currentNative: {value: 50, unit: "micrometres"}, proposedNative: {value: 49, unit: "micrometres", achievable: true}}}));
+  await ui.suggestion.onclick();
+  assert.match(ui.output.textContent, /Current physical dial: 50 micrometres/);
+  assert.match(ui.output.textContent, /Proposed physical dial: 49 micrometres/);
+  assert.doesNotMatch(ui.output.textContent, /physical dial: 500/);
 });
