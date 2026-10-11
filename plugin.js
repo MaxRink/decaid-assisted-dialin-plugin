@@ -1687,7 +1687,7 @@ function createDialinUiTools(document) {
     const series = [['machineFlow', 'Machine inlet flow', 'ml/s', '#159bd7'], ['pressure', 'Pressure', 'bar', '#d97706'], ['beverageFlowGPerSec', 'Beverage mass flow', 'g/s', '#15803d']];
     const temp = [['mixTemperatureC', 'Measured mix temperature', '°C', '#db2777'], ['groupTemperatureC', 'Measured group temperature', '°C', '#7c3aed']];
     const maxT = Math.max(1, ...points.map(point => point.tSec));
-    const chartWidth = Math.max(300, Math.min(760, Number(holder.clientWidth) || 760));
+    const chartWidth = Math.max(300, Math.min(760, Number(holder.clientWidth) || (Number(document.documentElement?.clientWidth) || 792) - 32));
     function chart(list, parent) {
       const ns = 'http://www.w3.org/2000/svg', make = (name, attrs, text) => { const node = document.createElementNS(ns, name); Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value))); if (text != null) node.textContent = String(text); return node; };
       const svg = make('svg', {viewBox: '0 0 ' + chartWidth + ' ' + (list.length * 190 + 30), role: 'img', 'aria-label': list.map(item => item[1]).join(', ') + ' over recording time'});

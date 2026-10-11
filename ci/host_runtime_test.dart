@@ -534,7 +534,7 @@ void main() {
     expect(
       (result['evidence'] as List).every(
         (entry) =>
-            entry['timingProvenance'].toString().contains('saved machine'),
+            entry['timingProvenance'] == 'recorded_machine_substates: pump clock',
       ),
       true,
     );

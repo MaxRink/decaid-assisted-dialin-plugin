@@ -266,3 +266,16 @@ test('a failed duplicate lookup does not create an unchecked second bean', async
   await button.click();
   assert.equal(writes.length, 0, 'cannot safely deduplicate when the host bean lookup failed');
 });
+
+test('analysis rendered inside an initially hidden wizard step keeps phone graph labels readable', async () => {
+  const page = await integratedPage();
+  page.document.documentElement = {clientWidth: 375};
+  page.byId.get('traceGraphBody').clientWidth = 0;
+  await page.analyse();
+  const plots = page.byId.get('traceGraphBody').children.filter(child => child.tagName === 'SVG');
+  assert.ok(plots.length > 0);
+  for (const plot of plots) {
+    const width = Number(plot.getAttribute('viewBox').split(' ')[2]);
+    assert.ok(width <= 375 && width >= 300, 'hidden-step charts must use available phone width');
+  }
+});
