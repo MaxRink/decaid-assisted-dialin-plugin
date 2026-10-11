@@ -171,3 +171,48 @@ the synthetic algorithm plots. A useful next experiment is controlled local
 sampling that holds dose, yield, profile and coffee constant, records burr and
 zero calibration, and stores both measured signals and explicit operator taste.
 
+## What the papers can and cannot tell us
+
+The useful physical picture is simple: a dial or display tells us where a
+particular grinder is set; it does not directly tell us the particle-size
+distribution or how a shot will taste. The safe chain is:
+
+`this grinder instance and burr set -> its measured burr coordinate -> its measured PSD -> its observed shot`.
+
+The papers below establish parts of that chain, but none supplies a universal
+curve for the 16 plugin profiles. They also used different grinders, coffees,
+measurement instruments and brew methods, so their numbers must not be copied
+as DF64, DF54, Niche, Ode, Sculptor or 1Zpresso defaults.
+
+* [Uman et al., Scientific Reports 6, 24483 (2016)](https://www.nature.com/articles/srep24483)
+  used a Mahlkönig EK43 with Turkish burrs, laser diffraction, a fixed 2.7
+  dial setting and four coffees. Under those conditions, origin and processing
+  method did not change PSD; colder beans produced a narrower distribution and
+  smaller mean size. This is evidence about temperature and the tested EK43,
+  not evidence that origin changes PSD everywhere.
+* [Cameron et al., Matter 2, 631–648 (2020)](https://doi.org/10.1016/j.matt.2019.12.019)
+  used a Mahlkönig EK43 with coffee burrs and espresso equipment. Its model
+  and measurements separate the coarse/boulder response to burr separation
+  from fines created during fracture, and show extraction can fall at both
+  very coarse and very fine settings. It supports keeping shot response
+  flexible; it supplies no home-grinder dial pitch.
+* [Smrke, Eiermann & Yeretzian, Scientific Reports 14, 5612 (2024)](https://doi.org/10.1038/s41598-024-55831-x)
+  used a Bentwood Vertical 63, whose scale is calibrated in burr-spacing µm,
+  plus an EK43 comparison. Using one Costa Rican coffee, settings 160–250,
+  sieved fines and a 20 g / 40 g espresso on a Victoria Arduino Black Eagle,
+  it found that more fines reduced permeability and lengthened extraction.
+  This is the closest reviewed evidence for a measured burr-distance coordinate
+  and espresso response, but it still does not transfer to another grinder or
+  burr set.
+
+These experiments are why the plugin stores the displayed coordinate, physical
+unit, burr identity, zero method and calibration epoch separately. A DF64 Gen
+1, DF64 Gen 2 or DF54 owner can add an individual grinder profile, enter their
+own zero and measured points, and replace the factory prior with local evidence.
+The plugin must not invent a thread pitch or convert the printed DF64/DF54
+number into micrometres. Even a real burr-spacing value is a mechanical
+coordinate, not a grounds-particle diameter.
+
+The compact, claim-scoped source ledger is shipped at
+[`docs/research/grinder-evidence.json`](research/grinder-evidence.json).
+

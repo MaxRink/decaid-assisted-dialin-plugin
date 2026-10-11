@@ -131,3 +131,17 @@ test("known dial references are available offline and keep physical models separ
   assert.notEqual(df64[0].id, df64[1].id);
   assert.ok(context.catalog.sources.some(source => source.id === "mahlkoenig-e64ws-native-distance"));
 });
+
+test("grinder image rights default to withheld and require an explicit reusable licence", () => {
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, "data/grinder-dials.json"), "utf8"));
+  assert.equal(catalog.models.length, 16);
+  for (const model of catalog.models) {
+    assert.equal(model.image.renderAllowed, false);
+    assert.equal(model.image.license, "unknown");
+    assert.equal(model.image.licenseUrl, null);
+  }
+  const allowed = { renderAllowed: true, license: "CC BY", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" };
+  assert.equal(allowed.renderAllowed && /^https:/.test(allowed.licenseUrl) && ["CC BY", "CC BY-SA", "CC0", "Public Domain"].includes(allowed.license), true);
+  const unknown = { renderAllowed: true, license: "unknown", licenseUrl: null };
+  assert.equal(unknown.renderAllowed && /^https:/.test(String(unknown.licenseUrl)) && ["CC BY", "CC BY-SA", "CC0", "Public Domain"].includes(unknown.license), false);
+});

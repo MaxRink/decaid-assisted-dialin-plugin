@@ -18,6 +18,11 @@
       "label": "Grinder identity",
       "description": "Stable identity of the current grinder, used only if the current workflow omits it; historical shots are never backfilled."
     },
+    "GrinderProfileId": {
+      "type": "string",
+      "label": "Individual grinder profile ID",
+      "description": "Optional stable owner-created local profile ID. It scopes owner calibration to one physical grinder; it is separate from the host's device grinderId."
+    },
     "GrinderModel": {
       "type": "string",
       "label": "Grinder model",
@@ -155,6 +160,11 @@
     },
     {
       "id": "settings",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "grinders",
       "type": "http",
       "data": {}
     },

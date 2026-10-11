@@ -17,6 +17,7 @@ START = "/* GENERATED REFERENCE CATALOG START */"
 END = "/* GENERATED REFERENCE CATALOG END */"
 ALLOWED_SOURCE_KEYS = {"id", "title", "url", "publisher", "kind", "scope", "facts", "notes", "reuse"}
 KINDS = {"manufacturer", "roaster", "research"}
+IMAGE_LICENSES = {"cc0", "public domain", "cc by", "cc by-sa", "cc by 4.0", "cc by-sa 4.0"}
 
 
 def fail(message: str) -> None:
@@ -154,6 +155,23 @@ def main():
         links = model.get("sources", [])
         image = model.get("image")
         if image:
+            if not isinstance(image, dict):
+                fail("grinderDials image must be an object")
+            if image.get("renderAllowed") is not True:
+                if image.get("renderAllowed") not in (False, None):
+                    fail("grinderDials image renderAllowed must be boolean")
+            license_name = image.get("license")
+            license_url = image.get("licenseUrl")
+            if image.get("renderAllowed") is True:
+                if license_name not in IMAGE_LICENSES or not isinstance(license_url, str):
+                    fail("renderable grinderDials image needs a recognized reusable license")
+                license_parsed = urlparse(license_url)
+                if license_parsed.scheme != "https" or not license_parsed.netloc or license_parsed.username or license_parsed.password:
+                    fail("renderable grinderDials image licenseUrl must be HTTPS without credentials")
+            elif license_url is not None:
+                license_parsed = urlparse(str(license_url))
+                if license_parsed.scheme != "https" or not license_parsed.netloc or license_parsed.username or license_parsed.password:
+                    fail("grinderDials licenseUrl must be HTTPS without credentials")
             links = links + [{"url": image.get("url")}, {"url": image.get("sourceUrl")}]
         for link in links:
             parsed = urlparse(link.get("url", ""))

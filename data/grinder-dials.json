@@ -25,7 +25,13 @@
         "sourceUrl": "https://www.mahlkoenig.com/products/e64-ws-espresso-home-grinder",
         "caption": "E64 WS front product view; electronic adjustment/display is part of the unit",
         "owner": "Mahlkönig",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Mahlkönig; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -52,7 +58,13 @@
         "sourceUrl": "https://www.mahlkoenig.com/products/e65s-gbw",
         "caption": "E65S GbW product view",
         "owner": "Mahlkönig",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Mahlkönig; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -79,7 +91,13 @@
         "sourceUrl": "https://www.mahlkoenig.com/products/e80s-gbw-grinder",
         "caption": "E80S GbW product view",
         "owner": "Mahlkönig",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Mahlkönig; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -106,7 +124,13 @@
         "sourceUrl": "https://df64coffee.com/products/df64-single-dose-coffee-grinder",
         "caption": "DF64 original-generation product photograph with numbered adjustment collar visible; not a calibration measurement",
         "owner": "DF64 Coffee",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by DF64 Coffee; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -129,11 +153,17 @@
       ],
       "schematicUrl": "../docs/grinder-dials/df64gen2.svg",
       "image": {
-        "url": "https://dfgrinders.com/cdn/shop/files/dial1_30fc9883-d06c-40d7-a2a2-2bf1d8cfe2d3.png?v=1759799433&width=416",
-        "sourceUrl": "https://dfgrinders.com/products/df64-metal-dial-indicator",
-        "caption": "DF64 Gen 2 premium dial indicator close-up (optional Gen 2 accessory; not a factory-scale specification)",
+        "url": "https://df64coffee.com/cdn/shop/files/64_GEN_2.png?v=1750929704&width=1946",
+        "sourceUrl": "https://df64coffee.com/products/df64-gen-2-single-dose-coffee-grinder",
+        "caption": "DF64 Gen 2 whole-grinder product photograph; the collar marking is a visual reference, not a calibration measurement",
         "owner": "DF Grinders",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by DF Grinders; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -151,16 +181,22 @@
       "sources": [
         {
           "title": "DF54 manufacturer or manual reference",
-          "url": "https://dfgrinders.com/products/df54-metal-dial-indicator"
+          "url": "https://df64coffee.com/products/df54"
         }
       ],
       "schematicUrl": "../docs/grinder-dials/df54.svg",
       "image": {
-        "url": "https://dfgrinders.com/cdn/shop/files/dial1.png?v=1759799419&width=416",
-        "sourceUrl": "https://dfgrinders.com/products/df54-metal-dial-indicator",
-        "caption": "DF Grinders premium dial indicator ring; dial close-up (optional DF54 accessory; not a factory-scale specification)",
+        "url": "https://df64coffee.com/cdn/shop/files/DF54.jpg?v=1738563824&width=1946",
+        "sourceUrl": "https://df64coffee.com/products/df54",
+        "caption": "DF54 whole-grinder product photograph; the collar marking is a visual reference, not a calibration measurement",
         "owner": "DF Grinders",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by DF Grinders; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -187,7 +223,13 @@
         "sourceUrl": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-dial-in-your-niche-zero",
         "caption": "Niche Zero with dial visible in the manufacturer's dial-in guide",
         "owner": "Niche Coffee",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Niche Coffee; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -214,7 +256,13 @@
         "sourceUrl": "https://www.baratza.com/en-us/product/encoretm-esp-zcg495",
         "caption": "Encore ESP product/carousel view; official page describes the numbered adjustment collar",
         "owner": "Baratza / Breville",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Baratza/Breville; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -241,7 +289,13 @@
         "sourceUrl": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
         "caption": "Sculptor 064S product view; official product page variant image",
         "owner": "Timemore",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Timemore; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -268,7 +322,13 @@
         "sourceUrl": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
         "caption": "Sculptor 078S product view; official product page variant image",
         "owner": "Timemore",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Timemore; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -295,7 +355,13 @@
         "sourceUrl": "https://www.option-o.com/lagom-01",
         "caption": "LAGOM 01 official product image",
         "owner": "Option-O",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Option-O; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -322,7 +388,13 @@
         "sourceUrl": "https://www.option-o.com/lagom-p64",
         "caption": "LAGOM P64 official product image",
         "owner": "Option-O",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Option-O; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     },
@@ -349,7 +421,13 @@
         "sourceUrl": "https://1zpresso.coffee/manual-xpro-en/",
         "caption": "X-Pro official adjustment instruction image",
         "owner": "1Zpresso",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by 1Zpresso; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11",
+        "renderAllowed": false
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -376,7 +454,13 @@
         "sourceUrl": "https://1zpresso.coffee/j/",
         "caption": "J-Max product image with external adjustment ring",
         "owner": "1Zpresso",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by 1Zpresso; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -404,7 +488,13 @@
         "sourceUrl": "https://1zpresso.coffee/k/",
         "caption": "K-series external adjustment ring product image",
         "owner": "1Zpresso",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by 1Zpresso; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
     },
@@ -432,7 +522,13 @@
         "sourceUrl": "https://fellowproducts.com/collections/grind-brew/products/ode-brew-grinder-gen-2?variant=40978992463972",
         "caption": "Ode Gen 2 official product image with large grind dial",
         "owner": "Fellow",
-        "reuse": "Externally hosted copyright image; no redistribution licence verified."
+        "reuse": "Externally hosted copyright image; no redistribution licence verified.",
+        "renderAllowed": false,
+        "license": "unknown",
+        "licenseUrl": null,
+        "attribution": "Copyright held by Fellow; permission to redistribute was not verified.",
+        "source": "official-product-page",
+        "verifiedAt": "2026-10-11"
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
     }

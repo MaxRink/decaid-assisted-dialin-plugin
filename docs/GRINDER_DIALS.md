@@ -59,7 +59,7 @@ Changing units does not make the recovered Mahlkönig formulas validated algorit
 
 ### Illustrated controls
 
-These original schematic images work offline. The simulator also shows attributed manufacturer photographs where a matching image is available. The drawings deliberately avoid pretending an unverified scale is the exact factory marking pattern.
+These original schematic images work offline. The simulator shows these original illustrations. Manufacturer photos remain source links until a reusable licence is verified. The drawings deliberately avoid pretending an unverified scale is the exact factory marking pattern.
 
 **E64 WS**
 
@@ -128,14 +128,14 @@ These original schematic images work offline. The simulator also shows attribute
 
 ### Manufacturer pictures
 
-Images stay on their publishers’ servers. These are product/adjustment references; a whole-grinder photo is not an exact close-up calibration scale. Availability requires a network connection.
+The photos below are external source links. No reusable licence was verified for these 16 model references, so the application does not embed or redistribute them. A whole-grinder photo is not a calibration measurement. See the [image rights audit](GRINDER_PHOTOS.md) for the decision for each model.
 
 - **E64 WS**: [View image](https://www.mahlkoenig.us/cdn/shop/files/E64-WS-Black-square_700x700.webp?v=1763414639) · [Source: Mahlkönig](https://www.mahlkoenig.com/products/e64-ws-espresso-home-grinder). E64 WS front product view; electronic adjustment/display is part of the unit.
 - **E65S GbW**: [View image](https://www.mahlkoenig.us/cdn/shop/files/E65S_GbW_-_Black_560x700.webp?v=1761340232) · [Source: Mahlkönig](https://www.mahlkoenig.com/products/e65s-gbw). E65S GbW product view.
 - **E80S GbW**: [View image](https://www.mahlkoenig.us/cdn/shop/files/E80S_GbW_-_Black_560x700.webp?v=1761340079) · [Source: Mahlkönig](https://www.mahlkoenig.com/products/e80s-gbw-grinder). E80S GbW product view.
 - **DF64 Gen 1**: [View image](https://df64coffee.com/cdn/shop/products/IMG_8737.png?v=1626712036&width=1445) · [Source: DF64 Coffee](https://df64coffee.com/products/df64-single-dose-coffee-grinder). DF64 original-generation product photograph with numbered adjustment collar visible; not a calibration measurement.
-- **DF64 Gen 2**: [View image](https://dfgrinders.com/cdn/shop/files/dial1_30fc9883-d06c-40d7-a2a2-2bf1d8cfe2d3.png?v=1759799433&width=416) · [Source: DF Grinders](https://dfgrinders.com/products/df64-metal-dial-indicator). DF64 Gen 2 premium dial indicator close-up (optional Gen 2 accessory; not a factory-scale specification).
-- **DF54**: [View image](https://dfgrinders.com/cdn/shop/files/dial1.png?v=1759799419&width=416) · [Source: DF Grinders](https://dfgrinders.com/products/df54-metal-dial-indicator). DF Grinders premium dial indicator ring; dial close-up (optional DF54 accessory; not a factory-scale specification).
+- **DF64 Gen 2**: [View whole-grinder image](https://df64coffee.com/cdn/shop/files/64_GEN_2.png?v=1750929704&width=1946) · [Source: DF64 Coffee](https://df64coffee.com/products/df64-gen-2-single-dose-coffee-grinder). Official product photograph; image rights are not granted, so the simulator uses the repository schematic by default.
+- **DF54**: [View whole-grinder image](https://df64coffee.com/cdn/shop/files/DF54.jpg?v=1738563824&width=1946) · [Source: DF64 Coffee](https://df64coffee.com/products/df54). Official product photograph; image rights are not granted, so the simulator uses the repository schematic by default.
 - **Niche Zero**: [View image](https://cdn.shopify.com/s/files/1/0081/2076/2450/files/White_Niche_Zero_and_coffee_machine.jpg?v=1760088418) · [Source: Niche Coffee](https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-dial-in-your-niche-zero). Niche Zero with dial visible in the manufacturer's dial-in guide.
 - **Baratza Encore ESP**: [View image](https://assets.breville.com/cdn-cgi/image/width%3D333%2Cformat%3Dauto%2Cquality%3D75/ZCG495/ZCG495_Carousel1.png) · [Source: Baratza / Breville](https://www.baratza.com/en-us/product/encoretm-esp-zcg495). Encore ESP product/carousel view; official page describes the numbered adjustment collar.
 - **Timemore Sculptor 064S**: [View image](https://www.timemore.com/cdn/shop/files/064S.jpg?v=1713171847) · [Source: Timemore](https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series). Sculptor 064S product view; official product page variant image.
@@ -162,3 +162,14 @@ The model, burr identity and epoch must match current context. The assistant wit
 For X-Pro and J-Max, store the **total clicks from the calibrated zero**, not just the repeating number printed on the ring. For example, X-Pro two full rotations plus 14 clicks is 134 clicks (60 per rotation); J-Max the same two turns plus 14 clicks is 194 clicks (90 per rotation). The shipped helper checks these counts and the lab displays the full turns alongside total clicks. A result between physical steps is labeled as such; it is not silently rounded to a motor command or an achievable recommendation.
 
 Published pitch is reference metadata, not an automatically chosen calibration: X-Pro 12.5 µm/click, J-Max 8.8 µm/click and the reviewed K-Pro/K-Max/K-Plus 22 µm/click describe mechanical movement. LAGOM 01's 7.5 µm/micro-tick applies to its documented configuration. Absolute mapping still needs your zero/reference and calibration epoch; these values do not define ground-particle diameter or make recovered GBS formulas portable to a different grinder.
+
+
+## Your individual grinders
+
+Two grinders of the same model can have different burrs, zero points and alignment. Give each physical unit its own profile: for example, “Kitchen DF64 Gen 1” and “DF54”. Model names describe the design; instance IDs identify your particular machine.
+
+In the simulator, add a grinder in the profile manager and select it before entering calibration anchors or running shots. Profiles are saved in this browser. Scenario exports include the selected profile; importing a conflicting profile ID is rejected. The simulator does not create a Decaid device or operate a grinder.
+
+In the plugin, load Decaid’s grinder catalog and bind the calibration profile to an existing host grinder record. Creating a grinder uses Decaid’s existing grinder API and its returned ID. Owner calibration remains plugin metadata. Selecting a calibration profile does not change the grinder associated with an existing shot or workflow: the actual workflow ID must match before its calibration applies.
+
+A conversion requires the same individual grinder, model, burr identity and calibration epoch. Recalibrate after changing burrs or redefining zero. Old calibrations without an individual identity need to be re-entered for the correct unit. Mechanical gap, particle size and brew response remain different quantities; the research coordinate is not a measured gap just because a graph displays it.

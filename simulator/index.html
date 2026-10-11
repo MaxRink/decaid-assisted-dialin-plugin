@@ -23,7 +23,8 @@
         <div class="card-head"><div><p class="eyebrow">1 · Your setup</p><h2>Make a coffee</h2></div><button id="theme" class="quiet" type="button">Light mode</button></div>
         <div class="fields">
           <label>Algorithm<select id="algorithm"><option value="GbS1">GbS1 · smooth memory</option><option value="GbS2">GbS2 · regression</option><option value="GbS3">GbS3 · cautious phases</option><option value="GbS4">GbS4 · near-lock</option><option value="DdEff">DdEff · measurement sweep</option></select></label>
-          <label>Grinder<select id="grinder"><option>DF64 Gen 2</option><option>DF54</option><option>E64 WS</option><option>Other known grinder</option></select></label>
+          <label>Grinder model<select id="grinder"><option>DF64 Gen 2</option><option>DF54</option><option>E64 WS</option><option>Other known grinder</option></select></label>
+          <label>Individual grinder<select id="grinder-instance" aria-describedby="grinder-instance-help"></select></label>
           <label>Burrs / calibration<input id="burrs" value="stock burrs · zero 0 · epoch 1"></label>
           <label>Bean / lot<input id="bean" value="Washed Ethiopia"></label>
           <label>Roaster (optional)<input id="roaster" value="" placeholder="For matching published recipes"></label>
@@ -38,6 +39,8 @@
         </div>
         <p class="hint">Bean and burr details identify the experiment. The shipped GBS formulas use timing and grinder coordinates; this lab keeps those context fields visible so you can see what is and is not used.</p>
         <div id="dial-panel" class="dial-panel" aria-live="polite"></div>
+        <div id="grinder-profiles" class="profile-manager" aria-live="polite"></div>
+        <p id="grinder-instance-help" class="hint">Known models are starting templates. Save your own grinder as a separate unit because two grinders with the same model can behave differently.</p>
       </article>
       <article class="card plant-card">
         <div class="card-head"><div><p class="eyebrow">2 · Brew model</p><h2>Choose what the coffee does</h2></div><span class="tag">fictional plant</span></div>

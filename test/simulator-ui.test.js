@@ -41,10 +41,10 @@ class Element {
   focus() {}
 }
 
-function uiFixture(catalog = { schemaVersion: 1, sources: [] }) {
+function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null) {
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
-    "notice", "theme", "algorithm", "grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog",
+    "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
@@ -114,6 +114,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }) {
     clearTimeout,
     queueMicrotask,
     fetch: async (url) => ({ ok: true, json: async () => String(url).includes("grinder-dials") ? dialData : catalog }),
+    localStorage: persistentStorage || { data: new Map(), getItem(key) { return this.data.has(key) ? this.data.get(key) : null; }, setItem(key, value) { this.data.set(key, String(value)); }, removeItem(key) { this.data.delete(key); } },
     Blob: BlobFixture,
     FileReader: FileReaderFixture,
   };
@@ -155,6 +156,51 @@ function panelInput(ui, label) {
   const walk = (node) => { if (node && node.attributes?.["aria-label"] === label) return node; for (const child of node?.children || []) { const found = walk(child); if (found) return found; } return null; };
   return walk(ui.elements.get("dial-panel"));
 }
+
+function managerButton(ui, label) {
+  const walk = (node) => { if (node && node.tagName === "BUTTON" && node.textContent === label) return node; for (const child of node?.children || []) { const found = walk(child); if (found) return found; } return null; };
+  return walk(ui.elements.get("grinder-profiles"));
+}
+
+test("simulator keeps same-model grinder units independent and restores them from local storage", async () => {
+  const first = uiFixture();
+  await new Promise(setImmediate);
+  first.elements.get("grinder").value = "DF64 Gen 1";
+  first.elements.get("grinder").dispatch("change");
+  managerButton(first, "Add individual grinder").click();
+  const firstId = first.elements.get("grinder-instance").value;
+  first.elements.get("burrs").value = "SSP HU · unit A";
+  first.elements.get("burrs").dispatch("change");
+  managerButton(first, "Save current calibration").click();
+  managerButton(first, "Add individual grinder").click();
+  const secondId = first.elements.get("grinder-instance").value;
+  assert.notEqual(firstId, secondId);
+  first.elements.get("burrs").value = "stock · unit B";
+  first.elements.get("burrs").dispatch("change");
+  managerButton(first, "Save current calibration").click();
+  assert.equal(first.elements.get("grinder-instance").children.length, 5);
+  first.elements.get("grinder-instance").value = firstId;
+  first.elements.get("grinder-instance").dispatch("change");
+  assert.equal(first.elements.get("burrs").value, "SSP HU · unit A");
+  const restored = uiFixture({ schemaVersion: 1, sources: [] }, first.context.localStorage);
+  await new Promise(setImmediate);
+  restored.elements.get("grinder-instance").value = secondId;
+  restored.elements.get("grinder-instance").dispatch("change");
+  assert.equal(restored.elements.get("burrs").value, "stock · unit B");
+  assert.match(restored.elements.get("grinder-profiles").textContent, new RegExp(secondId));
+});
+
+test("simulator rejects a conflicting imported grinder ID without losing the active history", () => {
+  const ui = uiFixture();
+  ui.elements.get("next").click();
+  ui.elements.get("export").click();
+  const saved = JSON.parse(ui.downloads[0].parts.join(""));
+  saved.setup.grinderInstances[0].model = "DF54";
+  const text = JSON.stringify(saved);
+  ui.elements.get("import").dispatch("change", { target: { files: [{ size: text.length, text }] } });
+  assert.match(ui.elements.get("notice").textContent, /conflicts/i);
+  assert.equal(ui.elements.get("shots").children.length, 1);
+});
 
 test("simulator uses shipped E64 micrometre normalization and exposes all dial profiles", async () => {
   const ui = uiFixture();

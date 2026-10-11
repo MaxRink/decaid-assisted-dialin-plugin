@@ -14,8 +14,10 @@ class Element {
     this.innerHTML = "";
     this._textContent = "";
     this.children = [];
+    this.dataset = {};
     this.focused = false;
     this.hidden = true;
+    this.dataset = {};
   }
   set textContent(value) {
     this._textContent = String(value);
@@ -25,6 +27,9 @@ class Element {
   }
   addEventListener(name, callback) {
     this.listeners[name] = callback;
+  }
+  click() {
+    return this.listeners.click ? this.listeners.click({ target: this }) : undefined;
   }
   appendChild(child) {
     this.children.push(child);
@@ -95,6 +100,18 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   const referenceList = new Element("referenceList");
   const dialReference = new Element("dialReference");
   const dialReferenceBody = new Element("dialReferenceBody");
+  const grinderManager = new Element("grinderManager");
+  const loadGrinders = new Element("loadGrinders");
+  const grinderProfileSelect = new Element("grinderProfileSelect");
+  const grinderModel = new Element("grinderModel");
+  const grinderLabel = new Element("grinderLabel");
+  const grinderBurrs = new Element("grinderBurrs");
+  const grinderEpoch = new Element("grinderEpoch");
+  const grinderPitchSource = new Element("grinderPitchSource");
+  const grinderAnchors = new Element("grinderAnchors");
+  const saveGrinder = new Element("saveGrinder");
+  const selectGrinder = new Element("selectGrinder");
+  const grinderManagerStatus = new Element("grinderManagerStatus");
   analysis.fields = { shotId: "shot-1" };
   form.fields = { shotId: "shot-1", notes: "<img src=x onerror=alert(1)>" };
   form.fields = {
@@ -112,7 +129,7 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
     yield: "36",
   };
   research.fields = {
-    state: html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)[1],
+    state: html.match(/<textarea[^>]*name="state"[^>]*>([\s\S]*?)<\/textarea>/)[1],
   };
   context.document = {
     querySelector(selector) {
@@ -132,6 +149,18 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
         "#referenceList": referenceList,
         "#dialReference": dialReference,
         "#dialReferenceBody": dialReferenceBody,
+        "#grinderManager": grinderManager,
+        "#loadGrinders": loadGrinders,
+        "#grinderProfileSelect": grinderProfileSelect,
+        "#grinderModel": grinderModel,
+        "#grinderLabel": grinderLabel,
+        "#grinderBurrs": grinderBurrs,
+        "#grinderEpoch": grinderEpoch,
+        "#grinderPitchSource": grinderPitchSource,
+        "#grinderAnchors": grinderAnchors,
+        "#saveGrinder": saveGrinder,
+        "#selectGrinder": selectGrinder,
+        "#grinderManagerStatus": grinderManagerStatus,
       }[selector];
     },
     createElement() {
@@ -156,6 +185,18 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
     referenceList,
     dialReference,
     dialReferenceBody,
+    grinderManager,
+    loadGrinders,
+    grinderProfileSelect,
+    grinderModel,
+    grinderLabel,
+    grinderBurrs,
+    grinderEpoch,
+    grinderPitchSource,
+    grinderAnchors,
+    saveGrinder,
+    selectGrinder,
+    grinderManagerStatus,
     context,
   };
 }
@@ -168,6 +209,66 @@ test("recommendation success renders JSON as text", async () => {
   assert.match(ui.output.textContent, /recommendation/);
   assert.match(ui.output.textContent, /2\.2/);
   assert.equal(ui.output.innerHTML, "");
+});
+
+test("native grinder manager uses host IDs, saves anchors, selects and reads back the setting", async () => {
+  const hostGrinders = [{ id: "host-df64-gen1", model: "DF64 Gen 1", burrs: "Stock" }];
+  let selected = "";
+  const ui = await uiFixture(async (url, init = {}) => {
+    if (String(url).includes("/api/v1/grinders?")) return response(hostGrinders);
+    if (String(url).includes("/api/v1/grinders/") && init.method === "PUT") return response({ ...hostGrinders[0], ...JSON.parse(init.body) });
+    if (url === "grinders" && (!init.method || init.method === "GET")) return response({ schemaVersion: 1, profiles: [] });
+    if (url === "grinders" && init.method === "POST") return response({ saved: true });
+    if (url === "settings" && init.method === "POST") { assert.deepEqual(JSON.parse(init.body), { GrinderProfileId: "host-df64-gen1" }); selected = JSON.parse(init.body).GrinderProfileId; return response({ GrinderProfileId: selected }); }
+    if (url === "settings") return response({ GrinderProfileId: selected });
+    return response({ items: [], total: 0 });
+  });
+  await ui.loadGrinders.click();
+  await new Promise(setImmediate);
+  assert.equal(ui.grinderProfileSelect.children.length, 1);
+  ui.grinderLabel.value = "Kitchen DF64";
+  ui.grinderBurrs.value = "SSP HU";
+  ui.grinderEpoch.value = "zero-1";
+  ui.grinderAnchors.value = JSON.stringify({ dialMin: 0, dialMax: 90, dialA: 10, ddDumA: 300, dialB: 90, ddDumB: 1200 });
+  await ui.saveGrinder.click();
+  assert.match(ui.grinderManagerStatus.textContent, /Saved host grinder/);
+  await ui.selectGrinder.click();
+  assert.equal(selected, "host-df64-gen1");
+  assert.match(ui.grinderManagerStatus.textContent, /Using DF64 Gen 1/);
+});
+
+test("native grinder manager surfaces host readback failure and rejects malformed anchors", async () => {
+  const ui = await uiFixture(async (url, init = {}) => {
+    if (String(url).includes("/api/v1/grinders?")) return response([{ id: "host-df54", model: "DF54", burrs: "Stock" }]);
+    if (url === "grinders") return response({ schemaVersion: 1, profiles: [] });
+    if (url === "settings" && init.method === "POST") return response({ GrinderProfileId: "other-id" });
+    if (url === "settings") return response({ GrinderProfileId: "" });
+    return response({ items: [], total: 0 });
+  });
+  await ui.loadGrinders.click();
+  ui.grinderAnchors.value = "not-json";
+  await ui.saveGrinder.click();
+  assert.match(ui.grinderManagerStatus.textContent, /valid JSON/);
+  ui.grinderAnchors.value = "";
+  await ui.selectGrinder.click();
+  assert.match(ui.grinderManagerStatus.textContent, /did not confirm|unavailable/i);
+});
+
+test("native grinder manager surfaces wrong-unit owner anchors from the profile API", async () => {
+  const ui = await uiFixture(async (url, init = {}) => {
+    if (String(url).includes("/api/v1/grinders?")) return response([{ id: "host-e64", model: "E64 WS", burrs: "Stock" }]);
+    if (url === "grinders" && init.method === "POST") return response({ error: "calibration unit does not match grinder" }, { ok: false, status: 400 });
+    if (url === "grinders") return response({ schemaVersion: 1, profiles: [] });
+    if (String(url).includes("/api/v1/grinders/") && init.method === "PUT") return response({ id: "host-e64", model: "E64 WS" });
+    return response({ items: [], total: 0 });
+  });
+  await ui.loadGrinders.click();
+  ui.grinderLabel.value = "E64 owner";
+  ui.grinderBurrs.value = "Stock";
+  ui.grinderEpoch.value = "zero-1";
+  ui.grinderAnchors.value = JSON.stringify({ dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 300, dialB: 90, ddDumB: 1200 });
+  await ui.saveGrinder.click();
+  assert.match(ui.grinderManagerStatus.textContent, /calibration unit does not match grinder/i);
 });
 
 test("recommendation network failure surfaces a retryable safe message", async () => {
@@ -568,7 +669,10 @@ test("suggestion renders the physical grinder dial scale and safe photo source",
         nativeStatus: "available",
         currentNative: { value: 10, unit: "marks" },
         proposedNative: { value: 11, unit: "marks" },
-        photoUrl: "https://example.test/df64-dial.jpg",
+      photoUrl: "https://example.test/df64-dial.jpg",
+      photoRenderAllowed: true,
+      photoLicense: "CC BY",
+      photoLicenseUrl: "https://creativecommons.org/licenses/by/4.0/",
         sourceUrl: "https://example.test/df64-guide",
       },
     }),
@@ -580,7 +684,8 @@ test("suggestion renders the physical grinder dial scale and safe photo source",
   assert.match(ui.dialReferenceBody.children[0].textContent, /Reference markings: 0 marks to 90 marks/);
   assert.match(ui.dialReferenceBody.children[0].textContent, /burrs touching/);
   assert.equal(ui.dialReferenceBody.children[1].src, "https://example.test/df64-dial.jpg");
-  assert.equal(ui.dialReferenceBody.children[2].href, "https://example.test/df64-guide");
+  assert.equal(ui.dialReferenceBody.children[2].href, "https://creativecommons.org/licenses/by/4.0/");
+  assert.equal(ui.dialReferenceBody.children[3].href, "https://example.test/df64-guide");
 });
 
 

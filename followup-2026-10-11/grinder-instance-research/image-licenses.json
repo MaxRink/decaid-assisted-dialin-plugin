@@ -1,0 +1,169 @@
+{
+  "reviewedAt": "2026-10-11",
+  "scope": "Exact-model grinder photographs for the 16 profiles in data/grinder-dials.json",
+  "decision": "No exact-model image had a verified redistribution licence; retain external links and use repository schematics by default.",
+  "downloadedAssets": [],
+  "licensedExactMatches": [],
+  "models": [
+    {
+      "id": "e64ws",
+      "model": "E64 WS",
+      "sourceUrl": "https://www.mahlkoenig.com/products/e64-ws-espresso-home-grinder",
+      "imageUrl": "https://www.mahlkoenig.us/cdn/shop/files/E64-WS-Black-square_700x700.webp?v=1763414639",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Mahlkönig; redistribution permission not verified."
+    },
+    {
+      "id": "e65sgbw",
+      "model": "E65S GbW",
+      "sourceUrl": "https://www.mahlkoenig.com/products/e65s-gbw",
+      "imageUrl": "https://www.mahlkoenig.us/cdn/shop/files/E65S_GbW_-_Black_560x700.webp?v=1761340232",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Mahlkönig; redistribution permission not verified."
+    },
+    {
+      "id": "e80sgbw",
+      "model": "E80S GbW",
+      "sourceUrl": "https://www.mahlkoenig.com/products/e80s-gbw-grinder",
+      "imageUrl": "https://www.mahlkoenig.us/cdn/shop/files/E80S_GbW_-_Black_560x700.webp?v=1761340079",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Mahlkönig; redistribution permission not verified."
+    },
+    {
+      "id": "df64gen1",
+      "model": "DF64 Gen 1",
+      "sourceUrl": "https://df64coffee.com/products/df64-single-dose-coffee-grinder",
+      "imageUrl": "https://df64coffee.com/cdn/shop/products/IMG_8737.png?v=1626712036&width=1445",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "DF64 Coffee; redistribution permission not verified."
+    },
+    {
+      "id": "df64gen2",
+      "model": "DF64 Gen 2",
+      "sourceUrl": "https://df64coffee.com/products/df64-gen-2-single-dose-coffee-grinder",
+      "imageUrl": "https://df64coffee.com/cdn/shop/files/64_GEN_2.png?v=1750929704&width=1946",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "DF Grinders; redistribution permission not verified."
+    },
+    {
+      "id": "df54",
+      "model": "DF54",
+      "sourceUrl": "https://df64coffee.com/products/df54",
+      "imageUrl": "https://df64coffee.com/cdn/shop/files/DF54.jpg?v=1738563824&width=1946",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "DF Grinders; redistribution permission not verified."
+    },
+    {
+      "id": "nichezero",
+      "model": "Niche Zero",
+      "sourceUrl": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-dial-in-your-niche-zero",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0081/2076/2450/files/White_Niche_Zero_and_coffee_machine.jpg?v=1760088418",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Niche Coffee; redistribution permission not verified."
+    },
+    {
+      "id": "encoreesp",
+      "model": "Baratza Encore ESP",
+      "sourceUrl": "https://www.baratza.com/en-us/product/encoretm-esp-zcg495",
+      "imageUrl": "https://assets.breville.com/cdn-cgi/image/width%3D333%2Cformat%3Dauto%2Cquality%3D75/ZCG495/ZCG495_Carousel1.png",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Baratza / Breville; redistribution permission not verified."
+    },
+    {
+      "id": "sculptor064s",
+      "model": "Timemore Sculptor 064S",
+      "sourceUrl": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
+      "imageUrl": "https://www.timemore.com/cdn/shop/files/064S.jpg?v=1713171847",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Timemore; redistribution permission not verified."
+    },
+    {
+      "id": "sculptor078s",
+      "model": "Timemore Sculptor 078S",
+      "sourceUrl": "https://www.timemore.com/products/timemore-electric-coffee-grinder-sculptor-series",
+      "imageUrl": "https://www.timemore.com/cdn/shop/files/078S.jpg?v=1713171847",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Timemore; redistribution permission not verified."
+    },
+    {
+      "id": "lagom01",
+      "model": "LAGOM 01",
+      "sourceUrl": "https://www.option-o.com/lagom-01",
+      "imageUrl": "https://images.squarespace-cdn.com/content/v1/5b125642ec4eb782ce4f9947/1693535581758-AKATHPG9RWQ6M071BF8O/lagom%2B01.jpg",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Option-O; redistribution permission not verified."
+    },
+    {
+      "id": "lagomp64",
+      "model": "LAGOM P64",
+      "sourceUrl": "https://www.option-o.com/lagom-p64",
+      "imageUrl": "https://images.squarespace-cdn.com/content/v1/5b125642ec4eb782ce4f9947/8e408f57-ffa3-4196-bd61-4d2aab5671cf/LAGOM%2BP64.jpg",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Option-O; redistribution permission not verified."
+    },
+    {
+      "id": "xpro",
+      "model": "1Zpresso X-Pro",
+      "sourceUrl": "https://1zpresso.coffee/manual-xpro-en/",
+      "imageUrl": "https://i0.wp.com/1zpresso.coffee/wp-content/uploads/2022/08/3-1.jpg?fit=731%2C386&ssl=1",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "1Zpresso; redistribution permission not verified."
+    },
+    {
+      "id": "jmax",
+      "model": "1Zpresso J-Max",
+      "sourceUrl": "https://1zpresso.coffee/j/",
+      "imageUrl": "https://i0.wp.com/1zpresso.coffee/wp-content/uploads/2021/07/J-Max-grinder-w-closeup.jpg?fit=1333%2C1000&ssl=1",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "1Zpresso; redistribution permission not verified."
+    },
+    {
+      "id": "kseries",
+      "model": "1Zpresso K series",
+      "sourceUrl": "https://1zpresso.coffee/k/",
+      "imageUrl": "https://i0.wp.com/1zpresso.coffee/wp-content/uploads/2021/06/KPRO-new.png?fit=1000%2C800&ssl=1",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "1Zpresso; redistribution permission not verified."
+    },
+    {
+      "id": "odegen2",
+      "model": "Fellow Ode Gen 2",
+      "sourceUrl": "https://fellowproducts.com/collections/grind-brew/products/ode-brew-grinder-gen-2?variant=40978992463972",
+      "imageUrl": "https://fellowproducts.com/cdn/shop/files/Web_PDP_OdeBrewGrinderGen2_Black_1_b979089a-570a-4024-99e7-dc5fcac0c69c.png?v=1780523585&width=1200",
+      "renderAllowed": false,
+      "license": "unknown",
+      "licenseUrl": null,
+      "attribution": "Fellow; redistribution permission not verified."
+    }
+  ]
+}

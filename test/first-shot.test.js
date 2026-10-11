@@ -123,7 +123,7 @@ test('E64 WS converts researched dD to its native micrometre display', async () 
 });
 
 test('DF64 owner calibration exposes native marks and withholds stale epochs', async () => {
-  const calibration = JSON.stringify({model: 'DF64', burrIdentity: 'stock', calibrationEpoch: 'cal-1', dialA: 10, ddDumA: 100, dialB: 30, ddDumB: 300, dialMin: 0, dialMax: 90});
+  const calibration = JSON.stringify({model: 'DF64', grinderId: 'g-1', burrIdentity: 'stock', calibrationEpoch: 'cal-1', dialA: 10, ddDumA: 100, dialB: 30, ddDumB: 300, dialMin: 0, dialMax: 90});
   const fresh = shot('fresh-df64-cal', context({grinderSetting: '200', grinderSettingUnit: 'deci-micrometre', beanType: 'washed', roastLevel: 'light'}), 20);
   const current = {context: context({grinderSetting: '200', grinderSettingUnit: 'deci-micrometre', beanType: 'washed', roastLevel: 'light'}), profile};
   const plugin = await load({current, entries: [fresh], settings: {DialCalibration: calibration}});
