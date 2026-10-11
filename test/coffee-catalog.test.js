@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const child = require('node:child_process');
+const os = require('node:os');
 
 const root = path.join(__dirname, '..');
 test('coffee catalog is deterministic and provenance scoped', () => {
@@ -32,11 +33,13 @@ test('coffee catalog is deterministic and provenance scoped', () => {
   child.execFileSync('python3', ['scripts/update-coffee-catalog.py', '--check'], { cwd: root, stdio: 'pipe' });
 });
 
-test('offline Shopify normalization keeps absent facts unknown', () => {
+test('offline Shopify normalization keeps absent facts unknown', (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'dialin-shopify-'));
+  t.after(() => fs.rmSync(temp, {recursive: true, force: true}));
   const script = path.join(root, 'scripts/update-coffee-catalog.py');
-  const fixture = path.join('/private/tmp', 'coffee-catalog-fixture.json');
+  const fixture = path.join(temp, 'fixture.json');
   fs.writeFileSync(fixture, JSON.stringify({ products: [{ title: 'Example', handle: 'example', product_type: 'Kaffee', tags: ['origin: Colombia', 'category: espresso', 'Geschenkabo'] }] }));
-  const output = path.join('/private/tmp', 'coffee-catalog-fixture-output.json');
+  const output = path.join(temp, 'output.json');
   fs.copyFileSync(path.join(root, 'data/coffee-catalog.json'), output);
   const result = child.spawnSync('python3', [script, '--shopify-json', fixture, '--publisher', 'Example Roaster', '--catalog-url', 'https://example.test/collections/coffee', '--output', output], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -50,10 +53,12 @@ test('offline Shopify normalization keeps absent facts unknown', () => {
   assert.equal(entry.decaf, null);
 });
 
-test('offline Coffee Circle JSON-LD normalization blocks non-bean formats', () => {
+test('offline Coffee Circle JSON-LD normalization blocks non-bean formats', (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'dialin-jsonld-'));
+  t.after(() => fs.rmSync(temp, {recursive: true, force: true}));
   const script = path.join(root, 'scripts/update-coffee-catalog.py');
-  const fixture = '/private/tmp/coffee-circle-jsonld.json';
-  const output = '/private/tmp/coffee-circle-jsonld-output.json';
+  const fixture = path.join(temp, 'fixture.json');
+  const output = path.join(temp, 'output.json');
   fs.writeFileSync(fixture, JSON.stringify([
     {'@type': 'ProductGroup', name: 'Arara Premium Coffee', url: 'https://www.coffeecircle.com/en/k/arara'},
     {'@type': 'ProductGroup', name: 'Espresso Capsules Set', url: 'https://www.coffeecircle.com/en/k/capsules-set'},
