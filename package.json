@@ -5,7 +5,11 @@
   "type": "commonjs",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "package": "rm -rf .package dist && mkdir .package dist && cp manifest.json plugin.js README.md NOTICE LICENSE .package/ && cp -R docs .package/docs && (cd .package && zip -q -r ../dist/decaid-assisted-dialin-plugin-0.3.0.zip manifest.json plugin.js README.md NOTICE LICENSE docs)"
+    "package": "rm -rf .package dist && mkdir .package dist && cp manifest.json plugin.js README.md NOTICE LICENSE .package/ && cp -R docs .package/docs && (cd .package && zip -q -r ../dist/decaid-assisted-dialin-plugin-0.3.0.zip manifest.json plugin.js README.md NOTICE LICENSE docs)",
+    "test:e2e": "playwright test"
   },
-  "license": "GPL-3.0-or-later"
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "@playwright/test": "1.64.0"
+  }
 }

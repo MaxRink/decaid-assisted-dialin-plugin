@@ -10,6 +10,27 @@ permissions:
   contents: read
 
 jobs:
+  browsers:
+    name: Playwright browser and novice journeys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: error
+
   javascript:
     name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest

@@ -3,3 +3,5 @@ node_modules/
 dist/
 .site/
 __pycache__/
+playwright-report/
+test-results/

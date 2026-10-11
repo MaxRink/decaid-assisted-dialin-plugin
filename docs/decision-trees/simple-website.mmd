@@ -1,0 +1,18 @@
+flowchart TD
+A[Your current dial, recipe and measured shot] --> B{Observation and recipe valid?}
+ B -->|No| X[Ask for correction]
+ B -->|Yes| C{Same pump clock and pressure recipe confirmed?}
+ C -->|No| H[Keep setting; gather missing evidence]
+ C -->|Yes| D{Taste useful and grinder supported?}
+ D -->|No| H
+ D -->|Yes| E[Apply shipped manual taste and timing rule]
+ E --> F{Direction agrees and owner step is checked?}
+ F -->|No| H
+ F -->|Yes| G{Candidate within reference range?}
+ G -->|No| H
+ G -->|Yes| I[Show one native-dial step]
+ I --> J[Record this shot in local history]
+ H --> J
+ J --> K[User accepts next setting]
+ K --> L[Clear measured inputs; brew and taste again]
+ L --> A

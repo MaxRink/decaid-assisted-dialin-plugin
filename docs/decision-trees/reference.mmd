@@ -1,5 +1,11 @@
 flowchart TD
-A[Matched reference or grinder image] --> B{Contextual source fact or image?}
+L[Website coffee or grinder reference request] --> M{Request and resource shape valid?}
+ M -->|No| N[Show unavailable and retry; retain entered setup and history]
+ N -->|Retry| O[Disable clicked button while loading]
+ O --> L
+ M -->|Yes| P[Refresh reference display; preserve selected model when available]
+ P --> A[Matched reference or grinder image]
+ A --> B{Contextual source fact or image?}
  B -->|Fact| C[Display scope, facts and provenance]
  C --> D[Does not alter calculation or historical record]
  B -->|Image| E{Explicit reusable rights and safe image/license URLs?}

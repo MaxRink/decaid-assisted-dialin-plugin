@@ -143,9 +143,18 @@ does not establish a temperature correction or measured extraction yield.
 
 ### Try the interactive simulator
 
+For a longer-term archive, see the [self-hosting study](docs/SELF_HOSTED_SHOT_ARCHIVE.md).
+
 Open the [Dial-in lab](https://maxrink.github.io/decaid-assisted-dialin-plugin/simulator/)
-to plan shots, compare the shipped algorithms, inspect their memory, and save
-or import an experiment. It loads this repository's actual `plugin.js`; the
+for a four-step beginner guide: choose coffee and grinder, set a recipe, enter
+your measured shot and taste, and try one small next step. Simple mode uses
+owner-confirmed dial marks for DF54/DF64 or native micrometres for E64 WS, with
+clock and recipe checks. Its shot history lasts for the current browser session.
+Missing or conflicting evidence keeps the current setting and explains what
+to check. The clearly labelled practice example uses fictional shots.
+
+Expert mode lets you plan shots, compare the shipped algorithms, inspect their
+memory, and save or import an experiment. It loads this repository's actual `plugin.js`; the
 research equations and assisted suggestion policy are not separately reimplemented.
 The brew model is deliberately synthetic. A simulated bean name or grinder
 label does not establish a real grind setting or a measured extraction curve.
@@ -240,6 +249,8 @@ truncation. Comparability is a filter, not a confidence score or measured result
 ```sh
 npm ci
 npm test
+npx playwright install chromium firefox webkit
+npm run test:e2e
 npm run package
 ```
 
@@ -250,6 +261,13 @@ layout checks, the actual host manifest/package parser, and a real QuickJS
 PluginManager fixture with loopback API, feedback writes, reload persistence,
 successful recommendation, abstention and error checks. These are hardware-free
 fixtures; controlled DOM tests do not constitute a browser rendering test.
+Playwright additionally exercises the shipped website and native plugin page in
+Chromium, Firefox, WebKit and a mobile viewport, including repeated shots,
+native dial advice, import/export, persistence and error handling. Its local
+server runs the actual plugin handlers with synthetic host records and storage;
+these browser checks complement the pinned QuickJS host tests. CI retains
+browser reports and failure traces. Neither fixture proves physical grinder
+performance.
 
 The host contract is pinned to Decaid commit `af4e99524ad7731dbdb7db4540cd272bc91da038` in CI.
 

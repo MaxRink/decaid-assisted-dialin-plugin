@@ -376,3 +376,42 @@ test("DdEff convenience replay enforces both call-count bounds", () => {
   assert.equal(algorithms.ddEff(1000, 64).length, 64);
   assert.deepEqual(Array.from(algorithms.ddEff(1000, 7)), [1000, 1000, 1000, 1000, 1000, 1000, 800]);
 });
+
+
+test("E64 manual advice uses only owner-supplied native micrometre steps", () => {
+  const base = {profile: "e64ws", settingUnit: "micrometres", currentDial: 60,
+    actualTimeSec: 20, targetTimeSec: 30, flavor: "too sour"};
+  for (const missing of [{}, {stepNative: 2}, {numericFinerDelta: -1}]) {
+    const result = algorithms.manual({...base, ...missing});
+    assert.equal(result.direction, "finer");
+    assert.equal(result.proposedDial, null);
+    assert.equal(result.physicalTurn, null);
+  }
+  const result = algorithms.manual({...base, stepNative: 2, numericFinerDelta: -1});
+  assert.equal(result.proposedDial, 58);
+  assert.equal(result.settingUnit, "micrometres");
+  assert.equal(result.suggestedStepNative, 2);
+  assert.equal(result.physicalTurn, null);
+  assert.equal(result.suggestedStepMarks, undefined);
+  assert.match(result.nativeStepProvenance, /no particle-size, dD-response or physical rotation inference/);
+  const coarser = algorithms.manual({...base, actualTimeSec: 40, flavor: "too bitter",
+    stepNative: 2, numericFinerDelta: -1});
+  assert.equal(coarser.proposedDial, 62);
+  assert.equal(coarser.physicalTurn, null);
+  assert.equal(algorithms.manual({...base, stepNative: 2, numericFinerDelta: 1}).proposedDial, 62);
+});
+
+test("E64 manual advice rejects mixed units and withholds contradictory or invalid movements", () => {
+  const base = {profile: "e64ws", settingUnit: "micrometres", currentDial: 60,
+    actualTimeSec: 20, targetTimeSec: 30, flavor: "too sour", stepNative: 2, numericFinerDelta: -1};
+  for (const extra of [{settingUnit: undefined}, {settingUnit: "deci-micrometre"},
+    {stepMarks: 1}, {finerDirection: "clockwise"}, {stepNative: 0}, {stepNative: -1},
+    {stepNative: Infinity}, {currentDial: -1}, {numericFinerDelta: 0}])
+    assert.throws(() => algorithms.manual({...base, ...extra}));
+  for (const extra of [{flavor: "balanced"}, {flavor: "too bitter"},
+    {currentDial: 1}, {currentDial: Number.MAX_VALUE, stepNative: Number.MAX_VALUE, numericFinerDelta: 1}]) {
+    const result = algorithms.manual({...base, ...extra});
+    assert.equal(result.proposedDial, null);
+    assert.equal(result.physicalTurn, null);
+  }
+});

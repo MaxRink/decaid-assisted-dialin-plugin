@@ -2,7 +2,7 @@
 
 This is an implementation map of the plugin and simulator. Start with the pictures; each condition table gives the precise rule and the function that owns it. “Abstain” means the app cannot justify this answer with its available evidence. It does not mean the coffee is bad.
 
-Reviewed base: `c9b9998decab2c5aa9733c1a540c3190c3aa4bba`. The review includes uncommitted working-tree changes, so the base commit alone does not identify the implementation. Exact file hashes and the branch inventory are in [decision-tree-map.json](research/decision-tree-map.json).
+Reviewed base: `745e1bdbcbcf4b06fba4818edfdd11653c1b3245`. The review includes uncommitted working-tree changes, so the base commit alone does not identify the implementation. Exact file hashes and the branch inventory are in [decision-tree-map.json](research/decision-tree-map.json).
 
 The numeric thresholds below are implementation policy or constants recovered from `HEM-HSG-HMI-S01 V01.16-24`. They are **not scientifically validated universal espresso thresholds**. Replay correctness, physical grinder suitability, measured shot quality and sensory preference are separate claims. The plugin sends no command to change a grinder.
 
@@ -15,7 +15,7 @@ Implementation sources: [plugin.js](../plugin.js), [simulator/app.js](../simulat
 | GbS1–GbS4, DdEff | Pinned-build recovered arithmetic; caller supplies time, coordinate and state. No verified grinder-model-to-algorithm assignment. |
 | effectiveDd, grindTime, inverseRegression | Supporting calculations with their own units and preconditions; not independent taste recommendations. |
 | proposedDd wizard | Model/roast table replay; output coordinate unit remains unknown. |
-| Manual DF54/DF64 | Community heuristic with explicit inputs and owner dial calibration; not recovered firmware. |
+| Manual E64 WS / DF54 / DF64 | Community heuristic with explicit inputs and owner dial calibration; not recovered firmware. |
 | Rich suggestion | Local matched-history heuristic; abstention and owner-step gates below. |
 | Research compare | Ten isolated results; computed does not mean physically applicable or scientifically ranked. |
 
@@ -762,17 +762,23 @@ A[Validated scenario] --> B[Start separate state for each algorithm]
 
 Behavior evidence: [test/simulator.test.js](../test/simulator.test.js), [test/simulator-ui.test.js](../test/simulator-ui.test.js).
 
-## Reviewed facts and photo rights
+## Reference loading, reviewed facts and photo rights
 
 A reference can explain a grinder or coffee without changing a recommendation. A link to a photograph is not permission to embed that photograph.
 
-Functions: `reviewedReferenceContext`, `createReferenceCatalog.matchReferences`, `renderReferenceDetails`, `renderDialReference`, `renderDialPanel`, `reusableImage`.
+Functions: `reviewedReferenceContext`, `createReferenceCatalog.matchReferences`, `renderReferenceDetails`, `renderDialReference`, `renderDialPanel`, `reusableImage`, `simulator/app.js.loadCatalog`, `loadCoffeeCatalog`, `loadDialProfiles`, `showResourceRetry`.
 
 [Open full-size SVG](decision-trees/reference.svg) · [Mermaid source](decision-trees/reference.mmd)
 
 ```mermaid
 flowchart TD
-A[Matched reference or grinder image] --> B{Contextual source fact or image?}
+L[Website coffee or grinder reference request] --> M{Request and resource shape valid?}
+ M -->|No| N[Show unavailable and retry; retain entered setup and history]
+ N -->|Retry| O[Disable clicked button while loading]
+ O --> L
+ M -->|Yes| P[Refresh reference display; preserve selected model when available]
+ P --> A[Matched reference or grinder image]
+ A --> B{Contextual source fact or image?}
  B -->|Fact| C[Display scope, facts and provenance]
  C --> D[Does not alter calculation or historical record]
  B -->|Image| E{Explicit reusable rights and safe image/license URLs?}
@@ -785,6 +791,12 @@ A[Matched reference or grinder image] --> B{Contextual source fact or image?}
 
 | Condition | Result |
 | --- | --- |
+| website coffee catalog request fails or products is not an array | Set unavailable state and show visible Retry coffee catalogue; manual coffee entry remains usable. |
+| website grinder-reference request fails or models is empty/missing | Show Retry grinder references in the Simple-visible status; retain selected grinder and entered history. |
+| reference retry clicked | Disable that button and mark Retrying while fetching; another failure renders a fresh usable retry button. |
+| coffee catalog retry succeeds | Clear unavailable state and redraw products without resetting shot history. |
+| grinder-reference retry succeeds | Clear status, refresh reference metadata and picker; retain selected model if still present, otherwise choose first returned model; re-render without resetting shot history. |
+| reviewed reference-catalog request fails or schemaVersion !=1 or sources is not an array | Show Unavailable plus error in reference shelf; this older source-facts loader has no retry button. |
 | exact supported grinder/burr/bean match | Return scoped offline references, deduplicated by source ID; reference facts do not change the suggestion. |
 | reference URL is not credential-free HTTPS | Do not make it a usable external source link. |
 | photo renderAllowed is true, safe HTTPS URL/license URL exist, and license is allowlisted reusable | Display the photo with attribution/license. |
@@ -834,7 +846,7 @@ Behavior evidence: [test/coffee-catalog.test.js](../test/coffee-catalog.test.js)
 
 ## Four steps and Simple/Expert presentation
 
-The wizard controls which task panel is visible. Simple and Expert change how much detail is shown; changing presentation mode does not make evidence more reliable.
+The wizard controls the visible task panel. Website Simple provides a native-dial manual experiment; Expert exposes recovered calculations and saved-trace analysis. Neither mode makes evidence more reliable.
 
 Functions: `showNativeWizardStep`, `showWizardStep`, `simulator/app.js.init`, `modeToggle.onclick`.
 
@@ -859,14 +871,15 @@ A[Open task] --> B[Step 1: coffee and equipment]
 | first step | Disable Back. |
 | fourth step and Next | Remain at results; do not wrap or mutate experiment. |
 | native Expert toggle | Show expert-panel elements and update aria-pressed/help text; Simple hides them. |
-| simulator mode | Persist simple/expert preference in localStorage when available; simple-mode CSS hides expert-only elements. |
+| simulator mode | Persist simple/expert preference when available; Simple shows native-dial brew/taste/next-shot panels, Expert shows research simulation and actual-trace tools. Their histories and advice paths are separate. |
+| website theme toggle or reload | Persist light/dark preference when localStorage is available; theme changes presentation only. |
 | algorithm selection changes | Reset experiment rather than mix algorithm histories. |
 | setup context or individual grinder changes | Reset affected experiment so observations are not silently reassigned to new equipment/beans. |
 | helper wizard selected | Expose model/roast/dose input for proposedDd; label unknown output unit. |
 
 Behavior evidence: [test/ui.test.js](../test/ui.test.js), [test/simulator-ui.test.js](../test/simulator-ui.test.js).
 
-## Manual DF54/DF64 experiment
+## Manual native-unit experiment
 
 This helper accepts a caller-selected time target and explicit taste intent. It does not diagnose extraction from arbitrary prose or infer that acidity is undesirable.
 
@@ -891,16 +904,19 @@ A[Explicit target, observed time and optional taste intent] --> B{All input and 
 
 | Condition | Result |
 | --- | --- |
-| profile not df54/df64_gen1/df64_gen2; invalid positive target/actual time or non-negative tolerance; invalid direction/sign/step/range | Reject. |
+| profile not e64ws/df54/df64_gen1/df64_gen2; invalid positive target/actual time or non-negative tolerance; invalid direction/sign/step/range | Reject. |
+| manual toleranceSec omitted | Use1 second; this is a software default, not a universal espresso tolerance. |
 | actual < target-tolerance | Add finer time direction; actual > target+tolerance adds coarser; equality is inside tolerance. |
 | trimmed lowercase flavor exactly too sour, too acidic or under-extracted | Add finer sensory-test direction. |
 | flavor exactly too bitter, too astringent or over-extracted | Add coarser sensory-test direction. |
 | other free text, including bare sour/bitter or negation | Ignore as taste evidence; an out-of-window time signal can still supply a direction. |
 | flavor balanced OR conflicting finer/coarser directions OR no direction | Return direction none. |
 | one agreed direction | Return confidence heuristic; legacyScore is 0.55 plus 0.15 per extra agreeing reason capped 0.9, explicitly not probability. |
-| direction plus currentDial, positive stepMarks and numericFinerDelta +/-1 | Calculate one numeric step; DF64 reference interval is 0..90. |
-| candidate outside model reference range | Withhold proposedDial and explain; keep directional result. |
-| physical turn | DF54 default finer counterclockwise; DF64 default finer clockwise; explicit valid override wins; coarser reverses it. |
+| E64 WS profile | Require settingUnit micrometres; reject stepMarks and rotation direction; use positive stepNative and nonnegative current native display number. |
+| dial-mark profile with stepNative | Reject; these profiles use stepMarks. |
+| direction plus currentDial, positive unit-appropriate step and numericFinerDelta +/-1 | Calculate one native numeric step; DF64 reference interval is 0..90, E64 WS candidates must remain nonnegative. |
+| candidate non-finite or outside model reference range/native lower bound | Withhold proposedDial and explain; keep directional result. |
+| physical turn | DF54 default finer counterclockwise; DF64 default finer clockwise; explicit valid override wins; coarser reverses it. E64 WS physicalTurn is null and has no rotation inference. |
 
 Behavior evidence: [test/research-algorithms.test.js](../test/research-algorithms.test.js), [test/research-endpoint.test.js](../test/research-endpoint.test.js), [test/simulator-ui.test.js](../test/simulator-ui.test.js).
 
@@ -979,6 +995,7 @@ A[Catalog reference] --> B{Host import or local setup?}
 | Condition | Result |
 | --- | --- |
 | native catalog load fails or products is not an array | Show unavailable or no entries; no bean write. |
+| website coffee catalog unavailable | Show explicit retry and retain manual entry; successful retry refreshes products without applying one or resetting history. |
 | catalog search or Show more | Native and simulator show10 more matches at a time; native search covers name, publisher, origin, process and format. |
 | first native import click | Show preview only; do not POST. |
 | format is capsule, ready-to-drink, bundle, green-bean or ground | Disable host import as reference-only. |
@@ -1077,4 +1094,149 @@ A[Saved-shot file] --> B{Size, JSON, timestamp and measurements valid?}
 | export saved trace | Download actual shot and current feedback together as JSON. |
 
 Behavior evidence: [test/ui-integration-audit.test.js](../test/ui-integration-audit.test.js), [test/simulator-ui.test.js](../test/simulator-ui.test.js), [test/brew-metrics.test.js](../test/brew-metrics.test.js).
+
+## Your first and next real coffee on the website
+
+The Simple website takes the numbers you read from your grinder and your own timer. Each next step uses the current shot and the manual taste rule; its visible shot list is not a learned response model or the matched-history assistant.
+
+Functions: `simulator/app.js.recordSimpleShot`, `renderSimpleRecipe`, `initializeSimple`, `invalidateSimpleAdvice`, `clearSimpleShots`, `clearSimpleSetup`.
+
+[Open full-size SVG](decision-trees/simple-website.svg) · [Mermaid source](decision-trees/simple-website.mmd)
+
+```mermaid
+flowchart TD
+A[Your current dial, recipe and measured shot] --> B{Observation and recipe valid?}
+ B -->|No| X[Ask for correction]
+ B -->|Yes| C{Same pump clock and pressure recipe confirmed?}
+ C -->|No| H[Keep setting; gather missing evidence]
+ C -->|Yes| D{Taste useful and grinder supported?}
+ D -->|No| H
+ D -->|Yes| E[Apply shipped manual taste and timing rule]
+ E --> F{Direction agrees and owner step is checked?}
+ F -->|No| H
+ F -->|Yes| G{Candidate within reference range?}
+ G -->|No| H
+ G -->|Yes| I[Show one native-dial step]
+ I --> J[Record this shot in local history]
+ H --> J
+ J --> K[User accepts next setting]
+ K --> L[Clear measured inputs; brew and taste again]
+ L --> A
+```
+
+| Condition | Result |
+| --- | --- |
+| coffee name blank, current dial missing, or measured time not in (0,600] seconds | Ask for the missing observation; do not append a shot. |
+| recipe dose/yield/target not positive, dose >100g, yield >200g or target >600s | Reject until recipe corrected. |
+| optional cup temperature outside 0..150C or tasting delay outside 0..10080 minutes | Reject; valid notes remain descriptive. |
+| pump-start timing and target-cup-weight confirmation absent | Keep current setting; request a repeated recipe measured on the same clock. |
+| pressure-led recipe without programmed flow confirmation absent | Keep current setting; time alone cannot justify a change for an unknown/flow-controlled recipe. |
+| taste not supplied | Keep setting and ask the operator to taste. |
+| taste weak or channeling | Keep setting; check measured recipe or preparation before changing grind. |
+| model is not E64 WS, DF54, DF64/DF64 Gen1 or DF64 Gen2 | Keep setting; no supported manual small-step rule. |
+| Simple recipe and tolerance | Use the visible recipe target and configured tolerance; config fallbacks are28s and1s, not a learned or universal recipe. |
+| supported model and evidence confirmations | Call recommendManual with actual/target time, configured tolerance and explicit taste intent; E64 WS uses micrometres and stepNative, DF models use stepMarks. No research-coordinate conversion. |
+| balanced, conflicting direction or no manual direction | Keep setting; liking the coffee vetoes chasing the timer. |
+| owner has not checked positive step size and numeric finer sign +/-1 | Request one checked physical movement before displaying a numbered adjustment. |
+| owner step would leave manual reference range | Keep current setting and request limit confirmation. |
+| valid proposedDial | Show one finer/coarser step in the grinder display unit; preserve dose and cup weight for the next experiment. |
+| accepted entry, including keep-setting advice | Append current setting/time/taste/optional notes to in-memory Simple history and show step4; history does not estimate a slope and is separate from Expert scenario import/export. |
+| Use this setting for my next shot | Copy proposed or retained native number to current dial, clear time/taste/clock confirmation and tasting notes, return to step3; user moves hardware manually. |
+| current shot or dial-check input changes | Invalidate previous proposal and disable Continue until recalculated. |
+| recipe or context changes | Reset Simple shot history alongside experiment history; every grinder-model change, individual grinder selection, burr or calibration change also clears checked Simple dial setup. |
+| Start a new coffee | Clear Simple shot history, proposal, pressure confirmation and checked native-dial setup; return to step1. |
+
+Behavior evidence: [test/simulator-ui.test.js](../test/simulator-ui.test.js), [e2e/novice.spec.js](../e2e/novice.spec.js).
+
+## Fictional practice stays visibly fictional
+
+Practice teaches the sequence of entering a shot, reading advice and trying another shot. Its preset dial and times are fictional examples, not a calibration or prediction of a real grinder.
+
+Functions: `simulator/app.js.initializeSimple`, `clearSimpleSetup`, `clearSimpleShots`.
+
+[Open full-size SVG](decision-trees/simple-practice.svg) · [Mermaid source](decision-trees/simple-practice.mmd)
+
+```mermaid
+flowchart TD
+A[Explicitly start practice] --> B[Label fictional dial and pressure setup]
+ B --> C[Request next practice shot]
+ C --> D{Practice still active?}
+ D -->|No| X[No action]
+ D -->|Yes| E[Choose authored time offset and taste]
+ E --> F[Run Simple manual decision rules]
+ F --> G[Show Practice label and disclaimer]
+ G --> C
+ H[Start a new coffee or change grinder calibration] --> I[Clear practice setup]
+```
+
+| Condition | Result |
+| --- | --- |
+| Try a fictional practice example | Select DF64 Gen2 and its available individual profile; clear Simple history; explicitly label practice. |
+| practice setup | Set illustrative current 20marks, step0.5marks and finer numeric sign-1; mark its fictional dial and pressure confirmations checked. |
+| Try next practice shot while practice inactive | Do nothing. |
+| practice shot requested | Set time to max(1,target+offset), with offsets-6,-2,0 for first, second and all later shots; confirm pump timing. |
+| practice offset nonzero | Use too sour intent; zero uses balanced. These tastes are authored examples, not inferred extraction. |
+| practice record | Run the same Simple manual gates; display practice disclaimer and label every history row Practice. |
+| start new coffee or change individual grinder/burr/calibration | Clear practice setup and its pressure confirmation before using real observations. |
+
+Behavior evidence: [test/simulator-ui.test.js](../test/simulator-ui.test.js), [e2e/novice.spec.js](../e2e/novice.spec.js).
+
+## Native app: readable answer or owner-confirmed dial step
+
+The native app first explains the saved-evidence answer in physical units when a verified conversion exists. Its separate manual form accepts an owner-checked physical dial step; that result is a new experiment, not a fitted grinder response.
+
+Functions: `beginnerMessage`, `renderBeginnerAdvice`, `updateAdviceClock`, `nativeAdviceForm submit handler`, `clearAnalysisState`.
+
+[Open full-size SVG](decision-trees/native-beginner.svg) · [Mermaid source](decision-trees/native-beginner.mmd)
+
+```mermaid
+flowchart TD
+A[Native next-setting step] --> B{Saved assistant answer or manual form?}
+ B -->|Saved answer| R{Recall of a good shot?}
+ R -->|Yes| S{Saved number has explicit convertible unit?}
+ S -->|Yes| T[Show recorded native number; verify on grinder]
+ S -->|No| E
+ R -->|No| C{Verified physical values available?}
+ C -->|Yes| D[Show native value and physical-step caveat]
+ C -->|No| E[Keep setting; explain missing evidence or conversion]
+ B -->|Owner manual form| F{Completed pressure-compatible shot and matching grinder?}
+ F -->|No| X[Explain why calculation is unavailable]
+ F -->|Yes| G{Owner confirmation and numeric inputs valid?}
+ G -->|No| X
+ G -->|Yes| H{Taste absent, weak or preparation uncertain?}
+ H -->|Yes| E
+ H -->|No| I[Call isolated manual heuristic]
+ I --> J{Current request and finite proposed dial?}
+ J -->|Yes| K[Show one physical experiment]
+ J -->|No proposal| E
+ J -->|Stale| L[Ignore response]
+```
+
+| Condition | Result |
+| --- | --- |
+| saved recommendation has finite setting and explicit native source unit | Display native µm for micrometres/micrometre/µm, or marks for dial-mark/dial-marks/marks/owner marks/owner-calibrated marks; E64 WS explicit deci-micrometre divides by10. |
+| saved recommendation unit unknown or value invalid | Withhold physical number; request verified units. A recalled number is a saved intended setting, not a live hardware reading. |
+| saved answer has available finite currentNative and proposedNative | Show actual display units and amount; zero amount means keep setting. |
+| converted proposal lies between physical steps | Ask the operator to choose and confirm a neighboring achievable mark. |
+| native conversion or proposed value unavailable | Keep current setting for now and explain missing evidence or conversion; do not present research dD as a physical number. |
+| manual form without analysed saved shot | Reject and request analysis in step3. |
+| saved metrics.stopReason matches error, disconnected or stopping.?backstop | Reject interrupted-shot manual advice, even with a completion checkbox. |
+| saved controlMode is not pressure or mixed_preinfusion_flow | Reject manual time-based dial calculation. |
+| owner has not confirmed physical dial used for this saved shot, small adjustment, completed recipe and target measured on the same clock | Reject. |
+| selected E64 WS/DF54/DF64 generation does not match normalized saved grinderModel | Reject; normalization ignores case and non-alphanumeric characters. |
+| any numeric field blank, current/step/actual/target not finite, step not positive, actual/target outside (0,600], or finer sign not +/-1 | Reject; a blank current setting cannot become zero. |
+| clock selector changes | Prefill finite selected-clock duration only for complete pump/pouring timing or explicitly chosen recording; otherwise leave measured time blank. |
+| selected native manual model changes | Switch display labels between micrometres and marks; clear current/step/sign and owner confirmation; invalidate previous answer. |
+| taste weak or channeling | Keep current native number and ask for dose/preparation/trace evidence. |
+| native manual taste blank | Keep current number and ask for sensory assessment; the beginner UI does not invoke time-only manual advice. |
+| saved setting has known native units | E64 WS accepts explicit micrometre aliases or divides explicit deci-micrometre by10 for consistency only; DF accepts dial-mark/dial-marks/marks/owner marks/owner-calibrated marks. |
+| known saved native setting differs from entered current by more than 1e-7 | Reject historical-setting mismatch; unknown units stay unconverted and require the owner confirmation. |
+| valid manual case | POST research operation manual with owner step/sign and same-clock times; E64 WS sends settingUnit micrometres and stepNative, DF models send stepMarks. This is separate from the rich history suggestion. |
+| manual response has finite proposedDial | Show one physical step and ask to brew/taste before another change. |
+| manual response lacks proposedDial | Keep current native number and show reasons, including balanced/conflict/range refusal. |
+| form inputs change or analysed shot changes during request | Increment advice generation; stale response does not replace current advice. |
+| feedback save succeeds | Invalidate previous beginner/manual advice and ask for a fresh assessment. |
+| new analysis or shot selection | Clear existing beginner and manual advice and the intended-recipe checkbox before fetching new evidence. |
+
+Behavior evidence: [test/ui.test.js](../test/ui.test.js), [test/ui-integration-audit.test.js](../test/ui-integration-audit.test.js), [e2e/native.spec.js](../e2e/native.spec.js).
 

@@ -1,0 +1,10 @@
+flowchart TD
+A[Explicitly start practice] --> B[Label fictional dial and pressure setup]
+ B --> C[Request next practice shot]
+ C --> D{Practice still active?}
+ D -->|No| X[No action]
+ D -->|Yes| E[Choose authored time offset and taste]
+ E --> F[Run Simple manual decision rules]
+ F --> G[Show Practice label and disclaimer]
+ G --> C
+ H[Start a new coffee or change grinder calibration] --> I[Clear practice setup]

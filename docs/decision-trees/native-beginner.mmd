@@ -1,0 +1,20 @@
+flowchart TD
+A[Native next-setting step] --> B{Saved assistant answer or manual form?}
+ B -->|Saved answer| R{Recall of a good shot?}
+ R -->|Yes| S{Saved number has explicit convertible unit?}
+ S -->|Yes| T[Show recorded native number; verify on grinder]
+ S -->|No| E
+ R -->|No| C{Verified physical values available?}
+ C -->|Yes| D[Show native value and physical-step caveat]
+ C -->|No| E[Keep setting; explain missing evidence or conversion]
+ B -->|Owner manual form| F{Completed pressure-compatible shot and matching grinder?}
+ F -->|No| X[Explain why calculation is unavailable]
+ F -->|Yes| G{Owner confirmation and numeric inputs valid?}
+ G -->|No| X
+ G -->|Yes| H{Taste absent, weak or preparation uncertain?}
+ H -->|Yes| E
+ H -->|No| I[Call isolated manual heuristic]
+ I --> J{Current request and finite proposed dial?}
+ J -->|Yes| K[Show one physical experiment]
+ J -->|No proposal| E
+ J -->|Stale| L[Ignore response]

@@ -22,6 +22,9 @@
   let grinderInstances = [];
   let activeInstanceId = null;
   let viewMode = "simple";
+  let simpleShots = [], simpleProposal = null, simplePractice = false;
+  let navigateSimple = () => {};
+
   const slug = (value) => String(value || "grinder").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "grinder";
   function storage() { try { return window.localStorage; } catch (_) { return null; } }
   function profileId(model, suffix) { return "grinder-" + slug(model) + "-" + suffix; }
@@ -39,7 +42,7 @@
   function setActiveProfile(id, announce) {
     const profile = grinderInstances.find(item => item.id === id); if (!profile) return;
     activeInstanceId = profile.id; $("grinder").value = profile.model; $("burrs").value = profile.burrIdentity; $("calibration").value = profile.calibrationEpoch; dialCalibration = profileCalibration(profile); persistProfiles();
-    reset(); renderDialPanel(); renderInstanceManager(); if (announce) setNotice("Switched to " + profile.name + ". Shot history and algorithm memory were reset for this individual grinder.");
+    clearSimpleSetup(); reset(); renderDialPanel(); renderInstanceManager(); if (announce) setNotice("Switched to " + profile.name + ". Start a fresh shot for this grinder.");
   }
   function ensureProfiles() {
     const store = storage(); let loaded = null;
@@ -48,18 +51,18 @@
     if (!grinderInstances.length) grinderInstances = [profileFromTemplate({ model: "DF64 Gen 2", zero: 0 }, 0), profileFromTemplate({ model: "DF54", zero: 0 }, 1), profileFromTemplate({ model: "E64 WS", zero: 0 }, 2)];
     let preferred = null; try { preferred = store && store.getItem(ACTIVE_INSTANCE_KEY); } catch (_) {}
     activeInstanceId = grinderInstances.some(item => item.id === preferred) ? preferred : grinderInstances[0].id;
-    const profile = activeProfile(); dialCalibration = profileCalibration(profile); $("burrs").value = profile.burrIdentity; $("calibration").value = profile.calibrationEpoch;
+    const profile = activeProfile(); $("grinder").value = profile.model; dialCalibration = profileCalibration(profile); $("burrs").value = profile.burrIdentity; $("calibration").value = profile.calibrationEpoch;
     persistProfiles(); renderInstanceManager();
   }
   function renderInstanceManager() {
-    const select = $("grinder-instance"); if (!select) return; select.replaceChildren(); grinderInstances.forEach(profile => { const option = document.createElement("option"); option.value = profile.id; text(option, profile.name + " · " + profile.model); select.append(option); }); select.value = activeInstanceId || "";
+    const select = $("grinder-instance"); if (!select) return; select.replaceChildren(); grinderInstances.forEach(profile => { const option = document.createElement("option"); option.value = profile.id; text(option, profile.name); select.append(option); }); select.value = activeInstanceId || "";
     const holder = $("grinder-profiles"); if (!holder) return; holder.replaceChildren();
-    const copy = document.createElement("p"); copy.className = "hint"; text(copy, "Profile ID " + (activeInstanceId || "none") + ". Each saved unit has its own zero, step size and measured anchors."); holder.append(copy);
-    const profile = activeProfile(); const profileFields = document.createElement("div"); profileFields.className = "fields compact";
+    const copy = document.createElement("p"); copy.className = "hint expert-only"; text(copy, "Profile ID " + (activeInstanceId || "none") + ". Each saved unit has its own zero, step size and measured anchors."); holder.append(copy);
+    const profile = activeProfile(); const profileFields = document.createElement("div"); profileFields.className = "fields compact expert-only";
     const zeroField = document.createElement("label"); text(zeroField, "Owner zero (native units)"); const zeroInput = document.createElement("input"); zeroInput.type = "number"; zeroInput.step = "any"; zeroInput.value = profile?.zero ?? 0; zeroInput.setAttribute("aria-label", "owner zero"); zeroField.append(zeroInput);
     const stepField = document.createElement("label"); text(stepField, "Owner step size (native units)"); const stepInput = document.createElement("input"); stepInput.type = "number"; stepInput.min = "0.000001"; stepInput.step = "any"; stepInput.value = profile?.stepSize ?? ""; stepInput.setAttribute("aria-label", "owner step size"); stepField.append(stepInput); profileFields.append(zeroField, stepField); holder.append(profileFields);
     const actions = document.createElement("div"); actions.className = "actions"; const buttons = {};
-    [["add-grinder", "Add individual grinder"], ["rename-grinder", "Rename"], ["save-grinder", "Save current calibration"], ["remove-grinder", "Remove"]].forEach(([id, label]) => { const button = document.createElement("button"); button.id = id; button.type = "button"; text(button, label); buttons[id] = button; actions.append(button); }); holder.append(actions);
+    [["add-grinder", "Add individual grinder"], ["rename-grinder", "Rename"], ["save-grinder", "Save current calibration"], ["remove-grinder", "Remove"]].forEach(([id, label]) => { const button = document.createElement("button"); button.id = id; button.type = "button"; text(button, label); buttons[id] = button; if (id === "save-grinder" || id === "remove-grinder") button.className = "expert-only"; actions.append(button); }); holder.append(actions);
     buttons["add-grinder"].addEventListener("click", () => { const model = $("grinder").value || "Other known grinder"; const profile = { id: profileId(model, "custom-" + Date.now().toString(36) + "-" + grinderInstances.length), name: model + " · my grinder " + (grinderInstances.length + 1), model, burrIdentity: $("burrs").value || "stock burrs", calibrationEpoch: $("calibration").value || "epoch 1", zero: 0, stepSize: null, anchors: null, source: "owner-created; calibration required" }; grinderInstances.push(profile); setActiveProfile(profile.id, true); });
     buttons["rename-grinder"].addEventListener("click", () => { const profile = activeProfile(); if (!profile) return; const name = window.prompt ? window.prompt("Name this individual grinder", profile.name) : profile.name; if (typeof name === "string" && name.trim() && name.length <= 128) { profile.name = name.trim(); persistProfiles(); renderInstanceManager(); setNotice("Individual grinder renamed."); } else if (name != null) setNotice("A grinder name is required and must be at most 128 characters.", true); });
     buttons["save-grinder"].addEventListener("click", () => { const profile = activeProfile(); if (!profile) return; const zero = Number(zeroInput.value); const step = stepInput.value === "" ? null : Number(stepInput.value); if (!Number.isFinite(zero) || Math.abs(zero) > 2147483647 || (step != null && (!Number.isFinite(step) || step <= 0 || step > 2147483647))) { setNotice("Owner zero must be finite; step size must be positive when supplied.", true); return; } profile.model = $("grinder").value; profile.burrIdentity = $("burrs").value; profile.calibrationEpoch = $("calibration").value; profile.zero = zero; profile.stepSize = step; profile.anchors = dialCalibration ? { ...dialCalibration } : null; profile.source = "owner-updated; calibrate this physical grinder"; persistProfiles(); renderInstanceManager(); renderDialPanel(); setNotice("Saved this grinder's identity and calibration anchors."); });
@@ -200,7 +203,7 @@
       showResult(rows[rows.length - 1].result);
     } catch (error) { setNotice(error.message, true); }
   }
-  function reset() { invalidateAssistant(); rows = []; render(); showResult(null); setNotice("New experiment ready."); }
+  function reset() { invalidateAssistant(); clearSimpleShots(); rows = []; render(); showResult(null); setNotice(viewMode === "simple" ? "Ready for a fresh coffee." : "New experiment ready."); }
   function replay() {
     invalidateAssistant();
     try {
@@ -306,6 +309,7 @@
   let referencePage = 1;
   let coffeeCatalogProducts = [];
   let coffeeCatalogPage = 1;
+  let coffeeCatalogUnavailable = false;
   const factLabels = { doseG: "Dose (g)", yieldG: "Beverage yield (g)", waterG: "Water (g)", brewTimeSec: "Brew time (s)", temperatureC: "Temperature (°C)", brewRatio: "Brew ratio", rpm: "RPM", burrDiameterMm: "Burr diameter (mm)", tastingNotes: "Roaster tasting notes" };
   function factLabel(key) { return factLabels[key] || key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, letter => letter.toUpperCase()); }
   function factValue(value) {
@@ -326,7 +330,7 @@
     if (visible.length > referencePage * 12) { const more = document.createElement("button"); text(more, "Show 12 more references"); more.addEventListener("click", () => { referencePage++; renderCatalog(); }); holder.append(more); }
   }
   function renderCoffeeCatalog() {
-    const holder = $("coffee-catalog"); if (!holder) return; holder.replaceChildren(); const query = ($( "coffee-catalog-search")?.value || "").trim().toLowerCase(); const products = coffeeCatalogProducts.filter(product => JSON.stringify(product).toLowerCase().includes(query));
+    const holder = $("coffee-catalog"); if (!holder) return; if (coffeeCatalogUnavailable) { showResourceRetry(holder, "Coffee catalogue unavailable. You can still enter your coffee by hand.", "Retry coffee catalogue", loadCoffeeCatalog); return; } holder.replaceChildren(); const query = ($( "coffee-catalog-search")?.value || "").trim().toLowerCase(); const products = coffeeCatalogProducts.filter(product => JSON.stringify(product).toLowerCase().includes(query));
     products.slice(0, coffeeCatalogPage * 10).forEach(product => { const card = document.createElement("article"); const h = document.createElement("h3"); text(h, product.name || product.title || "Unnamed coffee"); const p = document.createElement("p"); text(p, [product.publisher, product.category, product.roastLevel].filter(Boolean).join(" · ") || "Metadata incomplete"); const button = document.createElement("button"); button.type = "button"; text(button, "Use explicit fields"); button.addEventListener("click", () => { if (product.beanEligible !== true) { setNotice("This catalogue entry lacks confirmed whole-bean format. Keep it as a reference and confirm the physical product separately.", true); return; } reset(); if (product.name) $("bean").value = product.name; if (product.species) $("species").value = product.species; if (product.roastLevel) $("roast").value = product.roastLevel; if (product.publisher) $("roaster").value = product.publisher; setNotice("Applied explicit catalogue fields only. Confirm the bean batch and equipment before brewing."); }); card.append(h, p, button); holder.append(card); });
     if (products.length > coffeeCatalogPage * 10) { const more = document.createElement("button"); more.type = "button"; text(more, "Show 10 more coffees (" + (products.length - coffeeCatalogPage * 10) + " remaining)"); more.addEventListener("click", () => { coffeeCatalogPage += 1; renderCoffeeCatalog(); }); holder.append(more); }
     if (!products.length) { const p = document.createElement("p"); p.className = "hint"; text(p, "No matching coffee catalogue entries."); holder.append(p); }
@@ -334,11 +338,18 @@
   function loadCatalog() {
     fetch("../data/reference-catalog.json", { credentials: "same-origin" }).then((response) => { if (!response.ok) throw new Error("reference catalog unavailable"); return response.json(); }).then((catalog) => { if (!catalog || catalog.schemaVersion !== 1 || !Array.isArray(catalog.sources)) throw new Error("unsupported reference catalog"); catalogSources = catalog.sources.filter((source) => typeof source.url === "string" && source.url.startsWith("https://")); text($("catalog-status"), catalogSources.length + " reviewed"); renderCatalog(); }).catch((error) => { text($("catalog-status"), "Unavailable"); const holder = $("catalog"); const p = document.createElement("p"); p.className = "hint"; text(p, error.message); holder.append(p); });
   }
-  function loadCoffeeCatalog() { fetch("../data/coffee-catalog.json", { credentials: "same-origin" }).then(response => { if (!response.ok) throw new Error("coffee catalogue unavailable"); return response.json(); }).then(value => { coffeeCatalogProducts = Array.isArray(value.products) ? value.products : []; renderCoffeeCatalog(); }).catch(() => {}); }
-  function loadDialProfiles() {
-    return fetch("../data/grinder-dials.json", { credentials: "same-origin" }).then(response => { if (!response.ok) throw new Error("dial profiles unavailable"); return response.json(); }).then(value => { const list = value && Array.isArray(value.models) ? value.models : []; dialMetadata = Object.fromEntries(list.filter(profile => profile && profile.model).map(profile => [profile.model, profile])); const select = $("grinder"), selected = activeProfile()?.model || (select && select.value); if (select && list.length) { select.replaceChildren(); list.forEach(profile => { const option = document.createElement("option"); option.value = profile.model; text(option, profile.model + " · " + (profile.unit || "native")); select.append(option); }); select.value = list.some(profile => profile.model === selected) ? selected : list[0].model; } renderInstanceManager(); renderDialPanel(); }).catch(() => {});
+  function showResourceRetry(holder, message, label, retry) {
+    if (!holder) return;
+    const note = document.createElement("p"), button = document.createElement("button");
+    note.className = "hint"; text(note, message); button.type = "button"; text(button, label);
+    button.addEventListener("click", () => { button.disabled = true; text(button, "Retrying…"); return retry(); });
+    holder.replaceChildren(note, button);
   }
-  function render() { renderTable(); renderChart(); renderFlowChart(); compare(); renderCatalog(); }
+  function loadCoffeeCatalog() { return fetch("../data/coffee-catalog.json", { credentials: "same-origin" }).then(response => { if (!response.ok) throw new Error("coffee catalogue unavailable"); return response.json(); }).then(value => { if (!Array.isArray(value?.products)) throw new Error("unsupported coffee catalogue"); coffeeCatalogProducts = value.products; coffeeCatalogUnavailable = false; renderCoffeeCatalog(); }).catch(() => { coffeeCatalogUnavailable = true; renderCoffeeCatalog(); }); }
+  function loadDialProfiles() {
+    return fetch("../data/grinder-dials.json", { credentials: "same-origin" }).then(response => { if (!response.ok) throw new Error("dial profiles unavailable"); return response.json(); }).then(value => { const list = value && Array.isArray(value.models) ? value.models : []; if (!list.length) throw new Error("unsupported grinder references"); $("grinder-load-status")?.replaceChildren(); dialMetadata = Object.fromEntries(list.filter(profile => profile && profile.model).map(profile => [profile.model, profile])); const select = $("grinder"), selected = (select && select.value) || activeProfile()?.model; if (select && list.length) { select.replaceChildren(); list.forEach(profile => { const option = document.createElement("option"); option.value = profile.model; text(option, profile.model + " · " + (profile.unit || "native")); select.append(option); }); select.value = list.some(profile => profile.model === selected) ? selected : list[0].model; } renderInstanceManager(); renderDialPanel(); renderSimpleRecipe(); }).catch(() => showResourceRetry($("grinder-load-status"), "Extra grinder references unavailable. You can keep using your selected grinder and enter its settings yourself.", "Retry grinder references", loadDialProfiles));
+  }
+  function render() { renderSimpleRecipe(); renderTable(); renderChart(); renderFlowChart(); compare(); renderCatalog(); }
   function inputField(id, label, value, step) { const wrapper = document.createElement("label"); text(wrapper, label); const input = document.createElement("input"); input.id = id; input.type = "number"; input.value = value; input.step = step || "1"; wrapper.append(input); return wrapper; }
   function renderHelperFields() {
     const holder = $("helper-fields"); holder.replaceChildren();
@@ -376,9 +387,9 @@
   }
   function watchContextChanges() {
     ["bean", "roaster", "species", "roast", "calibration", "grinder", "burrs", "dose", "yield", "target", "tolerance", "start"].forEach((id) => $(id).addEventListener("change", () => {
-      if (id === "grinder") { const match = grinderInstances.find(profile => profile.model === $("grinder").value); if (match) setActiveProfile(match.id, false); else { reset(); renderDialPanel(); } return; }
-      if (["calibration", "burrs"].includes(id)) { const profile = activeProfile(); if (profile) { profile.burrIdentity = $("burrs").value; profile.calibrationEpoch = $("calibration").value; profile.anchors = null; persistProfiles(); } dialCalibration = null; }
-      reset(); renderDialPanel(); setNotice("Setup changed, so old shot history and dial calibration were reset to keep context honest.");
+      if (id === "grinder") { clearSimpleSetup(); const match = grinderInstances.find(profile => profile.model === $("grinder").value); if (match) setActiveProfile(match.id, false); else { reset(); renderDialPanel(); } return; }
+      if (["calibration", "burrs"].includes(id)) { clearSimpleSetup(); const profile = activeProfile(); if (profile) { profile.burrIdentity = $("burrs").value; profile.calibrationEpoch = $("calibration").value; profile.anchors = null; persistProfiles(); } dialCalibration = null; }
+      reset(); renderDialPanel(); setNotice(viewMode === "simple" ? "Your setup changed. Start a fresh shot with this coffee and recipe." : "Setup changed, so old shot history and dial calibration were reset to keep context honest.");
     }));
     $("grinder-instance").addEventListener("change", () => setActiveProfile($("grinder-instance").value, true));
   }
@@ -457,6 +468,112 @@
     if ($("profile-picker")) fetch("../data/decent-profiles.json").then(response => { if (!response.ok) throw new Error("Profile references unavailable"); return response.json(); }).then(catalog => uiTools.profilePicker($("profile-picker"), catalog)).catch(error => text($("profile-picker"), error.message));
   }
 
+  function simpleUnit() { return dialProfile()?.visibleUnit || dialProfile()?.unit || "dial units"; }
+  function simpleNumber(id) {
+    const value = $(id)?.value;
+    return value != null && String(value).trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+  }
+  function clearSimpleShots() {
+    simpleShots = []; simpleProposal = null;
+    $("simple-history")?.replaceChildren();
+    if ($("simple-advice")) text($("simple-advice"), "Brew a coffee and enter its time and taste first.");
+    if ($("simple-continue")) $("simple-continue").disabled = true;
+    if ($("simple-time")) $("simple-time").value = "";
+    if ($("simple-taste")) $("simple-taste").value = "";
+    if ($("simple-clock-confirmed")) $("simple-clock-confirmed").checked = false;
+  }
+  function clearSimpleSetup() {
+    simplePractice = false;
+    if ($("simple-pressure-confirmed")) $("simple-pressure-confirmed").checked = false;
+    ["simple-current-dial", "simple-step", "simple-finer"].forEach(id => { if ($(id)) $(id).value = ""; });
+    if ($("simple-confirm-dial")) $("simple-confirm-dial").checked = false;
+    if ($("simple-practice")) $("simple-practice").hidden = true;
+    if ($("simple-practice-status")) text($("simple-practice-status"), "");
+  }
+  function renderSimpleRecipe() {
+    if (!$("simple-recipe-summary")) return;
+    const c = config(), dial = simpleNumber("simple-current-dial"), unit = simpleUnit();
+    $("simple-step").placeholder = unit === "micrometres" ? "For example, 2 micrometres" : "For example, 0.5 of a mark";
+    text($("simple-unit"), "Use the " + unit + " shown on your own grinder. If you have no starting setting, use its espresso starting guide first.");
+    text($("simple-recipe-summary"), c.dose + " g coffee → " + c.yield + " g in your cup, aiming for about " + c.target + " seconds from pump start.");
+    text($("simple-brew-summary"), (simplePractice ? "Fictional practice · " : "") + c.bean + ": " + c.dose + " g coffee, " + c.yield + " g in your cup" + (dial == null ? ". Read your grinder setting before brewing." : ", grinder at " + dial + " " + unit + "."));
+  }
+  function invalidateSimpleAdvice() {
+    simpleProposal = null;
+    if ($("simple-continue")) $("simple-continue").disabled = true;
+    if ($("simple-advice")) text($("simple-advice"), "Your inputs changed. Enter this shot again to get a fresh next step.");
+  }
+  function recordSimpleShot() {
+    const c = config(), current = simpleNumber("simple-current-dial"), actual = simpleNumber("simple-time"), taste = $("simple-taste").value;
+    const fail = message => { text($("simple-brew-status"), message); };
+    if (!c.bean.trim()) return fail("Enter your coffee name in step 1.");
+    if (current == null) return fail("Read the dial on your grinder and enter its current setting in step 1.");
+    if (actual == null || actual <= 0 || actual > 600) return fail("Enter the time you measured, between 0 and 600 seconds.");
+    if (![c.dose, c.yield, c.target].every(value => value > 0) || c.dose > 100 || c.yield > 200 || c.target > 600) return fail("Check the dose, cup weight and target time in your recipe.");
+    const temperature = simpleNumber("simple-temperature"), minutes = simpleNumber("simple-minutes");
+    if ((temperature != null && (temperature < 0 || temperature > 150)) || (minutes != null && (minutes < 0 || minutes > 10080))) return fail("Check the optional temperature and tasting time.");
+    const profile = {"DF54": "df54", "DF64": "df64_gen1", "DF64 Gen 1": "df64_gen1", "DF64 Gen 2": "df64_gen2", "E64 WS": "e64ws"}[c.grinder];
+    const step = simpleNumber("simple-step"), sign = Number($("simple-finer").value), confirmed = $("simple-confirm-dial").checked && step > 0 && [-1, 1].includes(sign);
+    let action = "Keep the grinder at " + current + " " + simpleUnit() + ".", why, result = null;
+    if (!$("simple-clock-confirmed").checked) why = "Repeat this recipe, timing from pump start and stopping at the target cup weight. We need the same timing method before comparing shots.";
+    else if (!$("simple-pressure-confirmed").checked) why = "Check the recipe on your machine first. A programmed flow target can change the meaning of shot time, so time alone cannot tell us to move the dial.";
+    else if (!taste) why = "Let the coffee cool enough to sip comfortably, then taste it. Enter whether you like it or which taste you want to change.";
+    else if (["weak", "channeling"].includes(taste)) why = taste === "channeling" ? "Repeat the recipe with an evenly prepared coffee bed. Uneven flow needs a preparation check before a grind change." : "Check the weighed coffee and cup weight, then repeat. A weak taste alone does not tell us which way to turn.";
+    else if (!profile) why = "This grinder does not have a supported small-step rule here yet. Keep this measured shot as your starting point; use the grinder’s own adjustment guide.";
+    else {
+      try {
+        result = algorithms.recommendManual({profile, currentDial: current, actualTimeSec: actual, targetTimeSec: c.target, toleranceSec: c.tolerance, flavor: taste, ...(profile === "e64ws" ? {settingUnit: "micrometres"} : {}), ...(confirmed ? {...(profile === "e64ws" ? {stepNative: step} : {stepMarks: step}), numericFinerDelta: sign} : {})});
+      } catch (error) { return fail("Check your grinder setting: " + error.message); }
+      if (taste === "balanced") why = "You like this coffee. Repeat the same recipe and setting; you do not need to chase the timer.";
+      else if (result.direction === "none") why = "The time and taste do not point to the same change. Repeat the same recipe and taste again once it has cooled.";
+      else if (!confirmed) why = "Before a numbered adjustment, open “Set up one small dial movement” in step 1 and confirm a small step and which way the numbers move when you turn finer.";
+      else if (result.proposedDial == null) why = "That step would leave the reference dial range. Check your grinder’s limits before making a change.";
+      else {
+        const movement = step === 0.5 && simpleUnit() === "marks" ? "half a mark" : step + " " + simpleUnit();
+        action = (profile === "e64ws" ? "Set " : "Turn ") + result.direction + " by " + movement + ": from " + current + " to " + Number(result.proposedDial.toFixed(6)) + " " + simpleUnit() + ".";
+        why = "Try this one small change because " + (actual < c.target - c.tolerance ? "your shot ran faster than your target" : actual > c.target + c.tolerance ? "your shot ran slower than your target" : "you want the taste to change") + ". Keep the coffee weight and cup weight the same, then time and taste again.";
+      }
+    }
+    simpleProposal = result?.direction !== "none" ? result?.proposedDial ?? current : current;
+    const holder = $("simple-advice"); holder.replaceChildren();
+    const heading = document.createElement("h3"), reason = document.createElement("p"); text(heading, action); text(reason, why); holder.append(heading, reason);
+    if (result) { const details = document.createElement("details"), summary = document.createElement("summary"), explanation = document.createElement("p"); text(summary, "Why this suggestion?"); text(explanation, (result.reasons || []).join(". ") + ". This is a cautious taste experiment using the small step you confirmed, not a measured extraction diagnosis or a prediction of your grinder’s response."); details.append(summary, explanation); holder.append(details); }
+    if (simplePractice) { const note = document.createElement("p"); note.className = "hint"; text(note, "Practice only: these are fictional shot times and a fictional checked dial. They do not predict your grinder’s response."); holder.append(note); }
+    if (result?.proposedDial != null) { const note = document.createElement("p"); note.className = "hint"; text(note, "Move the dial yourself, following your grinder’s adjustment instructions. This page cannot move it."); holder.append(note); }
+    const shot = {setting: current, time: actual, taste, temperature, minutes, practice: simplePractice}; simpleShots.push(shot);
+    const entry = document.createElement("li"); text(entry, (simplePractice ? "Practice " : "Shot ") + simpleShots.length + " · " + current + " " + simpleUnit() + " · " + actual + " s · " + ($("simple-taste").selectedOptions?.[0]?.textContent || taste || "not tasted")); $("simple-history").append(entry);
+    $("simple-continue").disabled = false; text($("simple-brew-status"), ""); setNotice("Shot recorded. Your next step is below."); navigateSimple(4);
+  }
+  function initializeSimple() {
+    if (!$("simple-record")) return;
+    $("simple-record").addEventListener("click", recordSimpleShot);
+    ["simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes"].forEach(id => $(id).addEventListener("change", () => { invalidateSimpleAdvice(); renderSimpleRecipe(); }));
+    $("simple-continue").addEventListener("click", () => {
+      if (simpleProposal == null) return;
+      $("simple-current-dial").value = String(simpleProposal); simpleProposal = null;
+      $("simple-time").value = ""; $("simple-taste").value = ""; $("simple-clock-confirmed").checked = false;
+      $("simple-temperature").value = ""; $("simple-minutes").value = "";
+      $("simple-continue").disabled = true; setNotice("Use the new setting, then brew and taste again."); renderSimpleRecipe(); navigateSimple(3);
+    });
+    $("simple-start-practice").addEventListener("click", () => {
+      $("grinder").value = "DF64 Gen 2"; const profile = grinderInstances.find(item => item.model === "DF64 Gen 2"); if (profile) setActiveProfile(profile.id, false);
+      clearSimpleShots(); simplePractice = true;
+      $("simple-current-dial").value = "20"; $("simple-step").value = "0.5"; $("simple-finer").value = "-1"; $("simple-confirm-dial").checked = true;
+      $("simple-pressure-confirmed").checked = true; $("simple-practice").hidden = false;
+      setNotice("Fictional practice is on. These example times do not predict a real grinder.");
+      text($("simple-practice-status"), "Fictional practice is on. Example dial: 20 marks, half-mark steps, lower numbers finer. Start a new coffee before using real measurements.");
+      renderSimpleRecipe(); navigateSimple(2);
+    });
+    $("simple-practice").addEventListener("click", () => {
+      if (!simplePractice) return;
+      const offset = [-6, -2, 0][Math.min(simpleShots.length, 2)];
+      $("simple-time").value = String(Math.max(1, config().target + offset)); $("simple-clock-confirmed").checked = true;
+      $("simple-taste").value = offset ? "too sour" : "balanced"; recordSimpleShot();
+    });
+    $("simple-new").addEventListener("click", () => { clearSimpleSetup(); clearSimpleShots(); renderSimpleRecipe(); navigateSimple(1); });
+    renderSimpleRecipe();
+  }
+
   function init() {
     algorithms = window.createResearchAlgorithms || window.DecaidResearchAlgorithms;
     if (typeof algorithms !== "function") { setNotice("The shipped algorithm factory is not available. Open this page through the plugin package, then reload.", true); return; }
@@ -468,16 +585,20 @@
     const wizardButtons = typeof document.querySelectorAll === "function" ? [...document.querySelectorAll("[data-wizard-step]")].filter(button => button.tagName === "BUTTON") : [];
     const wizardPanels = typeof document.querySelectorAll === "function" ? [...document.querySelectorAll("section[data-wizard-step]")] : [];
     let wizardStep = 1;
-    const wizardNames = ["Coffee and equipment", "Recipe and brew model", "Taste and trace", "Compare results"];
-    const showWizardStep = step => { wizardStep = Math.max(1, Math.min(4, step)); wizardPanels.forEach(panel => { panel.hidden = Number(panel.getAttribute("data-wizard-step")) !== wizardStep; }); wizardButtons.forEach(button => { const active = Number(button.getAttribute("data-wizard-step")) === wizardStep; button.setAttribute("aria-current", active ? "step" : "false"); }); const status = $("wizard-status"); if (status) text(status, "Step " + wizardStep + " of 4 · " + wizardNames[wizardStep - 1]); const back = $("wizard-back"), next = $("wizard-next"); if (back) back.disabled = wizardStep === 1; if (next) { next.disabled = false; text(next, wizardStep === 4 ? "Stay on results" : "Next"); } };
+    const wizardNames = ["Coffee and grinder", "Your recipe", "Brew and taste", "Your next step"];
+    const showWizardStep = (step, focus = true) => { wizardStep = Math.max(1, Math.min(4, step)); wizardPanels.forEach(panel => { panel.hidden = Number(panel.getAttribute("data-wizard-step")) !== wizardStep; }); wizardButtons.forEach(button => { const active = Number(button.getAttribute("data-wizard-step")) === wizardStep; button.setAttribute("aria-current", active ? "step" : "false"); }); const status = $("wizard-status"); if (status) text(status, "Step " + wizardStep + " of 4 · " + wizardNames[wizardStep - 1]); const back = $("wizard-back"), next = $("wizard-next"); if (back) back.disabled = wizardStep === 1; if (next) { next.disabled = false; next.hidden = viewMode === "simple" && wizardStep >= 3; text(next, wizardStep === 1 ? "Next: recipe" : wizardStep === 2 ? "Next: brew and taste" : "Next"); } if (focus) { const panel = wizardPanels.find(item => !item.hidden && !item.className.split(" ").includes(viewMode === "simple" ? "expert-only" : "simple-only")); if (panel) { panel.setAttribute("tabindex", "-1"); panel.focus?.({preventScroll: true}); panel.scrollIntoView?.({block: "start"}); } } };
+    navigateSimple = showWizardStep;
     wizardButtons.forEach(button => button.addEventListener("click", () => showWizardStep(Number(button.getAttribute("data-wizard-step")))));
-    $("wizard-back")?.addEventListener("click", () => showWizardStep(wizardStep - 1)); $("wizard-next")?.addEventListener("click", () => showWizardStep(wizardStep + 1)); showWizardStep(1);
-    const mode = $("view-mode"); if (mode) { try { viewMode = window.localStorage?.getItem("decaid.assisted-dialin.view-mode") === "expert" ? "expert" : "simple"; } catch (_) {} mode.value = viewMode; document.body.classList.toggle("simple-mode", viewMode === "simple"); mode.addEventListener("change", () => { viewMode = mode.value === "expert" ? "expert" : "simple"; document.body.classList.toggle("simple-mode", viewMode === "simple"); try { window.localStorage?.setItem("decaid.assisted-dialin.view-mode", viewMode); } catch (_) {} render(); }); }
-    $("algorithm").addEventListener("change", () => { reset(); setNotice("Algorithm changed, so the experiment was reset to avoid mixing histories."); }); $("theme").addEventListener("click", () => { document.body.classList.toggle("light"); text($("theme"), document.body.classList.contains("light") ? "Dark mode" : "Light mode"); });
-    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); setNotice("Ready. The first shot uses your starting setting and bean-aware fictional plant.");
+    $("wizard-back")?.addEventListener("click", () => showWizardStep(wizardStep - 1)); $("wizard-next")?.addEventListener("click", () => showWizardStep(wizardStep + 1)); showWizardStep(1, false);
+    const mode = $("view-mode"); if (mode) { try { viewMode = window.localStorage?.getItem("decaid.assisted-dialin.view-mode") === "expert" ? "expert" : "simple"; } catch (_) {} mode.value = viewMode; document.body.classList.toggle("simple-mode", viewMode === "simple"); mode.addEventListener("change", () => { viewMode = mode.value === "expert" ? "expert" : "simple"; document.body.classList.toggle("simple-mode", viewMode === "simple"); try { window.localStorage?.setItem("decaid.assisted-dialin.view-mode", viewMode); } catch (_) {} showWizardStep(wizardStep); render(); }); }
+    $("algorithm").addEventListener("change", () => { reset(); setNotice("Algorithm changed, so the experiment was reset to avoid mixing histories."); }); let lightTheme = false;
+    try { lightTheme = storage()?.getItem("decaid.assisted-dialin.theme") === "light"; } catch (_) {}
+    document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode");
+    $("theme").addEventListener("click", () => { lightTheme = !lightTheme; document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode"); try { storage()?.setItem("decaid.assisted-dialin.theme", lightTheme ? "light" : "dark"); } catch (_) {} });
+    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-overall")?.addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.overall = $("assist-overall").value; renderTable(); } });
     $("assist-taste").addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
-    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges();
+    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple();
   }
   init();
 }());

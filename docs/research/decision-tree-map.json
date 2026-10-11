@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-10-11T10:25:11.337245+00:00",
+  "reviewedAt": "2026-10-11T11:03:19.652678+00:00",
   "scope": "Product decision branches, grouped validation predicates and recovered algorithm state transitions; not instrumented JavaScript branch coverage.",
-  "reviewedBaseCommit": "c9b9998decab2c5aa9733c1a540c3190c3aa4bba",
+  "reviewedBaseCommit": "745e1bdbcbcf4b06fba4818edfdd11653c1b3245",
   "sourceState": "working tree; source hashes identify the reviewed snapshot",
   "sourceSha256": {
-    "plugin.js": "56277d05b1a199e12a6377504cd3542ee4bbe0065aaebb116c7fda72b11ee455",
-    "simulator/app.js": "0ac84026a55095265b1230e3d30f90ae6a1ee27ae562f15df3620a7c4cd9efb0",
-    "simulator/index.html": "2e711bf354e16be73e48581b873bc693b3b3ae1bf9b253b6f26dd6fa14af34cf",
+    "plugin.js": "5130564e81b5393ad29577aba94c5de01c0a53dd75f8c849f0d9d6c519400952",
+    "simulator/app.js": "cc0cc66ed34e14196ece55736a2eb785ee9483fababf5c954cf530910337c20e",
+    "simulator/index.html": "99a4f7c09f17c3c2840c6325b37ea4f3d768424641f1de28f42f86b062529bf5",
+    "simulator/style.css": "65c30245d35cc8b347e8cd632a07db225853507a05230205654a47fb78a4c053",
     "simulator/engine.js": "746ef739b48183f49073c498371e49ada941f35471d9b331f2c5076ac0324b7a",
     "scripts/update-coffee-catalog.py": "692b082fc97e2c255e0e4019eb4809098ae64bffa50f6447fde67909b307fcbe",
     "data/coffee-catalog.json": "7b3b8795bfa9e389a9a3a76b1e56023db19cd675d09e71e363bc2a4186fdba0f",
@@ -1236,49 +1237,83 @@
     },
     {
       "id": "reference",
-      "title": "Reviewed facts and photo rights",
+      "title": "Reference loading, reviewed facts and photo rights",
       "functions": [
         "reviewedReferenceContext",
         "createReferenceCatalog.matchReferences",
         "renderReferenceDetails",
         "renderDialReference",
         "renderDialPanel",
-        "reusableImage"
+        "reusableImage",
+        "simulator/app.js.loadCatalog",
+        "loadCoffeeCatalog",
+        "loadDialProfiles",
+        "showResourceRetry"
       ],
       "why": "A reference can explain a grinder or coffee without changing a recommendation. A link to a photograph is not permission to embed that photograph.",
       "branches": [
         {
           "id": "reference.1",
+          "condition": "website coffee catalog request fails or products is not an array",
+          "outcome": "Set unavailable state and show visible Retry coffee catalogue; manual coffee entry remains usable."
+        },
+        {
+          "id": "reference.2",
+          "condition": "website grinder-reference request fails or models is empty/missing",
+          "outcome": "Show Retry grinder references in the Simple-visible status; retain selected grinder and entered history."
+        },
+        {
+          "id": "reference.3",
+          "condition": "reference retry clicked",
+          "outcome": "Disable that button and mark Retrying while fetching; another failure renders a fresh usable retry button."
+        },
+        {
+          "id": "reference.4",
+          "condition": "coffee catalog retry succeeds",
+          "outcome": "Clear unavailable state and redraw products without resetting shot history."
+        },
+        {
+          "id": "reference.5",
+          "condition": "grinder-reference retry succeeds",
+          "outcome": "Clear status, refresh reference metadata and picker; retain selected model if still present, otherwise choose first returned model; re-render without resetting shot history."
+        },
+        {
+          "id": "reference.6",
+          "condition": "reviewed reference-catalog request fails or schemaVersion !=1 or sources is not an array",
+          "outcome": "Show Unavailable plus error in reference shelf; this older source-facts loader has no retry button."
+        },
+        {
+          "id": "reference.7",
           "condition": "exact supported grinder/burr/bean match",
           "outcome": "Return scoped offline references, deduplicated by source ID; reference facts do not change the suggestion."
         },
         {
-          "id": "reference.2",
+          "id": "reference.8",
           "condition": "reference URL is not credential-free HTTPS",
           "outcome": "Do not make it a usable external source link."
         },
         {
-          "id": "reference.3",
+          "id": "reference.9",
           "condition": "photo renderAllowed is true, safe HTTPS URL/license URL exist, and license is allowlisted reusable",
           "outcome": "Display the photo with attribution/license."
         },
         {
-          "id": "reference.4",
+          "id": "reference.10",
           "condition": "photo rights unverified or URL invalid",
           "outcome": "Use a local schematic where the UI supports it; retain source link rather than embedding the image."
         },
         {
-          "id": "reference.5",
+          "id": "reference.11",
           "condition": "external allowed image fails to load in simulator",
           "outcome": "Fall back to the repository schematic."
         },
         {
-          "id": "reference.6",
+          "id": "reference.12",
           "condition": "no native coordinate conversion",
           "outcome": "Display research/recorded coordinate and unavailable conversion explanation."
         }
       ],
-      "mermaid": "flowchart TD\nA[Matched reference or grinder image] --> B{Contextual source fact or image?}\n B -->|Fact| C[Display scope, facts and provenance]\n C --> D[Does not alter calculation or historical record]\n B -->|Image| E{Explicit reusable rights and safe image/license URLs?}\n E -->|Yes| F[Display photo with credit]\n E -->|No| G[Schematic or source link]\n F --> H{Image fails in simulator?}\n H -->|Yes| G\n H -->|No| I[Keep photo]\n",
+      "mermaid": "flowchart TD\nL[Website coffee or grinder reference request] --> M{Request and resource shape valid?}\n M -->|No| N[Show unavailable and retry; retain entered setup and history]\n N -->|Retry| O[Disable clicked button while loading]\n O --> L\n M -->|Yes| P[Refresh reference display; preserve selected model when available]\n P --> A[Matched reference or grinder image]\n A --> B{Contextual source fact or image?}\n B -->|Fact| C[Display scope, facts and provenance]\n C --> D[Does not alter calculation or historical record]\n B -->|Image| E{Explicit reusable rights and safe image/license URLs?}\n E -->|Yes| F[Display photo with credit]\n E -->|No| G[Schematic or source link]\n F --> H{Image fails in simulator?}\n H -->|Yes| G\n H -->|No| I[Keep photo]\n",
       "tests": [
         "test/reference-data.test.js",
         "test/ui.test.js",
@@ -1303,7 +1338,7 @@
         },
         {
           "id": "catalog-data.2",
-          "condition": "Shopify record lacks title/handle or product_type is not kaffee/coffee/café/cafe",
+          "condition": "Shopify record lacks title/handle or product_type is not kaffee/coffee/caf\u00e9/cafe",
           "outcome": "Skip record."
         },
         {
@@ -1361,7 +1396,7 @@
         "simulator/app.js.init",
         "modeToggle.onclick"
       ],
-      "why": "The wizard controls which task panel is visible. Simple and Expert change how much detail is shown; changing presentation mode does not make evidence more reliable.",
+      "why": "The wizard controls the visible task panel. Website Simple provides a native-dial manual experiment; Expert exposes recovered calculations and saved-trace analysis. Neither mode makes evidence more reliable.",
       "branches": [
         {
           "id": "ui-modes.1",
@@ -1386,20 +1421,25 @@
         {
           "id": "ui-modes.5",
           "condition": "simulator mode",
-          "outcome": "Persist simple/expert preference in localStorage when available; simple-mode CSS hides expert-only elements."
+          "outcome": "Persist simple/expert preference when available; Simple shows native-dial brew/taste/next-shot panels, Expert shows research simulation and actual-trace tools. Their histories and advice paths are separate."
         },
         {
           "id": "ui-modes.6",
+          "condition": "website theme toggle or reload",
+          "outcome": "Persist light/dark preference when localStorage is available; theme changes presentation only."
+        },
+        {
+          "id": "ui-modes.7",
           "condition": "algorithm selection changes",
           "outcome": "Reset experiment rather than mix algorithm histories."
         },
         {
-          "id": "ui-modes.7",
+          "id": "ui-modes.8",
           "condition": "setup context or individual grinder changes",
           "outcome": "Reset affected experiment so observations are not silently reassigned to new equipment/beans."
         },
         {
-          "id": "ui-modes.8",
+          "id": "ui-modes.9",
           "condition": "helper wizard selected",
           "outcome": "Expose model/roast/dose input for proposedDd; label unknown output unit."
         }
@@ -1412,7 +1452,7 @@
     },
     {
       "id": "manual",
-      "title": "Manual DF54/DF64 experiment",
+      "title": "Manual native-unit experiment",
       "functions": [
         "recommendManual"
       ],
@@ -1420,53 +1460,68 @@
       "branches": [
         {
           "id": "manual.1",
-          "condition": "profile not df54/df64_gen1/df64_gen2; invalid positive target/actual time or non-negative tolerance; invalid direction/sign/step/range",
+          "condition": "profile not e64ws/df54/df64_gen1/df64_gen2; invalid positive target/actual time or non-negative tolerance; invalid direction/sign/step/range",
           "outcome": "Reject."
         },
         {
           "id": "manual.2",
+          "condition": "manual toleranceSec omitted",
+          "outcome": "Use1 second; this is a software default, not a universal espresso tolerance."
+        },
+        {
+          "id": "manual.3",
           "condition": "actual < target-tolerance",
           "outcome": "Add finer time direction; actual > target+tolerance adds coarser; equality is inside tolerance."
         },
         {
-          "id": "manual.3",
+          "id": "manual.4",
           "condition": "trimmed lowercase flavor exactly too sour, too acidic or under-extracted",
           "outcome": "Add finer sensory-test direction."
         },
         {
-          "id": "manual.4",
+          "id": "manual.5",
           "condition": "flavor exactly too bitter, too astringent or over-extracted",
           "outcome": "Add coarser sensory-test direction."
         },
         {
-          "id": "manual.5",
+          "id": "manual.6",
           "condition": "other free text, including bare sour/bitter or negation",
           "outcome": "Ignore as taste evidence; an out-of-window time signal can still supply a direction."
         },
         {
-          "id": "manual.6",
+          "id": "manual.7",
           "condition": "flavor balanced OR conflicting finer/coarser directions OR no direction",
           "outcome": "Return direction none."
         },
         {
-          "id": "manual.7",
+          "id": "manual.8",
           "condition": "one agreed direction",
           "outcome": "Return confidence heuristic; legacyScore is 0.55 plus 0.15 per extra agreeing reason capped 0.9, explicitly not probability."
         },
         {
-          "id": "manual.8",
-          "condition": "direction plus currentDial, positive stepMarks and numericFinerDelta +/-1",
-          "outcome": "Calculate one numeric step; DF64 reference interval is 0..90."
-        },
-        {
           "id": "manual.9",
-          "condition": "candidate outside model reference range",
-          "outcome": "Withhold proposedDial and explain; keep directional result."
+          "condition": "E64 WS profile",
+          "outcome": "Require settingUnit micrometres; reject stepMarks and rotation direction; use positive stepNative and nonnegative current native display number."
         },
         {
           "id": "manual.10",
+          "condition": "dial-mark profile with stepNative",
+          "outcome": "Reject; these profiles use stepMarks."
+        },
+        {
+          "id": "manual.11",
+          "condition": "direction plus currentDial, positive unit-appropriate step and numericFinerDelta +/-1",
+          "outcome": "Calculate one native numeric step; DF64 reference interval is 0..90, E64 WS candidates must remain nonnegative."
+        },
+        {
+          "id": "manual.12",
+          "condition": "candidate non-finite or outside model reference range/native lower bound",
+          "outcome": "Withhold proposedDial and explain; keep directional result."
+        },
+        {
+          "id": "manual.13",
           "condition": "physical turn",
-          "outcome": "DF54 default finer counterclockwise; DF64 default finer clockwise; explicit valid override wins; coarser reverses it."
+          "outcome": "DF54 default finer counterclockwise; DF64 default finer clockwise; explicit valid override wins; coarser reverses it. E64 WS physicalTurn is null and has no rotation inference."
         }
       ],
       "mermaid": "flowchart TD\nA[Explicit target, observed time and optional taste intent] --> B{All input and profile checks pass?}\n B -->|No| X[Reject]\n B -->|Yes| C[Collect out-of-window time direction and exact taste intent]\n C --> D{Balanced, conflict or no direction?}\n D -->|Yes| E[No adjustment]\n D -->|No| F[Heuristic finer or coarser experiment]\n F --> G{Current dial, calibrated numeric sign and step present?}\n G -->|No| H[Direction only]\n G -->|Yes| I{Candidate inside reference range?}\n I -->|No| J[Withhold numeric setting]\n I -->|Yes| K[Show one-step proposed dial]\n",
@@ -1566,71 +1621,76 @@
         },
         {
           "id": "catalog-import.2",
+          "condition": "website coffee catalog unavailable",
+          "outcome": "Show explicit retry and retain manual entry; successful retry refreshes products without applying one or resetting history."
+        },
+        {
+          "id": "catalog-import.3",
           "condition": "catalog search or Show more",
           "outcome": "Native and simulator show10 more matches at a time; native search covers name, publisher, origin, process and format."
         },
         {
-          "id": "catalog-import.3",
+          "id": "catalog-import.4",
           "condition": "first native import click",
           "outcome": "Show preview only; do not POST."
         },
         {
-          "id": "catalog-import.4",
+          "id": "catalog-import.5",
           "condition": "format is capsule, ready-to-drink, bundle, green-bean or ground",
           "outcome": "Disable host import as reference-only."
         },
         {
-          "id": "catalog-import.5",
+          "id": "catalog-import.6",
           "condition": "beanEligible is not truthy and format is not blocked",
           "outcome": "Require owner confirmation of roasted whole beans."
         },
         {
-          "id": "catalog-import.6",
+          "id": "catalog-import.7",
           "condition": "decaf is null or absent",
           "outcome": "Require explicit yes/no selection; preserve original unknown and owner confirmation in extras."
         },
         {
-          "id": "catalog-import.7",
+          "id": "catalog-import.8",
           "condition": "required confirmation missing or import already pending",
           "outcome": "Do not write."
         },
         {
-          "id": "catalog-import.8",
+          "id": "catalog-import.9",
           "condition": "catalog identity missing or GET beans?includeArchived=true fails",
           "outcome": "Abort import."
         },
         {
-          "id": "catalog-import.9",
+          "id": "catalog-import.10",
           "condition": "returned host record extras.catalogId matches exactly",
           "outcome": "Reuse existing record without POST."
         },
         {
-          "id": "catalog-import.10",
+          "id": "catalog-import.11",
           "condition": "no returned host record matches",
           "outcome": "POST catalog fields and source provenance; species/process/country/roast remain explicit or null; sourceOrigin stays metadata."
         },
         {
-          "id": "catalog-import.11",
+          "id": "catalog-import.12",
           "condition": "save returns stable ID",
           "outcome": "GET bean by ID; require matching ID and extras.catalogId before success."
         },
         {
-          "id": "catalog-import.12",
+          "id": "catalog-import.13",
           "condition": "host ID or readback identity missing/mismatched",
           "outcome": "Display error."
         },
         {
-          "id": "catalog-import.13",
+          "id": "catalog-import.14",
           "condition": "simulator product.beanEligible is not exactly true",
           "outcome": "Refuse local setup application; retain reference."
         },
         {
-          "id": "catalog-import.14",
+          "id": "catalog-import.15",
           "condition": "simulator eligible Use explicit fields",
           "outcome": "Reset experiment and apply available name/species/roast/publisher only; do not create a host bean or infer species from type."
         },
         {
-          "id": "catalog-import.15",
+          "id": "catalog-import.16",
           "condition": "published recipe reference is espresso-scoped with brewTimeSec",
           "outcome": "Separate starting-point button applies available dose/yield/time; ranges use arithmetic midpoint and absent fields stay unchanged."
         }
@@ -1693,7 +1753,7 @@
         {
           "id": "ui-evidence.8",
           "condition": "imported shot used for recovered comparisons",
-          "outcome": "Require integer current coordinate with explicit deci-micrometre unit and positive selected-clock time before constructing GbS1–4/DdEff cases."
+          "outcome": "Require integer current coordinate with explicit deci-micrometre unit and positive selected-clock time before constructing GbS1\u20134/DdEff cases."
         },
         {
           "id": "ui-evidence.9",
@@ -1801,6 +1861,308 @@
         "test/ui-integration-audit.test.js",
         "test/simulator-ui.test.js",
         "test/brew-metrics.test.js"
+      ]
+    },
+    {
+      "id": "simple-website",
+      "title": "Your first and next real coffee on the website",
+      "functions": [
+        "simulator/app.js.recordSimpleShot",
+        "renderSimpleRecipe",
+        "initializeSimple",
+        "invalidateSimpleAdvice",
+        "clearSimpleShots",
+        "clearSimpleSetup"
+      ],
+      "why": "The Simple website takes the numbers you read from your grinder and your own timer. Each next step uses the current shot and the manual taste rule; its visible shot list is not a learned response model or the matched-history assistant.",
+      "branches": [
+        {
+          "id": "simple-website.1",
+          "condition": "coffee name blank, current dial missing, or measured time not in (0,600] seconds",
+          "outcome": "Ask for the missing observation; do not append a shot."
+        },
+        {
+          "id": "simple-website.2",
+          "condition": "recipe dose/yield/target not positive, dose >100g, yield >200g or target >600s",
+          "outcome": "Reject until recipe corrected."
+        },
+        {
+          "id": "simple-website.3",
+          "condition": "optional cup temperature outside 0..150C or tasting delay outside 0..10080 minutes",
+          "outcome": "Reject; valid notes remain descriptive."
+        },
+        {
+          "id": "simple-website.4",
+          "condition": "pump-start timing and target-cup-weight confirmation absent",
+          "outcome": "Keep current setting; request a repeated recipe measured on the same clock."
+        },
+        {
+          "id": "simple-website.5",
+          "condition": "pressure-led recipe without programmed flow confirmation absent",
+          "outcome": "Keep current setting; time alone cannot justify a change for an unknown/flow-controlled recipe."
+        },
+        {
+          "id": "simple-website.6",
+          "condition": "taste not supplied",
+          "outcome": "Keep setting and ask the operator to taste."
+        },
+        {
+          "id": "simple-website.7",
+          "condition": "taste weak or channeling",
+          "outcome": "Keep setting; check measured recipe or preparation before changing grind."
+        },
+        {
+          "id": "simple-website.8",
+          "condition": "model is not E64 WS, DF54, DF64/DF64 Gen1 or DF64 Gen2",
+          "outcome": "Keep setting; no supported manual small-step rule."
+        },
+        {
+          "id": "simple-website.9",
+          "condition": "Simple recipe and tolerance",
+          "outcome": "Use the visible recipe target and configured tolerance; config fallbacks are28s and1s, not a learned or universal recipe."
+        },
+        {
+          "id": "simple-website.10",
+          "condition": "supported model and evidence confirmations",
+          "outcome": "Call recommendManual with actual/target time, configured tolerance and explicit taste intent; E64 WS uses micrometres and stepNative, DF models use stepMarks. No research-coordinate conversion."
+        },
+        {
+          "id": "simple-website.11",
+          "condition": "balanced, conflicting direction or no manual direction",
+          "outcome": "Keep setting; liking the coffee vetoes chasing the timer."
+        },
+        {
+          "id": "simple-website.12",
+          "condition": "owner has not checked positive step size and numeric finer sign +/-1",
+          "outcome": "Request one checked physical movement before displaying a numbered adjustment."
+        },
+        {
+          "id": "simple-website.13",
+          "condition": "owner step would leave manual reference range",
+          "outcome": "Keep current setting and request limit confirmation."
+        },
+        {
+          "id": "simple-website.14",
+          "condition": "valid proposedDial",
+          "outcome": "Show one finer/coarser step in the grinder display unit; preserve dose and cup weight for the next experiment."
+        },
+        {
+          "id": "simple-website.15",
+          "condition": "accepted entry, including keep-setting advice",
+          "outcome": "Append current setting/time/taste/optional notes to in-memory Simple history and show step4; history does not estimate a slope and is separate from Expert scenario import/export."
+        },
+        {
+          "id": "simple-website.16",
+          "condition": "Use this setting for my next shot",
+          "outcome": "Copy proposed or retained native number to current dial, clear time/taste/clock confirmation and tasting notes, return to step3; user moves hardware manually."
+        },
+        {
+          "id": "simple-website.17",
+          "condition": "current shot or dial-check input changes",
+          "outcome": "Invalidate previous proposal and disable Continue until recalculated."
+        },
+        {
+          "id": "simple-website.18",
+          "condition": "recipe or context changes",
+          "outcome": "Reset Simple shot history alongside experiment history; every grinder-model change, individual grinder selection, burr or calibration change also clears checked Simple dial setup."
+        },
+        {
+          "id": "simple-website.19",
+          "condition": "Start a new coffee",
+          "outcome": "Clear Simple shot history, proposal, pressure confirmation and checked native-dial setup; return to step1."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Your current dial, recipe and measured shot] --> B{Observation and recipe valid?}\n B -->|No| X[Ask for correction]\n B -->|Yes| C{Same pump clock and pressure recipe confirmed?}\n C -->|No| H[Keep setting; gather missing evidence]\n C -->|Yes| D{Taste useful and grinder supported?}\n D -->|No| H\n D -->|Yes| E[Apply shipped manual taste and timing rule]\n E --> F{Direction agrees and owner step is checked?}\n F -->|No| H\n F -->|Yes| G{Candidate within reference range?}\n G -->|No| H\n G -->|Yes| I[Show one native-dial step]\n I --> J[Record this shot in local history]\n H --> J\n J --> K[User accepts next setting]\n K --> L[Clear measured inputs; brew and taste again]\n L --> A\n",
+      "tests": [
+        "test/simulator-ui.test.js",
+        "e2e/novice.spec.js"
+      ]
+    },
+    {
+      "id": "simple-practice",
+      "title": "Fictional practice stays visibly fictional",
+      "functions": [
+        "simulator/app.js.initializeSimple",
+        "clearSimpleSetup",
+        "clearSimpleShots"
+      ],
+      "why": "Practice teaches the sequence of entering a shot, reading advice and trying another shot. Its preset dial and times are fictional examples, not a calibration or prediction of a real grinder.",
+      "branches": [
+        {
+          "id": "simple-practice.1",
+          "condition": "Try a fictional practice example",
+          "outcome": "Select DF64 Gen2 and its available individual profile; clear Simple history; explicitly label practice."
+        },
+        {
+          "id": "simple-practice.2",
+          "condition": "practice setup",
+          "outcome": "Set illustrative current 20marks, step0.5marks and finer numeric sign-1; mark its fictional dial and pressure confirmations checked."
+        },
+        {
+          "id": "simple-practice.3",
+          "condition": "Try next practice shot while practice inactive",
+          "outcome": "Do nothing."
+        },
+        {
+          "id": "simple-practice.4",
+          "condition": "practice shot requested",
+          "outcome": "Set time to max(1,target+offset), with offsets-6,-2,0 for first, second and all later shots; confirm pump timing."
+        },
+        {
+          "id": "simple-practice.5",
+          "condition": "practice offset nonzero",
+          "outcome": "Use too sour intent; zero uses balanced. These tastes are authored examples, not inferred extraction."
+        },
+        {
+          "id": "simple-practice.6",
+          "condition": "practice record",
+          "outcome": "Run the same Simple manual gates; display practice disclaimer and label every history row Practice."
+        },
+        {
+          "id": "simple-practice.7",
+          "condition": "start new coffee or change individual grinder/burr/calibration",
+          "outcome": "Clear practice setup and its pressure confirmation before using real observations."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Explicitly start practice] --> B[Label fictional dial and pressure setup]\n B --> C[Request next practice shot]\n C --> D{Practice still active?}\n D -->|No| X[No action]\n D -->|Yes| E[Choose authored time offset and taste]\n E --> F[Run Simple manual decision rules]\n F --> G[Show Practice label and disclaimer]\n G --> C\n H[Start a new coffee or change grinder calibration] --> I[Clear practice setup]\n",
+      "tests": [
+        "test/simulator-ui.test.js",
+        "e2e/novice.spec.js"
+      ]
+    },
+    {
+      "id": "native-beginner",
+      "title": "Native app: readable answer or owner-confirmed dial step",
+      "functions": [
+        "beginnerMessage",
+        "renderBeginnerAdvice",
+        "updateAdviceClock",
+        "nativeAdviceForm submit handler",
+        "clearAnalysisState"
+      ],
+      "why": "The native app first explains the saved-evidence answer in physical units when a verified conversion exists. Its separate manual form accepts an owner-checked physical dial step; that result is a new experiment, not a fitted grinder response.",
+      "branches": [
+        {
+          "id": "native-beginner.1",
+          "condition": "saved recommendation has finite setting and explicit native source unit",
+          "outcome": "Display native \u00b5m for micrometres/micrometre/\u00b5m, or marks for dial-mark/dial-marks/marks/owner marks/owner-calibrated marks; E64 WS explicit deci-micrometre divides by10."
+        },
+        {
+          "id": "native-beginner.2",
+          "condition": "saved recommendation unit unknown or value invalid",
+          "outcome": "Withhold physical number; request verified units. A recalled number is a saved intended setting, not a live hardware reading."
+        },
+        {
+          "id": "native-beginner.3",
+          "condition": "saved answer has available finite currentNative and proposedNative",
+          "outcome": "Show actual display units and amount; zero amount means keep setting."
+        },
+        {
+          "id": "native-beginner.4",
+          "condition": "converted proposal lies between physical steps",
+          "outcome": "Ask the operator to choose and confirm a neighboring achievable mark."
+        },
+        {
+          "id": "native-beginner.5",
+          "condition": "native conversion or proposed value unavailable",
+          "outcome": "Keep current setting for now and explain missing evidence or conversion; do not present research dD as a physical number."
+        },
+        {
+          "id": "native-beginner.6",
+          "condition": "manual form without analysed saved shot",
+          "outcome": "Reject and request analysis in step3."
+        },
+        {
+          "id": "native-beginner.7",
+          "condition": "saved metrics.stopReason matches error, disconnected or stopping.?backstop",
+          "outcome": "Reject interrupted-shot manual advice, even with a completion checkbox."
+        },
+        {
+          "id": "native-beginner.8",
+          "condition": "saved controlMode is not pressure or mixed_preinfusion_flow",
+          "outcome": "Reject manual time-based dial calculation."
+        },
+        {
+          "id": "native-beginner.9",
+          "condition": "owner has not confirmed physical dial used for this saved shot, small adjustment, completed recipe and target measured on the same clock",
+          "outcome": "Reject."
+        },
+        {
+          "id": "native-beginner.10",
+          "condition": "selected E64 WS/DF54/DF64 generation does not match normalized saved grinderModel",
+          "outcome": "Reject; normalization ignores case and non-alphanumeric characters."
+        },
+        {
+          "id": "native-beginner.11",
+          "condition": "any numeric field blank, current/step/actual/target not finite, step not positive, actual/target outside (0,600], or finer sign not +/-1",
+          "outcome": "Reject; a blank current setting cannot become zero."
+        },
+        {
+          "id": "native-beginner.12",
+          "condition": "clock selector changes",
+          "outcome": "Prefill finite selected-clock duration only for complete pump/pouring timing or explicitly chosen recording; otherwise leave measured time blank."
+        },
+        {
+          "id": "native-beginner.13",
+          "condition": "selected native manual model changes",
+          "outcome": "Switch display labels between micrometres and marks; clear current/step/sign and owner confirmation; invalidate previous answer."
+        },
+        {
+          "id": "native-beginner.14",
+          "condition": "taste weak or channeling",
+          "outcome": "Keep current native number and ask for dose/preparation/trace evidence."
+        },
+        {
+          "id": "native-beginner.15",
+          "condition": "native manual taste blank",
+          "outcome": "Keep current number and ask for sensory assessment; the beginner UI does not invoke time-only manual advice."
+        },
+        {
+          "id": "native-beginner.16",
+          "condition": "saved setting has known native units",
+          "outcome": "E64 WS accepts explicit micrometre aliases or divides explicit deci-micrometre by10 for consistency only; DF accepts dial-mark/dial-marks/marks/owner marks/owner-calibrated marks."
+        },
+        {
+          "id": "native-beginner.17",
+          "condition": "known saved native setting differs from entered current by more than 1e-7",
+          "outcome": "Reject historical-setting mismatch; unknown units stay unconverted and require the owner confirmation."
+        },
+        {
+          "id": "native-beginner.18",
+          "condition": "valid manual case",
+          "outcome": "POST research operation manual with owner step/sign and same-clock times; E64 WS sends settingUnit micrometres and stepNative, DF models send stepMarks. This is separate from the rich history suggestion."
+        },
+        {
+          "id": "native-beginner.19",
+          "condition": "manual response has finite proposedDial",
+          "outcome": "Show one physical step and ask to brew/taste before another change."
+        },
+        {
+          "id": "native-beginner.20",
+          "condition": "manual response lacks proposedDial",
+          "outcome": "Keep current native number and show reasons, including balanced/conflict/range refusal."
+        },
+        {
+          "id": "native-beginner.21",
+          "condition": "form inputs change or analysed shot changes during request",
+          "outcome": "Increment advice generation; stale response does not replace current advice."
+        },
+        {
+          "id": "native-beginner.22",
+          "condition": "feedback save succeeds",
+          "outcome": "Invalidate previous beginner/manual advice and ask for a fresh assessment."
+        },
+        {
+          "id": "native-beginner.23",
+          "condition": "new analysis or shot selection",
+          "outcome": "Clear existing beginner and manual advice and the intended-recipe checkbox before fetching new evidence."
+        }
+      ],
+      "mermaid": "flowchart TD\nA[Native next-setting step] --> B{Saved assistant answer or manual form?}\n B -->|Saved answer| R{Recall of a good shot?}\n R -->|Yes| S{Saved number has explicit convertible unit?}\n S -->|Yes| T[Show recorded native number; verify on grinder]\n S -->|No| E\n R -->|No| C{Verified physical values available?}\n C -->|Yes| D[Show native value and physical-step caveat]\n C -->|No| E[Keep setting; explain missing evidence or conversion]\n B -->|Owner manual form| F{Completed pressure-compatible shot and matching grinder?}\n F -->|No| X[Explain why calculation is unavailable]\n F -->|Yes| G{Owner confirmation and numeric inputs valid?}\n G -->|No| X\n G -->|Yes| H{Taste absent, weak or preparation uncertain?}\n H -->|Yes| E\n H -->|No| I[Call isolated manual heuristic]\n I --> J{Current request and finite proposed dial?}\n J -->|Yes| K[Show one physical experiment]\n J -->|No proposal| E\n J -->|Stale| L[Ignore response]\n",
+      "tests": [
+        "test/ui.test.js",
+        "test/ui-integration-audit.test.js",
+        "e2e/native.spec.js"
       ]
     }
   ]

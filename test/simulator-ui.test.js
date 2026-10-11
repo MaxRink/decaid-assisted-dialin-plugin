@@ -41,9 +41,11 @@ class Element {
   focus() {}
 }
 
-function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null) {
+function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null, unavailable = {}) {
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
+    "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
+    "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
     "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
@@ -114,7 +116,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
     setTimeout,
     clearTimeout,
     queueMicrotask,
-    fetch: async (url) => ({ ok: true, json: async () => String(url).includes("grinder-dials") ? dialData : String(url).includes("decent-profiles") ? JSON.parse(fs.readFileSync(require("node:path").join(root, "data/decent-profiles.json"), "utf8")) : catalog }),
+    fetch: async (url) => ({ ok: !(String(url).includes("grinder-dials") && unavailable.grinders || String(url).includes("coffee-catalog") && unavailable.coffee), json: async () => String(url).includes("coffee-catalog") ? {products: [{name: "Retry coffee", beanEligible: true}]} : String(url).includes("grinder-dials") ? dialData : String(url).includes("decent-profiles") ? JSON.parse(fs.readFileSync(require("node:path").join(root, "data/decent-profiles.json"), "utf8")) : catalog }),
     localStorage: persistentStorage || { data: new Map(), getItem(key) { return this.data.has(key) ? this.data.get(key) : null; }, setItem(key, value) { this.data.set(key, String(value)); }, removeItem(key) { this.data.delete(key); } },
     Blob: BlobFixture,
     FileReader: FileReaderFixture,
@@ -479,4 +481,96 @@ test("saved-shot manual-stop confirmation survives import, editing, API feedback
   assert.equal(save().feedback.manualStopConfirmed, false, "invalid input retains previous explicit choice");
   open({shot, feedback: {manualStopConfirmed: true}}); ui.elements.get("clear-shot-trace").click();
   assert.equal(ui.elements.get("manual-stop-confirmed").checked, false, "confirmation cannot leak into another shot");
+});
+
+
+test("beginner flow uses the shipped native rule and carries half-mark steps across shots", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  field("current-dial").value = "20"; field("step").value = "0.5"; field("finer").value = "-1"; field("confirm-dial").checked = true;
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true;
+  field("time").value = "22"; field("taste").value = "too sour"; field("record").click();
+  assert.match(field("advice").textContent, /Turn finer by half a mark: from 20 to 19.5 marks/);
+  assert.doesNotMatch(field("advice").textContent, /dD|GbS|under.extracted/);
+  field("continue").click(); assert.equal(field("current-dial").value, "19.5");
+  assert.equal(field("clock-confirmed").checked, false);
+  field("time").value = "26"; field("taste").value = "too sour"; field("clock-confirmed").checked = true; field("record").click();
+  assert.match(field("advice").textContent, /from 19.5 to 19 marks/);
+  field("continue").click(); field("time").value = "28"; field("taste").value = "balanced"; field("clock-confirmed").checked = true; field("record").click();
+  assert.match(field("advice").textContent, /Keep the grinder at 19 marks/);
+  assert.equal(field("history").children.length, 3);
+});
+
+test("beginner advice requires checked dial movement, clock and pressure recipe", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  field("current-dial").value = "20"; field("time").value = "22"; field("taste").value = "too sour";
+  field("record").click(); assert.match(field("advice").textContent, /timing from pump start/);
+  field("clock-confirmed").checked = true; field("record").click(); assert.match(field("advice").textContent, /programmed flow target/);
+  field("pressure-confirmed").checked = true; field("taste").value = ""; field("record").click(); assert.match(field("advice").textContent, /cool enough to sip/);
+  field("taste").value = "too sour"; field("record").click(); assert.match(field("advice").textContent, /confirm a small step/);
+  field("step").value = "0.5"; field("finer").value = "-1"; field("confirm-dial").checked = true;
+  field("taste").value = "too bitter"; field("record").click(); assert.match(field("advice").textContent, /do not point to the same change/);
+  field("time").value = "34"; field("record").click(); assert.match(field("advice").textContent, /Turn coarser.*20 to 20.5 marks/);
+  field("taste").value = "weak"; field("record").click(); assert.match(field("advice").textContent, /weak taste alone/);
+});
+
+test("fictional practice completes three shots without creating an owner conversion", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  field("start-practice").click();
+  for (let i = 0; i < 3; i++) { field("practice").click(); if (i < 2) field("continue").click(); }
+  assert.equal(field("history").children.length, 3);
+  assert.match(field("advice").textContent, /Keep the grinder at 19 marks/);
+  assert.match(field("advice").textContent, /fictional shot times/);
+  assert.match(ui.elements.get("dial-panel").textContent, /calibration required/);
+  field("new").click(); assert.equal(field("confirm-dial").checked, false); assert.equal(field("current-dial").value, "");
+});
+
+test("beginner E64 uses native micrometres and a fresh owner-confirmed step", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  field("start-practice").click();
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  assert.equal(field("current-dial").value, ""); assert.equal(field("step").value, "");
+  assert.equal(field("confirm-dial").checked, false); assert.equal(field("pressure-confirmed").checked, false);
+  field("current-dial").value = "60"; field("step").value = "2"; field("finer").value = "-1"; field("confirm-dial").checked = true;
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("time").value = "22"; field("taste").value = "too sour";
+  field("record").click();
+  assert.match(field("advice").textContent, /Set finer by 2 micrometres: from 60 to 58 micrometres/);
+  assert.doesNotMatch(field("advice").textContent, /clockwise|marks|dD|Practice only/);
+  field("time").value = "26"; field("time").dispatch("change"); assert.equal(field("continue").disabled, true);
+  field("continue").click(); assert.equal(field("current-dial").value, "60", "stale proposal cannot be applied");
+  field("record").click(); field("continue").click(); assert.equal(field("current-dial").value, "58");
+  field("new").click(); assert.equal(field("pressure-confirmed").checked, false);
+});
+
+
+test("simulator restores the selected theme and still works when storage is unavailable", () => {
+  const first = uiFixture(); first.elements.get("theme").click();
+  const restored = uiFixture(undefined, first.context.localStorage);
+  assert.match(restored.context.document.body.className, /light/);
+  assert.equal(restored.elements.get("theme").textContent, "Dark mode");
+  const unavailable = uiFixture(undefined, {getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); }});
+  assert.doesNotThrow(() => unavailable.elements.get("theme").click());
+  assert.match(unavailable.context.document.body.className, /light/);
+});
+
+
+test("unavailable coffee and grinder references show retry and recover without losing shots", async () => {
+  const unavailable = {coffee: true, grinders: true}, ui = uiFixture(undefined, null, unavailable);
+  await new Promise(setImmediate);
+  assert.match(ui.elements.get("coffee-catalog").textContent, /Coffee catalogue unavailable/);
+  assert.match(ui.elements.get("grinder-load-status").textContent, /grinder references unavailable/);
+  ui.elements.get("next").click(); assert.equal(ui.elements.get("shots").children.length, 1);
+  ui.elements.get("coffee-catalog-search").dispatch("input");
+  const coffeeRetry = ui.elements.get("coffee-catalog").children.find(node => node.tagName === "BUTTON");
+  assert.equal(coffeeRetry.textContent, "Retry coffee catalogue");
+  await coffeeRetry.click(); assert.match(ui.elements.get("coffee-catalog").textContent, /Retry coffee catalogue/);
+  unavailable.coffee = false; unavailable.grinders = false;
+  ui.elements.get("grinder").value = "DF64 Gen 1";
+  await ui.elements.get("coffee-catalog").children.find(node => node.tagName === "BUTTON").click();
+  await ui.elements.get("grinder-load-status").children.find(node => node.tagName === "BUTTON").click();
+  assert.match(ui.elements.get("coffee-catalog").textContent, /Retry coffee/);
+  assert.doesNotMatch(ui.elements.get("coffee-catalog").textContent, /unavailable/);
+  assert.equal(ui.elements.get("grinder-load-status").textContent, "");
+  assert.equal(ui.elements.get("grinder").value, "DF64 Gen 1", "retry retains the current grinder choice");
+  assert.equal(ui.elements.get("grinder").children.length, 16);
+  assert.equal(ui.elements.get("shots").children.length, 1);
 });
