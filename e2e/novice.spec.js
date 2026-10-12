@@ -51,7 +51,7 @@ test('first shot asks for confirmed dial movement instead of guessing numbers', 
 test('E64 WS gives owner-confirmed steps in native micrometres', async ({page}) => {
   await setup(page, 'E64 WS');await step(page,1);
   await page.locator('#simple-current-dial').fill('63');
-  await page.locator('#simple-step').fill('1');await step(page,3);
+  await page.locator('#simple-step').fill('1');await page.locator('#simple-confirm-dial').check();await step(page,3);
   await shot(page,22,'too sour');
   await expect(page.locator('#simple-advice')).toContainText('from 63 to 62');
   await expect(page.locator('#simple-advice')).toContainText('micrometres');

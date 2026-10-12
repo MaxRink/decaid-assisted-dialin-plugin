@@ -319,3 +319,13 @@ Decaid can offer an update.
 
 [Validation readiness and physical trial checklist](docs/VALIDATION_READINESS.md)
 tracks upstream dependencies and the evidence needed before physical claims.
+
+
+The website also learns a separate local response in your grinder's native dial
+units, without requiring a micron calibration. Its guided setup offers sourced,
+editable small-step presets and asks for the missing operating details. First
+and second settings are labelled unlearned trials; three consistent nearby
+settings can support a bounded numerical suggestion. Plateaus, noisy repeats,
+changed conditions and conflicting taste ask for a repeat. See the
+[grinder setup guide](docs/GRINDER_SETUP.md) for preset evidence, ELI5 explanations,
+the complete decision flow and the native-response contract.

@@ -44,11 +44,13 @@ class Element {
 function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null, unavailable = {}) {
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
+    "simple-bound-min", "simple-bound-max", "simple-step-preset", "simple-bounds-help", "simple-reset-defaults", "simple-zero-changed", "simple-profile-name", "native-response", "research-calibration", "research-inputs", "simple-dial-setup", "simple-grinder-context", "simple-brew",
     "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
     "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
     "view-mode", "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "all-comparison-context", "comparison-source", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
+  elements.get("simple-profile-name").value = "My pressure espresso";
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
   ["dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "assist-dial", "catalog-search"].forEach((id) => { elements.get(id).tagName = "INPUT"; });
   Object.assign(elements.get("algorithm"), { value: "GbS1" });
@@ -181,7 +183,7 @@ test("simulator keeps same-model grinder units independent and restores them fro
   first.elements.get("burrs").value = "stock · unit B";
   first.elements.get("burrs").dispatch("change");
   managerButton(first, "Save current calibration").click();
-  assert.equal(first.elements.get("grinder-instance").children.length, 5);
+  assert.equal(first.elements.get("grinder-instance").children.length, 6);
   first.elements.get("grinder-instance").value = firstId;
   first.elements.get("grinder-instance").dispatch("change");
   assert.equal(first.elements.get("burrs").value, "SSP HU · unit A");
@@ -658,4 +660,158 @@ test("Simple mode never borrows an imported expert scenario as recorded coffee",
   ui.elements.get("view-mode").value = "simple"; ui.elements.get("view-mode").dispatch("change");
   for (const name of ["GbS1", "GbS2", "GbS3", "GbS4", "DdEff", "manual"]) assert.equal(comparisonCard(ui, name).attributes["data-status"], "unavailable");
   assert.equal(ui.elements.get("simple-history").children.length, 0);
+});
+
+
+function nativeSession(ui, target = 28) {
+  const field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("target").value = String(target);
+  field("step").value = "0.25"; field("finer").value = "-1";
+  field("bound-min").value = "20"; field("bound-max").value = "25"; field("confirm-dial").checked = true;
+  return (setting, time, taste = "too bitter") => {
+    field("current-dial").value = String(setting); field("time").value = String(time); field("taste").value = taste;
+    field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("record").click();
+  };
+}
+
+test("native learner holds the exact 22/34, 22.25/31, 22.5/31 plateau and repeated plateau", () => {
+  const ui = uiFixture(), record = nativeSession(ui);
+  for (const [setting, time] of [[22,34],[22.25,31],[22.5,31],[22.5,31]]) {
+    if (ui.elements.get("simple-history").children.length) ui.elements.get("simple-continue").click();
+    record(setting, time);
+  }
+  assert.equal(ui.elements.get("native-response").attributes["data-reason"], "latest_plateau");
+  assert.match(ui.elements.get("simple-advice").textContent, /Keep the grinder at 22.5 marks and repeat/);
+  assert.match(ui.elements.get("native-response").textContent, /22.5 marks.*31 s median, 2 shot/);
+  assert.equal(ui.elements.get("simple-history").children.length, 4);
+  assert.match(ui.elements.get("dial-panel").textContent, /calibration required/);
+  ui.elements.get("simple-continue").click(); assert.equal(ui.elements.get("simple-current-dial").value, "22.5");
+});
+
+test("stable native response uses measured points while balanced and prep feedback still hold", () => {
+  const ui = uiFixture(), record = nativeSession(ui, 25);
+  for (const [setting,time] of [[22,34],[22.25,31],[22.5,28]]) {
+    if (ui.elements.get("simple-history").children.length) ui.elements.get("simple-continue").click();
+    record(setting,time);
+  }
+  assert.equal(ui.elements.get("native-response").attributes["data-status"], "suggestion");
+  assert.match(ui.elements.get("simple-advice").textContent, /Try 22.75 marks next/);
+  assert.match(ui.elements.get("native-response").textContent, /Local timing slope: -12 seconds per marks/);
+  assert.match(ui.elements.get("native-response").textContent, /raw estimate is not an instruction/);
+  record(22.5,28,"balanced"); assert.match(ui.elements.get("simple-advice").textContent, /Keep the grinder at 22.5/);
+  record(22.5,28,"channeling"); assert.match(ui.elements.get("simple-advice").textContent, /evenly prepared/);
+});
+
+test("native setup guidance and context changes retain recorded history without mixing recipes", () => {
+  const ui = uiFixture(), record = nativeSession(ui);
+  record(22,34); ui.elements.get("simple-continue").click(); record(22.25,31);
+  ui.elements.get("simple-bound-min").value = ""; ui.elements.get("simple-bound-min").dispatch("change");
+  ui.elements.get("simple-bound-min").value = "20"; ui.elements.get("simple-confirm-dial").checked = true;
+  record(22.25,31); assert.equal(ui.elements.get("simple-history").children.length, 2, "reconfirming setup replaces current entry");
+  ui.elements.get("simple-zero-changed").click();
+  assert.equal(ui.elements.get("simple-history").children.length, 2);
+  assert.equal(ui.elements.get("simple-confirm-dial").checked, false);
+  ui.elements.get("simple-bound-min").value = "20"; ui.elements.get("simple-bound-max").value = "25"; ui.elements.get("simple-finer").value = "-1"; ui.elements.get("simple-confirm-dial").checked = true;
+  record(22.5,30);
+  assert.equal(ui.elements.get("native-response").attributes["data-reason"], "first_setting");
+  assert.match(ui.elements.get("native-response").textContent, /Older shots.*left out/);
+  assert.equal(ui.elements.get("simple-history").children.length, 3);
+});
+
+test("presets remain unconfirmed, respect edits, and remember each owner's step separately", async () => {
+  const ui = uiFixture();
+  ui.elements.get("simple-step").value = "0.25"; ui.elements.get("simple-step").dispatch("input");
+  await new Promise(setImmediate);
+  assert.equal(ui.elements.get("simple-step").value, "0.25", "metadata load cannot overwrite an edited step");
+  assert.equal(ui.elements.get("simple-bound-min").value, "", "printed scale is not a safe trial window");
+  assert.equal(ui.elements.get("simple-confirm-dial").checked, false);
+  ui.elements.get("simple-finer").value = "-1"; ui.elements.get("simple-confirm-dial").checked = true; ui.elements.get("simple-confirm-dial").dispatch("change");
+  const firstId = ui.elements.get("grinder-instance").value;
+  managerButton(ui, "Add individual grinder").click();
+  assert.equal(ui.elements.get("simple-step").value, "0.5", "another unit uses its proposed preset");
+  assert.equal(ui.elements.get("simple-confirm-dial").checked, false);
+  ui.elements.get("grinder-instance").value = firstId; ui.elements.get("grinder-instance").dispatch("change");
+  assert.equal(ui.elements.get("simple-step").value, "0.25");
+  const reloaded = uiFixture(undefined, ui.context.localStorage); await new Promise(setImmediate);
+  assert.equal(reloaded.elements.get("simple-step").value, "0.25");
+  reloaded.elements.get("grinder").value = "LAGOM P64"; reloaded.elements.get("grinder").dispatch("change");
+  assert.equal(reloaded.elements.get("simple-step").value, "", "unknown preset stays blank");
+});
+
+test("research starting table seeds only supported model, known roast and confirmed dose", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60"; field("time").value = "22"; field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("taste").value = "too sour"; field("record").click();
+  assert.equal(comparisonCard(ui,"proposedDd").attributes["data-status"], "computed");
+  assert.deepEqual(JSON.parse(JSON.stringify(comparisonValue(ui,"proposedDd").case.input)), {model:"e64",roast:"light",weightMg:18000});
+  assert.match(comparisonCard(ui,"proposedDd").textContent, /unit unknown.*Do not use this number on your dial/);
+  assert.equal(comparisonCard(ui,"effectiveDd").attributes["data-status"], "unavailable");
+  ui.elements.get("roast").value = "unknown"; ui.elements.get("roast").dispatch("change");
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("record").click();
+  assert.equal(comparisonCard(ui,"proposedDd").attributes["data-status"], "unavailable");
+});
+
+test("Ode rejects espresso learning even when owner supplied a complete trial window", async () => {
+  const ui = uiFixture(); await new Promise(setImmediate);
+  ui.elements.get("grinder").value = "Fellow Ode Gen 2"; ui.elements.get("grinder").dispatch("change");
+  const record = nativeSession(ui); record(22,34);
+  assert.equal(ui.elements.get("native-response").attributes["data-reason"], "unsupported_grinder");
+  assert.match(ui.elements.get("simple-advice").textContent, /not supported for espresso/);
+  ui.elements.get("simple-continue").click(); assert.equal(ui.elements.get("simple-current-dial").value, "22");
+});
+
+
+test("each supplied native bound applies independently to manual fallback", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  field("current-dial").value = "20"; field("step").value = "0.5"; field("finer").value = "-1"; field("confirm-dial").checked = true;
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true;
+  field("bound-min").value = "20"; field("bound-max").value = ""; field("time").value = "22"; field("taste").value = "too sour"; field("record").click();
+  assert.match(field("advice").textContent, /Keep the grinder at 20 marks/);
+  assert.match(comparisonCard(ui,"manual").textContent, /outside your allowed trial window/);
+  field("bound-min").value = ""; field("bound-max").value = "20"; field("time").value = "34"; field("taste").value = "too bitter"; field("record").click();
+  assert.match(field("advice").textContent, /Keep the grinder at 20 marks/);
+});
+
+test("context changes withhold every recorded research replay and starting table until a fresh shot", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60"; field("time").value = "22"; field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("taste").value = "too sour"; field("record").click();
+  assert.equal(comparisonCard(ui,"GbS2").attributes["data-status"], "computed");
+  ui.elements.get("bean").value = "Different coffee"; ui.elements.get("bean").dispatch("change");
+  for (const name of ["GbS1","GbS2","GbS3","GbS4","DdEff","manual","proposedDd"]) assert.equal(comparisonCard(ui,name).attributes["data-status"], "unavailable", name);
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("record").click();
+  assert.equal(comparisonValue(ui,"GbS2").case.state.history.length, 0, "new replay does not borrow old-coffee regression");
+  assert.equal(field("history").children.length, 2, "historical shots remain visible");
+});
+
+
+test("replacing calibration anchors fences historical research coordinates even with the same epoch label", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  const calibrate = dd => {
+    for (const [label,value] of Object.entries({"Native dial minimum":0,"Native dial maximum":90,"Native dial at anchor 1":0,"Research dD at anchor 1":0,"Native dial at anchor 2":90,"Research dD at anchor 2":dd})) panelInput(ui,label).value = String(value);
+    ui.elements.get("dial-panel").children.flatMap(node => node.children || []).find(node => node.textContent === "Apply owner calibration").click();
+  };
+  calibrate(3000);
+  field("current-dial").value = "21"; field("time").value = "22"; field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("taste").value = "too sour"; field("record").click();
+  assert.equal(comparisonCard(ui,"GbS2").attributes["data-status"], "computed");
+  calibrate(6000);
+  assert.equal(comparisonCard(ui,"GbS2").attributes["data-status"], "unavailable");
+  assert.equal(field("history").children.length, 1);
+  field("time").value = "25"; field("record").click();
+  assert.equal(comparisonValue(ui,"GbS2").case.state.history.length, 0);
+  assert.equal(field("history").children.length, 2);
+});
+
+test("changed target and tolerance refresh the last recorded shot instead of inventing a repeat", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60"; field("time").value = "22"; field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("taste").value = "too sour"; field("record").click();
+  for (const [id,value] of [["target","25"],["tolerance","2"]]) {
+    ui.elements.get(id).value = value; ui.elements.get(id).dispatch("change");
+    assert.equal(comparisonCard(ui,"GbS2").attributes["data-status"], "unavailable");
+    assert.equal(comparisonCard(ui,"manual").attributes["data-status"], "unavailable");
+    field("record").click(); assert.equal(field("history").children.length, 1);
+  }
+  assert.equal(comparisonValue(ui,"GbS2").case.input.targetBrewTimeMs, 25000);
+  assert.equal(comparisonValue(ui,"GbS2").case.input.toleranceMs, 2000);
 });

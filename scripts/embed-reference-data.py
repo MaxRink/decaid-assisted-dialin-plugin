@@ -150,6 +150,27 @@ def main():
         for key in ("model", "unit", "control", "markings", "zero"):
             if not isinstance(model.get(key), str) or not 1 <= len(model[key]) <= 1000:
                 fail(f"grinderDials {key} is invalid")
+        adjustment = model.get("espressoAdjustment")
+        if adjustment is not None:
+            if not isinstance(adjustment, dict) or set(adjustment) != {"stepNative", "basis", "note", "sources", "numericFinerDelta", "espressoSupported"}:
+                fail("grinderDials espresso adjustment has an invalid schema")
+            step = adjustment["stepNative"]
+            if step is not None and (isinstance(step, bool) or not isinstance(step, (int, float)) or not math.isfinite(step) or step <= 0):
+                fail("grinderDials espresso step must be positive or unknown")
+            if adjustment["numericFinerDelta"] not in (None, -1, 1) or isinstance(adjustment["numericFinerDelta"], bool):
+                fail("grinderDials espresso direction must be explicit or unknown")
+            if not isinstance(adjustment["espressoSupported"], bool):
+                fail("grinderDials espresso support must be explicit")
+            if any(not isinstance(adjustment[key], str) or not adjustment[key].strip() or len(adjustment[key]) > 4000 for key in ("basis", "note")):
+                fail("grinderDials espresso preset needs bounded provenance")
+            if not isinstance(adjustment["sources"], list) or not 1 <= len(adjustment["sources"]) <= 16:
+                fail("grinderDials espresso preset needs sources")
+            for source in adjustment["sources"]:
+                if not isinstance(source, dict) or set(source) != {"title", "url"} or not isinstance(source["title"], str) or not source["title"].strip() or not isinstance(source["url"], str):
+                    fail("grinderDials espresso source is invalid")
+                parsed = urlparse(source["url"])
+                if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+                    fail("grinderDials espresso source must use HTTPS without credentials")
         if model.get("schematicUrl") != "../docs/grinder-dials/" + model["id"] + ".svg":
             fail("grinderDials schematic path is invalid")
         if not (ROOT / "docs" / "grinder-dials" / (model["id"] + ".svg")).is_file():
