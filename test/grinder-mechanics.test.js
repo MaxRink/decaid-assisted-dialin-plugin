@@ -1,88 +1,213 @@
 "use strict";
-
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const catalog = require("../data/grinder-mechanics.json");
-const evidenceCatalog = catalog;
 const { createGrinderMechanics } = require("../src/grinder-mechanics");
-
 const mechanics = createGrinderMechanics(catalog);
+const close = (a, b) => assert.ok(Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)), `${a} != ${b}`);
+const relative = extra => mechanics.toRelativeCoordinate({ model: "DF64 Gen 1", nativeValue: 22.25,
+  baselineNativeValue: 22, signedAxialUmPerNative: 10.4, umPerResearchUnit: .1, acceptScenario: true, ...extra });
+const proposal = extra => mechanics.proposeNative({ currentNativeValue: 22, requestedResearchDelta: 26,
+  signedAxialUmPerNative: 10.4, umPerResearchUnit: .1, ownerStep: .5, minNative: 0, maxNative: 90,
+  acceptScenario: true, ...extra });
+const finiteOutputs = value => {
+  if (typeof value === "number") assert.ok(Number.isFinite(value));
+  else if (value && typeof value === "object") Object.values(value).forEach(finiteOutputs);
+};
 
-test("known native disk distance is reported as mechanical distance only", () => {
-  const result = mechanics.estimate({ model: "E64 WS", nativeValue: 500 });
-  assert.equal(result.status, "mechanical_reference");
-  assert.equal(result.axialMovementUm, 500);
-  assert.match(result.warnings[0], /particle size/);
+test("canonical catalog resolves all actual grinder names without conflating K Ultra", () => {
+  const names = ["E64 WS", "E65S GbW", "E80S GbW", "DF64 Gen 1", "DF64 Gen 2", "DF54", "Niche Zero",
+    "Baratza Encore ESP", "Timemore Sculptor 064S", "Timemore Sculptor 078S", "LAGOM 01", "LAGOM P64",
+    "1Zpresso X-Pro", "1Zpresso J-Max", "1Zpresso K series", "Fellow Ode Gen 2"];
+  assert.equal(catalog.models.length, 16);
+  names.forEach(name => assert.ok(mechanics.profileFor(name), name));
+  assert.equal(mechanics.profileFor("1Zpresso K-Ultra"), null);
 });
 
-test("E64 relative delta and P64 printed-number conversion stay explicit", () => {
-  const e64 = mechanics.toRelativeCoordinate({ model: "E64 WS", nativeValue: 62, baselineNativeValue: 60, finerSign: -1, signedAxialUmPerNative: 1, umPerResearchUnit: 0.1 });
-  assert.equal(e64.relativeCoordinate, 20);
-  const p64 = mechanics.estimate({ model: "LAGOM P64", nativeValue: 1.1, baselineNativeValue: 1, nativeUnit: "printed_number" });
-  assert.ok(Math.abs(p64.axialMovementUm - 10) < 1e-9);
+test("DDD readout is distinct from baseline-relative displacement and physical offset", () => {
+  for (const model of ["E64 WS", "E65S GbW", "E80S GbW"]) {
+    const indicated = mechanics.estimate({ model, nativeValue: 62 });
+    assert.equal(indicated.indicatedDistanceUm, 62);
+    assert.equal(indicated.axialMovementUm, null);
+    const delta = mechanics.estimate({ model, nativeValue: 62, baselineNativeValue: 60 });
+    assert.equal(delta.axialMovementUm, 2);
+    const mapped = relative({ model, nativeValue: 62, baselineNativeValue: 60, signedAxialUmPerNative: undefined });
+    assert.equal(mapped.relativeCoordinate, 20);
+    const physical = mechanics.toPhysicalCoordinate({ model, nativeValue: 62, baselineNativeValue: 60, zeroOffsetUm: 60 });
+    assert.equal(physical.coordinate, 62);
+    assert.equal(mechanics.toPhysicalCoordinate({ model, nativeValue: 62, zeroOffsetUm: 60 }).coordinate, null);
+  }
 });
 
-test("DF64 dial fraction is provisional and does not invent a coordinate", () => {
-  const result = mechanics.estimate({ model: "DF64 Gen 1", nativeValue: 45 });
-  assert.equal(result.status, "needs_baseline");
-  const withheld = mechanics.toPhysicalCoordinate({ model: "DF64 Gen 1", nativeValue: 45, zeroOffsetUm: 0 });
-  assert.equal(withheld.coordinate, null);
-  assert.match(withheld.reason, /relative movement/);
+test("P64 and LAGOM01 distinguish printed numbers from minor-line counts", () => {
+  for (const [model, perLine] of [["LAGOM P64", 10], ["LAGOM 01", 7.5]]) {
+    const printed = mechanics.estimate({ model, nativeValue: 1.1, baselineNativeValue: 1, nativeUnit: "printed_number" });
+    close(printed.axialMovementUm, perLine);
+    assert.equal(printed.nativeUnit, "printed_number");
+    assert.equal(printed.nominalUmPerNative, 10 * perLine);
+    const minor = mechanics.estimate({ model, nativeValue: 11, baselineNativeValue: 10 });
+    close(minor.axialMovementUm, perLine);
+    assert.equal(mechanics.estimate({ model, nativeValue: 1, baselineNativeValue: 0, nativeUnit: "clicks" }).status, "invalid");
+  }
 });
 
-test("relative pitch requires a baseline and explicit physical zero", () => {
-  const missing = mechanics.estimate({ model: "1Zpresso X-Pro", nativeValue: 2 });
-  assert.equal(missing.status, "needs_baseline");
-  const result = mechanics.toPhysicalCoordinate({ model: "1Zpresso X-Pro", nativeValue: 2, baselineNativeValue: 0, zeroOffsetUm: 100 });
-  assert.equal(result.status, "provisional_physical_coordinate");
-  assert.equal(result.coordinate, 125);
-  assert.match(result.warnings.at(-1), /must not be saved/);
+test("unknown pitch and cross-segment Encore response are never filled from unrelated candidates", () => {
+  for (const model of ["Niche Zero", "Timemore Sculptor 064S", "Fellow Ode Gen 2", "Baratza Encore ESP"]) {
+    assert.equal(mechanics.estimate({ model, nativeValue: 21, baselineNativeValue: 20, acceptScenario: true }).status, "unavailable");
+  }
+  const candidateOnly = createGrinderMechanics({ models: [{ model: "Candidate", candidates: [{ value: 1248, unit: "µm per revolution" }] }] });
+  assert.equal(candidateOnly.estimate({ model: "Candidate", nativeValue: 1, baselineNativeValue: 0, acceptScenario: true }).status, "unavailable");
 });
 
-test("unknown models and nonnumeric values are withheld", () => {
-  assert.equal(mechanics.estimate({ model: "Unknown", nativeValue: 1 }).status, "unavailable");
-  assert.equal(mechanics.estimate({ model: "DF54", nativeValue: "55" }).status, "invalid");
+test("DF54 and DF64Gen2 scenarios require opt-in; firsthand and nominal quantities retain units", () => {
+  for (const model of ["DF54", "DF64 Gen 2"]) {
+    assert.equal(mechanics.estimate({ model, nativeValue: 2, baselineNativeValue: 1 }).status, "unavailable");
+    const result = mechanics.estimate({ model, nativeValue: 2, baselineNativeValue: 1, acceptScenario: true });
+    assert.equal(result.status, "provisional_scenario");
+    assert.ok(result.axialMovementUm > 0);
+    assert.equal(result.scenario.promotesToCalibration, false);
+  }
+  for (const [model, rate] of [["DF64 Gen 1", 10.4], ["Timemore Sculptor 078S", 30],
+    ["1Zpresso X-Pro", 12.5], ["1Zpresso J-Max", 8.8], ["1Zpresso K series", 22]]) {
+    close(mechanics.estimate({ model, nativeValue: 2, baselineNativeValue: 1 }).axialMovementUm, rate);
+  }
 });
 
-test("P64 nominal line movement remains a mechanical prior", () => {
-  const result = mechanics.estimate({ model: "LAGOM P64", nativeValue: 2, baselineNativeValue: 0 });
-  assert.equal(result.status, "mechanical_reference");
-  assert.equal(result.axialMovementUm, 20);
-  assert.match(result.warnings[0], /particle-size/);
-});
-
-test("full evidence catalog keeps DF64 and DF54 scenarios opt-in", () => {
-  const evidence = createGrinderMechanics(evidenceCatalog);
-  assert.equal(evidence.estimate({ model: "DF64 Gen 1", nativeValue: 2, baselineNativeValue: 0 }).status, "mechanical_reference");
-  const df54 = evidence.estimate({ model: "DF54", nativeValue: 2, baselineNativeValue: 0 });
-  assert.equal(df54.status, "unavailable");
-  const accepted = evidence.estimate({ model: "DF54", nativeValue: 2, baselineNativeValue: 0, acceptScenario: true });
-  assert.equal(accepted.status, "provisional_scenario");
-  assert.deepEqual(accepted.uncertainty, [6, 11]);
-  assert.equal(evidence.estimate({ model: "LAGOM P64", nativeValue: 1, baselineNativeValue: 0 }).axialMovementUm, 10);
-});
-
-test("relative adapter keeps offset separate and caps native proposals", () => {
-  const evidence = createGrinderMechanics(evidenceCatalog);
-  const relative = evidence.toRelativeCoordinate({ model: "DF64 Gen 1", nativeValue: 2, baselineNativeValue: 0, finerSign: 1, umPerResearchUnit: 10.4, baselineResearchCoordinate: 500 });
-  assert.equal(relative.coordinateStatus, "estimated_relative");
-  assert.equal(relative.researchCoordinate, 498);
-  const proposal = evidence.proposeNative({ currentNativeValue: 40, requestedResearchDelta: 25, umPerResearchUnit: 10.4, finerSign: 1, ownerStep: 1, minNative: 0, maxNative: 90, acceptScenario: true });
-  assert.equal(proposal.status, "estimated_relative");
-  assert.equal(proposal.proposedNative, 39);
-  assert.equal(evidence.proposeNative({ currentNativeValue: 40, requestedResearchDelta: 1, umPerResearchUnit: 1, finerSign: 1, ownerStep: 1 }).status, "withheld");
-});
-
-test("conical movement does not silently become dD", () => {
-  const result = mechanics.toRelativeCoordinate({ model: "1Zpresso X-Pro", nativeValue: 2, baselineNativeValue: 0, finerSign: -1, umPerResearchUnit: 0.1, signedAxialUmPerNative: 12.5 });
-  assert.match(result.reason, /Conical axial movement/);
-  const accepted = mechanics.toRelativeCoordinate({ model: "1Zpresso X-Pro", nativeValue: 2, baselineNativeValue: 0, finerSign: -1, umPerResearchUnit: 0.1, signedAxialUmPerNative: 12.5, acceptGeometryAssumption: true });
+test("relative research mapping requires explicit acceptance and conical geometry assumption", () => {
+  assert.equal(relative({ acceptScenario: false }).relativeCoordinate, null);
+  assert.equal(relative({ model: "1Zpresso X-Pro", signedAxialUmPerNative: 12.5 }).relativeCoordinate, null);
+  const accepted = relative({ model: "1Zpresso X-Pro", nativeValue: 2, baselineNativeValue: 0,
+    signedAxialUmPerNative: 12.5, acceptGeometryAssumption: true });
   assert.equal(accepted.relativeCoordinate, 250);
+  assert.equal(accepted.status, "provisional_scenario");
+  assert.equal(proposal({ model: "1Zpresso X-Pro" }).proposedNative, null);
 });
 
-test("owner supplied slope is explicit and physical resolution cannot exceed the owner cap", () => {
-  const owner = mechanics.toRelativeCoordinate({ model: "Owner DF54", nativeValue: 2, baselineNativeValue: 0, signedAxialUmPerNative: 8, umPerResearchUnit: 0.1, acceptScenario: true });
-  assert.equal(owner.relativeCoordinate, 160);
-  const capped = mechanics.proposeNative({ currentNativeValue: 1.5, requestedResearchDelta: 100, signedAxialUmPerNative: 1, umPerResearchUnit: 1, ownerStep: 1.5, physicalIncrement: 1, acceptScenario: true });
-  assert.equal(capped.proposedNative, 3);
+test("signed mechanical-to-research mapping round trips both directions without losing the pitch", () => {
+  for (const slope of [10.4, -10.4, .01, -75, 100]) {
+    for (const change of [-.25, .25]) {
+      const mapped = relative({ nativeValue: 22 + change, signedAxialUmPerNative: slope });
+      close(mapped.relativeCoordinate, change * slope / .1);
+      const back = proposal({ signedAxialUmPerNative: slope, requestedResearchDelta: mapped.relativeCoordinate });
+      close(back.proposedNative, 22 + change);
+      assert.equal(back.status, "estimated_relative");
+    }
+  }
+});
+
+test("relative adapter is invariant to a native coordinate translation and retains explicit research offset", () => {
+  const mapped = relative({ baselineResearchCoordinate: 500 });
+  assert.equal(mapped.researchCoordinate, 526);
+  const translated = relative({ nativeValue: 122.25, baselineNativeValue: 122, baselineResearchCoordinate: 1500 });
+  assert.equal(translated.relativeCoordinate, mapped.relativeCoordinate);
+  assert.equal(translated.researchCoordinate, 1526);
+  assert.equal(relative().researchCoordinate, null);
+});
+
+test("source-derived direction is explicit and the zero displacement still maps to zero", () => {
+  assert.equal(relative({ signedAxialUmPerNative: undefined, finerSign: -1 }).relativeCoordinate, 26);
+  assert.equal(relative({ signedAxialUmPerNative: undefined, finerSign: 1 }).relativeCoordinate, -26);
+  assert.equal(relative({ signedAxialUmPerNative: undefined, finerSign: -1, nativeValue: 22 }).relativeCoordinate, 0);
+  assert.equal(relative({ signedAxialUmPerNative: undefined }).relativeCoordinate, null);
+});
+
+test("no missing or invalid slope silently becomes one micrometre per native unit", () => {
+  for (const signedAxialUmPerNative of [undefined, null, "10.4", 0, NaN, Infinity]) {
+    assert.equal(proposal({ signedAxialUmPerNative }).proposedNative, null);
+  }
+  const explicitMagnitude = proposal({ signedAxialUmPerNative: undefined, umPerNative: 10.4, finerSign: -1 });
+  assert.equal(explicitMagnitude.proposedNative, 22.25);
+});
+
+test("continuous owner step is a movement cap and never an absolute rounding grid", () => {
+  assert.equal(proposal({ currentNativeValue: 22.1, requestedResearchDelta: 1000, ownerStep: .25 }).proposedNative, 22.35);
+  assert.equal(proposal({ requestedResearchDelta: 10.4 }).proposedNative, 22.1);
+  assert.equal(proposal({ requestedResearchDelta: -1000, ownerStep: .25 }).proposedNative, 21.75);
+  assert.equal(proposal({ currentNativeValue: 89.9, requestedResearchDelta: 1000 }).proposedNative, 90);
+});
+
+test("discrete proposals quantize toward current, never beyond raw movement or owner step", () => {
+  const base = { currentNativeValue: 12, signedAxialUmPerNative: 1, umPerResearchUnit: 1, physicalIncrement: 1, ownerStep: 1.5 };
+  assert.equal(proposal({ ...base, requestedResearchDelta: 1.5 }).proposedNative, 13);
+  assert.equal(proposal({ ...base, requestedResearchDelta: -1.5 }).proposedNative, 11);
+  for (const requestedResearchDelta of [.5, .6, -.6]) {
+    const held = proposal({ ...base, requestedResearchDelta });
+    assert.equal(held.status, "hold");
+    assert.equal(held.proposedNative, null);
+  }
+  assert.equal(proposal({ ...base, requestedResearchDelta: 4, ownerStep: .5 }).status, "hold");
+});
+
+test("physical bounds choose only achievable lattice points and invalid current cannot be rounded silently", () => {
+  const base = { currentNativeValue: 12, signedAxialUmPerNative: 1, umPerResearchUnit: 1, physicalIncrement: 1, ownerStep: 4, requestedResearchDelta: 4 };
+  assert.equal(proposal({ ...base, maxNative: 13.5 }).proposedNative, 13);
+  assert.equal(proposal({ ...base, maxNative: 12.5 }).status, "hold");
+  assert.equal(proposal({ ...base, currentNativeValue: 12.5 }).status, "invalid");
+  assert.equal(proposal({ ...base, currentNativeValue: 12.5, physicalOrigin: .5 }).proposedNative, 16.5);
+  assert.equal(proposal({ ...base, requestedResearchDelta: -4, minNative: 10.5 }).proposedNative, 11);
+});
+
+test("decimal physical increments tolerate representation error without changing the grid", () => {
+  const result = proposal({ currentNativeValue: .35, signedAxialUmPerNative: 1, umPerResearchUnit: 1,
+    requestedResearchDelta: .15, ownerStep: .2, physicalIncrement: .1, physicalOrigin: .05 });
+  close(result.proposedNative, .45);
+});
+
+test("bounded proposal invariants hold over signs, steps, requested deltas and fractional boundaries", () => {
+  for (const current of [-12, 0, 12]) for (const sign of [-1, 1]) for (const requested of [.1, .5, .99, 1, 1.5, 2, 4, 40])
+    for (const cap of [.25, 1, 1.5, 3]) {
+      const lower = current - 2.5, upper = current + 2.5;
+      const result = proposal({ currentNativeValue: current, signedAxialUmPerNative: sign * 2, umPerResearchUnit: .1,
+        requestedResearchDelta: requested * 20, ownerStep: cap, minNative: lower, maxNative: upper, physicalIncrement: 1 });
+      if (result.proposedNative === null) { assert.equal(result.status, "hold"); continue; }
+      assert.ok(Number.isInteger(result.proposedNative));
+      const delta = result.proposedNative - current;
+      assert.equal(Math.sign(delta), sign);
+      assert.ok(Math.abs(delta) <= cap && Math.abs(delta) <= requested);
+      assert.ok(result.proposedNative >= lower && result.proposedNative <= upper);
+    }
+});
+
+test("nonnumeric coordinates and malformed bounds or resolution fail closed", () => {
+  for (const value of [null, "2", NaN, Infinity]) {
+    assert.equal(relative({ model: "Unknown", nativeValue: value }).relativeCoordinate, null);
+    assert.equal(relative({ baselineResearchCoordinate: value }).researchCoordinate, null);
+    assert.equal(proposal({ physicalIncrement: value }).proposedNative, null);
+    assert.equal(proposal({ minNative: value }).proposedNative, null);
+  }
+  assert.equal(proposal({ minNative: 30, maxNative: 20 }).status, "invalid");
+  assert.equal(proposal({ currentNativeValue: 100 }).status, "invalid");
+  assert.equal(proposal({ physicalOrigin: 0 }).status, "invalid");
+  assert.equal(mechanics.estimate({ model: "DF54", nativeValue: "2", baselineNativeValue: 0, acceptScenario: true }).status, "invalid");
+});
+
+test("overflow never escapes as a nominal coordinate, movement or proposal", () => {
+  const results = [
+    mechanics.estimate({ model: "1Zpresso X-Pro", nativeValue: 1e308, baselineNativeValue: -1e308 }),
+    mechanics.estimate({ model: "DF54", nativeValue: 1e308, baselineNativeValue: 0, acceptScenario: true }),
+    mechanics.toPhysicalCoordinate({ model: "E64 WS", nativeValue: 1e308, baselineNativeValue: 0, zeroOffsetUm: 1e308 }),
+    relative({ model: "Unknown", nativeValue: 1e308, baselineNativeValue: 0, signedAxialUmPerNative: 1,
+      umPerResearchUnit: 1, baselineResearchCoordinate: 1e308 }),
+    proposal({ currentNativeValue: 1e308, requestedResearchDelta: 1e308, signedAxialUmPerNative: 1,
+      umPerResearchUnit: 1, ownerStep: 1e308, minNative: undefined, maxNative: undefined }),
+  ];
+  results.forEach(finiteOutputs);
+  assert.equal(results[0].status, "invalid");
+  assert.equal(results[1].status, "invalid");
+  assert.equal(results[2].coordinate, null);
+  assert.equal(results[3].researchCoordinate, null);
+  assert.equal(results[4].proposedNative, null);
+});
+
+test("embedded factory runs without module helpers and preserves caller inputs and evidence", () => {
+  const vm = require("node:vm");
+  const before = JSON.stringify(catalog);
+  const factory = vm.runInNewContext("(" + createGrinderMechanics.toString() + ")");
+  const embedded = factory(catalog);
+  const input = { currentNativeValue: 12, requestedResearchDelta: 1.5, signedAxialUmPerNative: 1,
+    umPerResearchUnit: 1, ownerStep: 1.5, physicalIncrement: 1, acceptScenario: true };
+  const snapshot = JSON.stringify(input);
+  assert.equal(embedded.proposeNative(input).proposedNative, 13);
+  assert.equal(JSON.stringify(input), snapshot);
+  assert.equal(JSON.stringify(catalog), before);
 });
