@@ -1,5 +1,10 @@
 const {test, expect} = require('@playwright/test');
-const step = (page, n) => page.locator(`button[data-wizard-step="${n}"]`).click();
+async function step(page, n) {
+  const button = page.locator(`button[data-wizard-step="${n}"]`);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator(`section[data-wizard-step="${n}"]:not(.expert-only):visible`)).toHaveCount(1);
+}
 async function setup(page, target = '28') {
   await page.goto('/simulator/');
   await expect(page.locator('#grinder option')).toHaveCount(16);
@@ -15,7 +20,7 @@ async function setup(page, target = '28') {
   await step(page,2); await page.locator('#target').fill(target);
 }
 async function shot(page, setting, time, taste = 'too bitter') {
-  await step(page,1); await page.locator('#simple-current-dial').fill(String(setting));
+  await step(page,1); await expect(page.locator('#simple-current-dial')).toBeVisible(); await page.locator('#simple-current-dial').fill(String(setting));
   await step(page,3); await page.locator('#simple-time').fill(String(time));
   await page.locator('#simple-taste').selectOption(taste);
   await page.locator('#simple-clock-confirmed').check();
