@@ -162,14 +162,14 @@ test('random series resets for changed bean, grinder or recipe; corrections and 
 test('archive preserves supported grinder coordinates and available dose, flow and thermal measurements',async t=>{
   let current;
   const f=fixture(t,{readShot:()=>reply(clone(current))});
-  const units=['clicks','total-clicks','printed-decimal','numbered-settings','micro-ticks'];
+  const units=['clicks','total-clicks','printed-decimal','numbered-settings','micro-ticks','decimal dial numbers','printed numbers'];
   for(let i=0;i<units.length;i++){
     current=clone(shot);current.id='PRIVATE-UNIT-'+i;current.workflow.context.extras.grinderSettingUnit=units[i];
     current.measurements.forEach(sample=>{sample.machine.mixTemperature=93;sample.machine.groupTemperature=91;});
     f.plugin.onEvent({name:'shotStored',payload:{id:current.id}});await captured(f,i+1);
   }
   const records=(await f.request('GET',null,'sharing-export')).body.records;
-  assert.deepEqual(records.map(record=>record.grinder.settingUnit),units);
+  assert.deepEqual(records.map(record=>record.grinder.settingUnit),['clicks','total-clicks','printed-decimal','numbered-settings','micro-ticks','printed-decimal','printed-decimal']);
   for(const record of records){
     assert.equal(record.grinder.setting,50);assert.equal(record.measurements.doseG,18);
     assert.equal(record.measurements.preinfusionSec,1);

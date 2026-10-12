@@ -2660,7 +2660,7 @@ function createPlugin(host, services) {
       const full = await fullShot(shotId), f = JSON.parse(JSON.stringify(feedback[shotId] || {}));
       const m = createBrewMetrics().analyze(full, f), c = historicalContext(full, f);
       if (!active || epoch !== sessionEpoch || generation !== researchGeneration || researchCaptures.get(shotId) !== capture) return;
-      const unit = { marks: "dial-marks", "dial-mark": "dial-marks", "µm": "micrometres" }[c.settingUnit] || c.settingUnit || "unknown";
+      const unit = { marks: "dial-marks", "dial-mark": "dial-marks", "µm": "micrometres", "decimal dial numbers": "printed-decimal", "printed numbers": "printed-decimal" }[c.settingUnit] || c.settingUnit || "unknown";
       const numericSetting = c.grinderSetting != null && String(c.grinderSetting).trim() !== "" ? Number(c.grinderSetting) : undefined;
       await client.capture({ source: "plugin", mode: "measured", kind: "shot",
         researchSeries: researchSeriesFor(shotId, c),
@@ -4363,12 +4363,12 @@ function createPlugin(host, services) {
 <label><input id="researchLocal" type="checkbox"> Keep the local research archive</label>
 <label>Your research collector HTTPS endpoint<input id="researchEndpoint" type="url" placeholder="https://your-collector.example/v1/records" autocomplete="off"></label>
 <label><input id="researchHostLimits" type="checkbox"> I trust this collector and understand this host cannot prevent redirects or cancel an upload already sent.</label>
-<button id="researchEnable" type="button">Enable remote sharing</button>
+<button id="researchEnable" type="button">Enable automatic remote sharing</button>
 <button id="researchDisable" type="button">Opt out and clear pending uploads</button>
 <button id="researchRetry" type="button">Retry pending uploads</button>
 <button id="researchExport" type="button">Show local research export</button>
 <button id="researchDelete" type="button">Delete all local research data</button>
-<p>Opt-out keeps the local archive and stops future uploads. Previously received data cannot be recalled without collector support. Only new brew events and feedback changes are queued after enabling; older local records are not uploaded automatically.</p>
+<p>After you enable sharing, new brew events and feedback changes upload automatically, with retries while the plugin is running. Older local records are not uploaded automatically. Opt-out keeps the local archive and stops future uploads. Previously received data cannot be recalled without collector support.</p>
 <output id="researchStatus" aria-live="polite">Open this panel to load your saved choices and upload status.</output>
 <pre id="researchExportData" hidden></pre></details>
 
