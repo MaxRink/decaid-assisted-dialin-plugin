@@ -54,6 +54,18 @@
             <div class="fields"><label>Lowest setting I allow for this coffee<input id="simple-bound-min" type="number" step="any" placeholder="Your allowed trial window"></label><label>Highest setting I allow for this coffee<input id="simple-bound-max" type="number" step="any" placeholder="Your allowed trial window"></label></div><p id="simple-bounds-help" class="hint"></p>
             <label class="check"><input id="simple-confirm-dial" type="checkbox"> I checked this small step and finer direction on my grinder. If I entered a trial window, I checked that its whole range is safe.</label><button id="simple-reset-defaults" type="button">Restore proposed step for this model</button>
           </details>
+          <details id="mechanical-setup"><summary>Try a rough movement estimate (optional)</summary>
+            <p>This gives the timing research tools a rough starting point before you have enough matching shots. Your taste and measured next step keep priority.</p>
+            <div id="mechanical-source-note" class="hint"></div>
+            <div class="fields"><label>Movement assumption<select id="mechanical-scenario"><option value="central">Central estimate</option><option value="lower">Lower sensitivity scenario</option><option value="upper">Upper sensitivity scenario</option><option value="owner">My own rough estimate</option></select></label><label>Estimated movement per dial unit (µm)<input id="mechanical-slope" type="number" min="0.000001" step="any" placeholder="Leave unknown values blank"></label><label>Zero or reference setting on my dial<input id="mechanical-reference" type="number" step="any" placeholder="A setting you can identify"></label></div>
+            <label class="check"><input id="mechanical-zero-assumed" type="checkbox"> Use this burr-touching dial setting as a rough zero. I understand this is an assumption, not a measured gap.</label>
+            <button id="mechanical-use-current" type="button">Use my current setting as the reference</button>
+            <p id="mechanical-scenario-note" class="hint"></p>
+            <details><summary>Optional absolute reference for additional models</summary><p>Only enter a value if you deliberately want to test an assumed absolute reference. Relative movement alone cannot tell us the gap between the burrs.</p><label>Assumed gap at the reference setting (µm)<input id="mechanical-offset" type="number" min="0" step="any" placeholder="No absolute reference assumed"></label><label class="check"><input id="mechanical-absolute-enabled" type="checkbox"> I explicitly accept this assumed absolute gap for the additional models.</label></details>
+            <label class="check"><input id="mechanical-enabled" type="checkbox"> Use a rough mechanical estimate. I accept that this guessed burr movement may not match my burr geometry or coffee response.</label>
+            <p id="mechanical-status" role="status">Rough estimates are off.</p>
+            <p class="hint">Check your small step, finer direction and allowed trial window above. A mechanical estimate never becomes a measured calibration.</p>
+          </details>
           <button id="simple-start-practice" type="button">Try a fictional practice example</button>
           <p id="simple-practice-status" class="hint" role="status"></p>
         </div>
@@ -138,13 +150,13 @@
     <aside class="card research-sharing" aria-labelledby="research-sharing-title">
       <details id="research-sharing-panel"><summary id="research-sharing-title">Local research archive · remote sharing off</summary>
         <p>Help improve dial-in guidance with a small record of your shots. Sharing is off until you choose it.</p>
-        <p><strong>Local research archive is on by default;</strong> you can turn it off or delete it below. Records include numeric coffee weights, grinder settings and shot times, broad coffee and grinder categories, taste choices and calculation results. They exclude coffee names, personal grinder names, device identifiers, credentials, raw timestamps and measurement traces.</p>
+        <p><strong>Local research archive is on by default;</strong> you can turn it off or delete it below. Records include numeric coffee weights, grinder settings and shot times, broad coffee and grinder categories, taste choices and calculation results. They exclude coffee names, personal grinder names, personal device identifiers, credentials, raw timestamps and measurement traces.</p>
         <label class="check"><input id="research-local-enabled" type="checkbox" checked> Keep a small research archive in this browser (up to 200 records).</label>
         <label class="check"><input id="research-sharing-consent" type="checkbox"> I choose to share these research records with the configured collector.</label>
         <p id="research-sharing-status" role="status" aria-live="polite">Sharing is off. No collector is configured.</p>
         <p id="research-sharing-destination" class="hint"></p>
         <div class="actions"><button id="research-sharing-export" type="button">Save a research file locally</button><button id="research-sharing-send" type="button" disabled>Send queued records</button><button id="research-sharing-disable" type="button">Turn off and delete queued records</button><button id="research-sharing-delete" type="button">Delete all research records</button></div>
-        <p class="hint">Local export works without a collector or sharing consent. Turning sharing off deletes unsent records from this browser. Your collector may receive network connection metadata.</p>
+        <p class="hint">Local export works without a collector or sharing consent. Turning sharing off deletes unsent records from this browser. Random research record and series keys identify corrections and related shots; there is no permanent visitor identifier. Your collector may receive network connection metadata.</p>
         <details class="expert-only"><summary>Configure your research collector</summary>
           <label>Collector HTTPS URL<input id="research-sharing-endpoint" type="url" placeholder="https://your-collector.example/records" autocomplete="off" spellcheck="false"></label>
           <button id="research-sharing-apply" type="button">Use this collector</button>

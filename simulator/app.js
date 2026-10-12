@@ -27,6 +27,8 @@
   const nativeSetupEdited = new Set();
   let nextNativeShotId = 1;
   let navigateSimple = () => {};
+  let mechanics = null, mechanicsCatalog = null, mechanicalSetupScope = null;
+  let researchSeries = null;
 
   const RESEARCH_KEY = "decaid.assisted-dialin.research.v1";
   const RESEARCH_ENDPOINT_KEY = "decaid.assisted-dialin.research-endpoint.v1";
@@ -49,22 +51,28 @@
     try { await action(); await renderResearchSharing(message); }
     catch (error) { await renderResearchSharing("Research action failed: " + error.message); }
   }
+  function researchUnit(unit) {
+    return {marks: "dial-marks", "µm": "micrometres", "decimal dial numbers": "printed-decimal", "printed numbers": "printed-decimal"}[unit] || unit || "unknown";
+  }
   function researchRecord(shot, c, proposedSetting) {
-    const settingUnit = shot.scope.settingUnit === "micrometres" || shot.scope.settingUnit === "µm" ? "micrometres" : shot.scope.settingUnit === "marks" ? "dial-marks" : "unknown";
+    const settingUnit = researchUnit(shot.scope.settingUnit);
     const native = ["suggestion", "hold"].includes(shot.nativeResponse?.status);
-    const model = c.grinder === "DF64" ? "DF64 Gen 1" : c.grinder === "LAGOM P64" ? "Lagom P64" : ["E64 WS", "DF54", "DF64 Gen 1", "DF64 Gen 2", "EK43"].includes(c.grinder) ? c.grinder : "other";
+    const model = c.grinder === "Other known grinder" ? "other" : c.grinder;
     const moved = proposedSetting !== shot.setting;
-    return researchFactory.sanitizeRecord({source: "website", kind: "shot", mode: shot.practice ? "practice" : "manual",
+    return researchFactory.sanitizeRecord({source: "website", kind: "shot", mode: shot.practice ? "practice" : "manual", researchSeries: shot.researchSeries, shotOrdinal: shot.researchOrdinal, approaches: shot.researchApproaches,
       grinder: {model, settingUnit, setting: shot.setting, step: simpleNumber("simple-step"), finerSign: Number($("simple-finer").value), ownerConfirmed: $("simple-confirm-dial").checked === true},
       recipe: {controlMode: shot.scope.controlMode, targetClock: shot.clockConfirmed ? "pump" : "unknown", targetTimeSec: shot.target, targetDoseG: c.dose, targetYieldG: c.yield},
-      measurements: {...(shot.clockConfirmed ? {pumpTimeSec: shot.time, pumpComplete: true} : {}), ...(shot.pressureConfirmed ? {doseG: c.dose, yieldG: c.yield} : {})},
+      measurements: shot.clockConfirmed ? {pumpTimeSec: shot.time, pumpComplete: true} : {},
       coffee: {species: String(c.species).toLowerCase(), roast: c.roast},
-      taste: {intent: {"too sour": "too_sour", "too bitter": "too_bitter", "too astringent": "too_astringent", channeling: "uneven_flow"}[shot.taste] || shot.taste || "unknown", tastingTemperatureC: shot.temperature, minutesAfterBrew: shot.minutes},
-      advice: {algorithm: native ? "native-response" : "manual", status: moved ? "suggestion" : "retained", direction: moved ? (proposedSetting - shot.setting) * Number($("simple-finer").value) > 0 ? "finer" : "coarser" : "none", settingUnit, proposedSetting, evidenceCount: native ? shot.nativeResponse?.fit?.points?.length : undefined}});
+      taste: {...(shot.taste ? {good: shot.taste === "balanced"} : {}), intent: {"too sour": "too_sour", "too bitter": "too_bitter", "too astringent": "too_astringent", channeling: "uneven_flow"}[shot.taste] || shot.taste || "unknown", tastingTemperatureC: shot.temperature, minutesAfterBrew: shot.minutes},
+      advice: {algorithm: shot.chosenMechanical?.algorithm || (native ? "native-response" : "manual"), coordinateStatus: shot.chosenMechanical?.coordinateStatus || "native", status: moved ? "suggestion" : "retained", direction: moved ? (proposedSetting - shot.setting) * Number($("simple-finer").value) > 0 ? "finer" : "coarser" : "none", settingUnit, proposedSetting, evidenceCount: native ? shot.nativeResponse?.fit?.points?.length : undefined}});
   }
   function captureResearchShot(shot, c, proposedSetting) {
     if (!researchClient) return;
     try {
+      const scope = JSON.stringify([shot.scope, shot.target, shot.tolerance, shot.practice]);
+      if (!researchSeries || researchSeries.scope !== scope) researchSeries = {scope, id: researchFactory.randomId(), count: 0};
+      if (shot.researchSeries !== researchSeries.id) { shot.researchSeries = researchSeries.id; shot.researchOrdinal = ++researchSeries.count; }
       const record = researchRecord(shot, c, proposedSetting);
       researchAction(() => researchClient.capture(record, researchSession + ":" + shot.id));
     } catch (_) { text($("research-sharing-status"), "This shot could not be added to the research archive. Your dial-in history is still available."); }
@@ -117,7 +125,7 @@
   }
   function validProfile(value) {
     if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.id !== "string" || !/^[a-z0-9][a-z0-9._-]{2,127}$/.test(value.id) || typeof value.name !== "string" || !value.name.trim() || value.name.length > 128 || typeof value.model !== "string" || !value.model.trim() || value.model.length > 256 || typeof value.burrIdentity !== "string" || !value.burrIdentity.trim() || value.burrIdentity.length > 256 || typeof value.calibrationEpoch !== "string" || !value.calibrationEpoch.trim() || value.calibrationEpoch.length > 256) return false;
-    if (value.nativeSetup != null) { const setup = value.nativeSetup; if (!setup || typeof setup !== "object" || Array.isArray(setup) || typeof setup.burrIdentity !== "string" || typeof setup.calibrationEpoch !== "string" || ![-1, 1].includes(setup.numericFinerDelta) || [setup.min, setup.max].some(bound => bound != null && (typeof bound !== "number" || !Number.isFinite(bound)))) return false; }
+    if (value.nativeSetup != null) { const setup = value.nativeSetup; if (!setup || typeof setup !== "object" || Array.isArray(setup) || typeof setup.burrIdentity !== "string" || typeof setup.calibrationEpoch !== "string" || (setup.settingUnit != null && (typeof setup.settingUnit !== "string" || !setup.settingUnit.trim() || setup.settingUnit.length > 64)) || ![-1, 1].includes(setup.numericFinerDelta) || [setup.min, setup.max].some(bound => bound != null && (typeof bound !== "number" || !Number.isFinite(bound)))) return false; }
     return (value.zero == null || (typeof value.zero === "number" && Number.isFinite(value.zero) && Math.abs(value.zero) <= 2147483647)) && (value.stepSize == null || (typeof value.stepSize === "number" && Number.isFinite(value.stepSize) && value.stepSize > 0 && value.stepSize <= 2147483647)) && (value.anchors == null || (typeof value.anchors === "object" && !Array.isArray(value.anchors))) && (value.source == null || (typeof value.source === "string" && value.source.length <= 256));
   }
   function persistProfiles() { const store = storage(); if (!store) return; try { store.setItem(INSTANCE_KEY, JSON.stringify(grinderInstances)); store.setItem(ACTIVE_INSTANCE_KEY, activeInstanceId || ""); } catch (_) { setNotice("Your browser could not save grinder profiles; this experiment still works in memory.", true); } }
@@ -537,6 +545,101 @@
     instance.onLoad({TargetTimeSec: String(c.target), TargetTimeClock: $("actual-shot-clock")?.value || "pump", TimeToleranceSec: String(c.tolerance)});
     try { const saved = await instance.handleHttpRequest({endpoint: "feedback", method: "POST", body: feedback}); if (saved.status !== 200) throw new Error(JSON.parse(saved.body).error || "Feedback rejected"); const result = await instance.handleHttpRequest({endpoint: "suggestion", method: "GET"}); const body = JSON.parse(result.body); if (generation !== assistantGeneration) return; importedFeedback = feedback; const holder = $("assist-result"); holder.replaceChildren(); const summary = document.createElement("p"); text(summary, "Saved shot " + shot.id + " · " + body.status + " · " + (body.direction || "retain / gather evidence") + ". " + (body.reason || "")); holder.append(summary); const why = document.createElement("p"); text(why, "This assessment used the imported timestamps, controller steps and recorded context. Missing bean catalogue or calibration stays unavailable. " + (body.warnings || []).join(" ")); holder.append(why); const detail = document.createElement("details"), caption = document.createElement("summary"), pre = document.createElement("pre"); text(caption, "Why / complete evidence"); text(pre, JSON.stringify(body, null, 2)); detail.append(caption, pre); holder.append(detail); } finally { instance.onUnload(); }
   }
+  function mechanicalNativeUnit() { return ["LAGOM P64", "LAGOM 01"].includes(config().grinder) ? "printed_number" : undefined; }
+  function renderMechanicalSetup(reset = false) {
+    if (!$("mechanical-enabled")) return;
+    const scope = JSON.stringify([config().grinderId, config().burrs, config().calibration]);
+    if (reset || scope !== mechanicalSetupScope) {
+      mechanicalSetupScope = scope; $("mechanical-enabled").checked = false; $("mechanical-absolute-enabled").checked = false; $("mechanical-zero-assumed").checked = false;
+      $("mechanical-reference").value = "0"; $("mechanical-offset").value = ""; $("mechanical-slope").value = ""; $("mechanical-scenario").value = "central";
+    }
+    const profile = mechanics?.profileFor(config().grinder), scenario = profile?.exploratoryScenario, choice = $("mechanical-scenario").value;
+    const preview = mechanics?.estimate({model: config().grinder, nativeUnit: mechanicalNativeUnit(), nativeValue: 1, baselineNativeValue: 0, acceptScenario: true});
+    const central = config().grinder === "LAGOM 01" ? null : preview?.axialMovementUm, interval = scenario?.sensitivityIntervalUmPerUnit;
+    if (choice !== "owner") {
+      const value = choice === "lower" ? interval?.[0] : choice === "upper" ? interval?.[1] : central;
+      $("mechanical-slope").value = Number.isFinite(value) ? String(value) : "";
+    }
+    const holder = $("mechanical-source-note"); holder.replaceChildren();
+    const note = document.createElement("p");
+    text(note, profile ? config().grinder + ": " + (scenario?.rationale || profile.relativeMovement?.status || "No uniform movement estimate is established for this model.") + " " + (profile.uncertainty?.reason || "") : "No reviewed movement estimate is available. You may enter your own rough assumption in the dial units you use above."); holder.append(note);
+    (profile?.sourceIds || []).forEach(id => { const source = mechanicsCatalog?.sources?.[id]; if (!source || !safeHttps(source.url)) return; const link = document.createElement("a"); link.href = source.url; link.target = "_blank"; link.rel = "noopener noreferrer"; text(link, source.title); const line = document.createElement("p"); line.append(link); holder.append(line); });
+    const slope = simpleNumber("mechanical-slope");
+    text($("mechanical-scenario-note"), (slope > 0 ? "Chosen assumption: approximately " + Number(slope.toPrecision(6)) + " µm per " + (mechanicalNativeUnit() === "printed_number" ? "whole printed dial number" : simpleUnit()) + ". " : "Enter a positive movement estimate or choose an available scenario. ") + (interval ? "Sensitivity choices " + interval[0] + "–" + interval[1] + " are analyst-chosen scenarios, not confidence bounds. " : "No measured uncertainty interval is supplied. ") + "This estimates burr movement, not particle size or shot time." + (config().grinder === "LAGOM 01" ? " LAGOM 01 variants are not selected here; enter an explicit owner assumption for your printed-number coordinate." : ""));
+    text($("mechanical-status"), !mechanics ? "Mechanical estimate tools are unavailable." : $("mechanical-enabled").checked ? "Rough estimates are enabled for this setup. Record a shot to compare them." : "Rough estimates are off.");
+  }
+  function mechanicalInput() {
+    if (!$("mechanical-enabled")?.checked || !mechanics) return {reason: "Choose the optional rough estimate and acknowledge its assumptions first."};
+    if (dialProfile()?.espressoAdjustment?.espressoSupported === false) return {reason: "This grinder is not supported for espresso."};
+    const slope = simpleNumber("mechanical-slope"), baseline = simpleNumber("mechanical-reference"), sign = simpleNumber("simple-finer");
+    const step = simpleNumber("simple-step"), min = simpleNumber("simple-bound-min"), max = simpleNumber("simple-bound-max"), current = simpleNumber("simple-current-dial");
+    if (!(slope > 0) || baseline == null) return {reason: "Enter a positive rough movement per dial unit and a reference setting."};
+    if (!$("simple-confirm-dial").checked || ![-1, 1].includes(sign) || !(step > 0)) return {reason: "Check your small step and finer direction before using the rough estimate."};
+    if (min == null || max == null || !(min < max) || current < min || current > max) return {reason: "Enter and check both ends of your allowed trial window. The current setting must be inside it."};
+    const zeroAssumed = $("mechanical-zero-assumed").checked, absolute = zeroAssumed || $("mechanical-absolute-enabled").checked, offset = zeroAssumed ? 0 : simpleNumber("mechanical-offset");
+    if (absolute && (offset == null || offset < 0)) return {reason: "Enter the assumed gap at your reference setting, or turn off the absolute reference."};
+    return {model: config().grinder, nativeUnit: mechanicalNativeUnit(), signedAxialUmPerNative: -sign * slope, baselineNativeValue: baseline, baselineResearchCoordinate: absolute ? offset * 10 : 1000,
+      umPerResearchUnit: .1, acceptScenario: true, acceptGeometryAssumption: true, ownerStep: step, minNative: min, maxNative: max, physicalIncrement: nativeResolution(), currentNativeValue: current,
+      coordinateStatus: absolute ? "estimated_absolute" : "estimated_relative", absolute};
+  }
+  function mechanicalCases(latest, failures) {
+    const setup = mechanicalInput(), output = {cases: {}, setup, alternatives: {}};
+    if (setup.reason) return output;
+    if (!latest?.clockConfirmed || !latest?.pressureConfirmed) { setup.reason = "Confirm the same pump clock and pressure recipe before using a timing estimate."; return output; }
+    let start = simpleShots.length - 1;
+    while (start > 0) { const prior = simpleShots[start - 1]; if (JSON.stringify(prior.scope) !== JSON.stringify(latest.scope) || !prior.clockConfirmed || !prior.pressureConfirmed || prior.setting < setup.minNative || prior.setting > setup.maxNative) break; start--; }
+    const inputs = (origin) => simpleShots.slice(start).map(shot => {
+      const mapped = mechanics.toRelativeCoordinate({...setup, baselineResearchCoordinate: origin, nativeValue: shot.setting});
+      const coordinate = mapped.researchCoordinate;
+      if (!Number.isFinite(coordinate) || coordinate < 10 || coordinate > 2147483647) throw new Error(mapped.reason || "The assumed reference leaves the numerical range; choose another reference.");
+      return {actualBrewTimeMs: Math.round(shot.time * 1000), targetBrewTimeMs: Math.round(shot.target * 1000), toleranceMs: Math.round(shot.tolerance * 1000), estimatedDdDum: Math.round(coordinate), setpointDdDum: Math.round(coordinate)};
+    });
+    try {
+      output.cases = replayCases(inputs(setup.baselineResearchCoordinate), failures, setup.absolute ? algorithmNames.slice(0, 4) : ["GbS1", "GbS2"]);
+      if (!setup.absolute) output.alternatives = replayCases(inputs(setup.baselineResearchCoordinate + 1000), {}, ["GbS1", "GbS2"]);
+    } catch (error) { setup.reason = error.message; output.cases = {}; }
+    return output;
+  }
+  function mechanicalProposal(row, estimated) {
+    if (row.status !== "computed" || !estimated?.cases[row.algorithm]) return null;
+    const input = estimated.cases[row.algorithm].input, delta = row.result.returnedDdDum - input.estimatedDdDum;
+    const alternate = estimated.alternatives[row.algorithm];
+    if (!estimated.setup.absolute) {
+      if (!alternate) return {status: "withheld", reason: "The relative-reference consistency check is unavailable."};
+      const check = algorithms.compareAll({cases: {[row.algorithm]: alternate}}).results.find(item => item.algorithm === row.algorithm);
+      if (check?.status !== "computed" || check.result.returnedDdDum - alternate.input.estimatedDdDum !== delta) return {status: "withheld", reason: "Changing the temporary reference changes this result. An absolute assumption is needed before trying it."};
+    }
+    const result = mechanics.proposeNative({...estimated.setup, requestedResearchDelta: delta});
+    return {...result, coordinateStatus: estimated.setup.coordinateStatus};
+  }
+  function canTryMechanical(latest, proposal) {
+    if (!latest || simpleComparisonStale || !Number.isFinite(proposal?.proposedNative) || proposal.proposedNative === latest.setting) return false;
+    if (!latest.clockConfirmed || !latest.pressureConfirmed || !latest.taste || ["balanced", "weak", "channeling"].includes(latest.taste)) return false;
+    if (["suggestion", "hold", "abstain"].includes(latest.nativeResponse?.status)) return false;
+    const intent = latest.taste === "too sour" ? "finer" : ["too bitter", "too astringent"].includes(latest.taste) ? "coarser" : null;
+    const direction = (proposal.proposedNative - latest.setting) * Number($("simple-finer").value) > 0 ? "finer" : "coarser";
+    return intent === direction && (latest.time < latest.target - latest.tolerance ? direction === "finer" : latest.time > latest.target + latest.tolerance ? direction === "coarser" : false);
+  }
+  function chooseMechanical(latest, algorithm, proposal) {
+    if (!canTryMechanical(latest, proposal) || latest !== simpleShots.at(-1)) return;
+    simpleProposal = proposal.proposedNative; latest.chosenMechanical = {algorithm, coordinateStatus: proposal.coordinateStatus};
+    latest.action = "Your chosen estimated trial: from " + latest.setting + " to " + Number(simpleProposal.toFixed(6)) + " " + simpleUnit() + ".";
+    latest.why = "You chose " + algorithm + " using a rough mechanical assumption. Keep the recipe unchanged, then measure and taste the next shot.";
+    const holder = $("simple-advice"); holder.replaceChildren(); const heading = document.createElement("h3"), why = document.createElement("p"); text(heading, latest.action); text(why, latest.why); holder.append(heading, why);
+    captureResearchShot(latest, config(), simpleProposal); navigateSimple(4);
+  }
+  function initializeMechanical() {
+    if (typeof window.createGrinderMechanics === "function" && typeof window.createGrinderMechanicsCatalog === "function") { mechanicsCatalog = window.createGrinderMechanicsCatalog(); mechanics = window.createGrinderMechanics(mechanicsCatalog); }
+    renderMechanicalSetup();
+    ["mechanical-enabled", "mechanical-scenario", "mechanical-slope", "mechanical-reference", "mechanical-offset", "mechanical-absolute-enabled", "mechanical-zero-assumed"].forEach(id => $(id)?.addEventListener("change", () => {
+      if (id === "mechanical-slope") $("mechanical-scenario").value = "owner";
+      if (id === "mechanical-zero-assumed") $("mechanical-absolute-enabled").checked = false;
+      if (id === "mechanical-absolute-enabled") $("mechanical-zero-assumed").checked = false;
+      renderMechanicalSetup(); invalidateSimpleAdvice();
+    }));
+    $("mechanical-use-current")?.addEventListener("click", () => { const current = simpleNumber("simple-current-dial"); if (current != null) $("mechanical-reference").value = String(current); $("mechanical-zero-assumed").checked = false; invalidateSimpleAdvice(); });
+  }
+
   function replayCases(shots, failures, names = algorithmNames) {
     const cases = {}, first = shots[0]?.setpointDdDum;
     if (first == null) return cases;
@@ -575,7 +678,7 @@
     try {
       const cases = supplemental?.cases() || {}, reasons = {}, failures = {};
       const latest = simpleShots.at(-1), matchingScope = latest && JSON.stringify(latest.scope) === JSON.stringify(nativeScope()), matchingTarget = latest && latest.target === config().target && latest.tolerance === config().tolerance;
-      let source = "No completed shot yet. Every approach is listed below.", timing, measurement, importedMappingMatches = false;
+      let source = "No completed shot yet. Every approach is listed below.", timing, measurement, importedMappingMatches = false, estimated = null;
       const useRecorded = viewMode === "simple" || simpleShots.length > 0 && $("comparison-source")?.value !== "experiment";
       if (useRecorded) {
         delete cases.manual;
@@ -626,11 +729,16 @@
         const completed = rows.filter(row => row.actual !== "" && Number(row.actual) > 0);
         if (completed.length) { Object.assign(cases, replayCases(engineScenario(completed).shots, failures)); source = "Expert experiment · independent replay of the same entered or fictional shot inputs. These research models ignore taste."; }
       }
+      if (useRecorded && latest && latest.coordinate == null && matchingScope && matchingTarget && !simpleComparisonStale && $("mechanical-enabled")?.checked) {
+        estimated = mechanicalCases(latest, failures); Object.assign(cases, estimated.cases);
+        source += " Optional mechanical estimates use the selected assumption, never measured calibration.";
+      }
       const tableModel = {"E64 WS": "e64", "E65S GbW": "e65", "E80S GbW": "e80"}[config().grinder], tableRoast = config().roast.trim().toLowerCase();
       if (useRecorded && matchingScope && matchingTarget && !cases.proposedDd && latest?.pressureConfirmed && !simpleComparisonStale && tableModel && ["light", "medium", "dark"].includes(tableRoast) && latest.scope?.doseG > 0) cases.proposedDd = {input: {model: tableModel, roast: tableRoast, weightMg: latest.scope.doseG * 1000}};
-      algorithmNames.forEach(name => { const reason = name === "DdEff" ? measurement : timing; if (reason) { delete cases[name]; reasons[name] = reason; } });
+      algorithmNames.forEach(name => { const reason = estimated?.cases[name] ? null : estimated && name !== "DdEff" ? estimated.setup.reason || "This model needs an explicitly accepted absolute reference; the relative-only estimate enables GbS1 and GbS2." : name === "DdEff" ? measurement : timing; if (reason) { delete cases[name]; reasons[name] = reason; } });
       text($("all-comparison-context"), source);
       holder.replaceChildren();
+      const approachSnapshots = [];
       algorithms.compareAll({cases}).results.forEach(row => {
         if (failures[row.algorithm]) row = {...row, status: "invalid", result: null, reason: failures[row.algorithm]};
         const card = document.createElement("article"), heading = document.createElement("h3"), label = document.createElement("p"), answer = document.createElement("p"), why = document.createElement("p");
@@ -658,23 +766,43 @@
           else if (row.algorithm === "inverseRegression") recommendation = "Estimated research setting: " + Number(value.toFixed(3)) + " micrometres. Verify calibration and measured-point range before using it.";
           else recommendation = "Estimated effective research coordinate: " + value.result + ". This is a model estimate, not a dial command.";
         } else if (row.status === "invalid") recommendation = "Check the supplied measurements: " + row.reason;
+        const mechanical = mechanicalProposal(row, estimated);
+        if (mechanical) {
+          card.setAttribute("data-coordinate-status", mechanical.coordinateStatus || estimated.setup.coordinateStatus);
+          text(heading, row.algorithm + " · estimated");
+          recommendation = Number.isFinite(mechanical.proposedNative) ? (canTryMechanical(latest, mechanical) ? "Estimated trial: " : "Model estimate only: ") + Number(mechanical.proposedNative.toFixed(6)) + " " + simpleUnit() + " (currently " + latest.setting + ")." + (canTryMechanical(latest, mechanical) ? "" : " Follow your measured or taste-based next step above.") : "Estimated trial withheld: " + (mechanical.reason || "No achievable small step is available.");
+          explanation = comparisonHelp[row.algorithm][1] + " Uses approximately " + Number(Math.abs(estimated.setup.signedAxialUmPerNative).toPrecision(6)) + " µm per dial unit under your chosen " + (estimated.setup.absolute ? "absolute-zero assumption" : "relative-only assumption") + ". Any offered trial respects your checked small step, allowed window and physical clicks.";
+        }
+        const snapshot = {algorithm: row.algorithm, status: row.status, coordinateStatus: mechanical?.coordinateStatus || (row.algorithm === "manual" ? "native" : latest?.coordinate != null && algorithmNames.includes(row.algorithm) ? "measured" : "unknown")};
+        let snapshotSetting = mechanical?.proposedNative;
+        if (!mechanical && row.status === "computed" && value?.returnedDdDum != null && useRecorded) { const mapped = dialConversion(value.returnedDdDum); if (mapped.status === "normalized") snapshotSetting = mapped.visible.value; }
+        if (row.algorithm === "manual" && row.status === "computed") snapshotSetting = value.direction === "none" ? latest?.setting : value.proposedDial;
+        const checkedStep = simpleNumber("simple-step"), checkedMin = simpleNumber("simple-bound-min"), checkedMax = simpleNumber("simple-bound-max");
+        if (useRecorded && latest && $("simple-confirm-dial").checked && Number.isFinite(snapshotSetting) && Math.abs(snapshotSetting - latest.setting) <= checkedStep + 1e-9 && (checkedMin == null || snapshotSetting >= checkedMin) && (checkedMax == null || snapshotSetting <= checkedMax)) Object.assign(snapshot, {settingUnit: researchUnit(simpleUnit()), proposedSetting: snapshotSetting, direction: snapshotSetting === latest.setting ? "none" : (snapshotSetting - latest.setting) * Number($("simple-finer").value) > 0 ? "finer" : "coarser"});
+        approachSnapshots.push(snapshot);
         const supplied = cases[row.algorithm];
         if (row.status === "computed" && supplied && row.algorithm === "proposedDd") explanation += " Chosen inputs: " + supplied.input.model + ", " + supplied.input.roast + " roast, " + supplied.input.weightMg / 1000 + " g coffee.";
         if (row.status === "computed" && supplied && row.algorithm === "grindTime") explanation += " Chosen mode: " + supplied.input.mode + "; recipe grind time: " + supplied.input.recipeTimeMs / 1000 + " seconds.";
         if (row.status === "computed" && supplied && row.algorithm === "effectiveDd") explanation += " Measured grind duration: " + supplied.input.grindDurationMs / 1000 + " seconds; supplied baseline: " + supplied.input.effectiveBaseline + " micrometres.";
         if (row.status === "computed" && supplied && row.algorithm === "inverseRegression") explanation += " Uses " + supplied.points.length + " supplied points; target time: " + supplied.targetSec + " seconds.";
         text(answer, recommendation); text(why, (row.status === "computed" ? "Why: " : "Why this tool is unavailable: ") + explanation); card.append(heading, label, answer, why);
+        if (mechanical && canTryMechanical(latest, mechanical)) { const choose = document.createElement("button"); choose.type = "button"; text(choose, "Try this estimated approach"); choose.addEventListener("click", () => chooseMechanical(latest, row.algorithm, mechanical)); card.append(choose); }
         if (row.status !== "computed") {
           if (algorithmNames.includes(row.algorithm)) {
-            if (latest && latest.coordinate == null) guideTo(card, "About measured research conversion", "research-calibration");
+            if (latest && latest.coordinate == null && row.algorithm !== "DdEff") guideTo(card, "Set up a rough estimate (optional)", "mechanical-setup", "mechanical-reference");
+            else if (latest && latest.coordinate == null) guideTo(card, "About measured research conversion", "research-calibration");
             else guideTo(card, "Check the recorded shot", "simple-brew", "simple-time");
           } else if (row.algorithm === "manual") guideTo(card, "Check my small dial step", "simple-dial-setup", "simple-step");
           else if (row.algorithm === "proposedDd") guideTo(card, "Check grinder and coffee details", "simple-grinder-context", "roast");
           else guideTo(card, "Add this tool’s measured inputs", "research-inputs", "lab-" + row.algorithm + "-enabled");
         }
-        if (cases[row.algorithm]) { const details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre"); text(summary, "Exact inputs and calculation"); text(pre, JSON.stringify({case: cases[row.algorithm], ...row}, null, 2)); details.append(summary, pre); card.append(details); }
+        if (cases[row.algorithm]) { const details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre"); text(summary, "Exact inputs and calculation"); text(pre, JSON.stringify({case: cases[row.algorithm], ...(mechanical ? {mechanicalAssumptions: estimated.setup, boundedNativeResult: mechanical, relativeOriginCheck: estimated.setup.absolute ? "not applicable" : "compared against origin shifted by 1000 dD", sourceProfile: mechanics.profileFor(config().grinder)} : {}), ...row}, null, 2)); details.append(summary, pre); card.append(details); }
         holder.append(card);
       });
+      if (useRecorded && latest && matchingScope && matchingTarget && !simpleComparisonStale) {
+        const response = latest.nativeResponse;
+        latest.researchApproaches = approachSnapshots.concat([{algorithm: "native-response", status: response?.status || "unavailable", coordinateStatus: "native", ...(Number.isFinite(response?.proposedSetting) ? {settingUnit: researchUnit(simpleUnit()), proposedSetting: response.proposedSetting, direction: response.direction} : {})}]);
+      }
     } catch (error) { holder.replaceChildren(); text(holder, "Comparison could not be refreshed: " + error.message); }
   }
   function initializeEvidenceUi() {
@@ -694,6 +822,7 @@
     return value != null && String(value).trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
   }
   function clearSimpleShots() {
+    researchSeries = null;
     simpleShots = []; simpleProposal = null; simpleEditingShot = false; simpleComparisonStale = false;
     $("simple-history")?.replaceChildren();
     if ($("simple-advice")) text($("simple-advice"), "Brew a coffee and enter its time and taste first.");
@@ -704,6 +833,7 @@
     compareAllCalculators(); renderNativeResponse();
   }
   function clearSimpleSetup() {
+    renderMechanicalSetup(true);
     simplePractice = false; nativeSetupEdited.clear();
     if ($("simple-pressure-confirmed")) $("simple-pressure-confirmed").checked = false;
     ["simple-current-dial", "simple-step", "simple-finer", "simple-bound-min", "simple-bound-max"].forEach(id => { if ($(id)) $(id).value = ""; });
@@ -725,18 +855,23 @@
     if ($("simple-advice")) text($("simple-advice"), "Your inputs changed. Enter this shot again to get a fresh next step.");
   }
   function applyNativeDefaults() {
+    renderMechanicalSetup();
     if (!$("simple-step")) return;
     const profile = activeProfile(), metadata = dialProfile(), preset = metadata?.espressoAdjustment;
     const saved = profile?.model === config().grinder ? profile : null;
     const owner = saved?.nativeSetup;
-    const sameSetup = owner?.burrIdentity === config().burrs && owner?.calibrationEpoch === config().calibration;
-    const proposed = {"simple-step": saved?.stepSize ?? preset?.stepNative, "simple-finer": sameSetup ? owner.numericFinerDelta : preset?.numericFinerDelta,
+    const unit = simpleUnit(), savedUnit = owner?.settingUnit;
+    const legacyP64 = config().grinder === "LAGOM P64" && [undefined, "marks", "dial marks"].includes(savedUnit) && researchUnit(unit) === "printed-decimal";
+    const sameUnit = savedUnit ? researchUnit(savedUnit) === researchUnit(unit) || legacyP64 : config().grinder !== "LAGOM 01";
+    const sameSetup = sameUnit && owner?.burrIdentity === config().burrs && owner?.calibrationEpoch === config().calibration;
+    const savedStep = sameUnit ? saved?.stepSize : null;
+    const proposed = {"simple-step": savedStep ?? preset?.stepNative, "simple-finer": sameSetup ? owner.numericFinerDelta : preset?.numericFinerDelta,
       "simple-bound-min": sameSetup ? owner.min : null, "simple-bound-max": sameSetup ? owner.max : null};
     Object.entries(proposed).forEach(([id, value]) => { if ($(id) && !nativeSetupEdited.has(id) && $(id).value === "" && Number.isFinite(value)) $(id).value = String(value); });
     const holder = $("simple-step-preset"); if (holder) {
       holder.replaceChildren(); const note = document.createElement("p");
       const basis = {reviewer_observed_increment: "Observed in a firsthand review", cautious_product_heuristic: "A cautious trial chosen for this product", manufacturer_native_increment: "Published native adjustment increment"}[preset?.basis] || "Proposed trial from the reviewed model notes";
-      text(note, saved?.stepSize != null ? "Your saved step for this individual grinder is proposed here. Check it again after setup changes." : preset?.stepNative != null ? basis + ": " + preset.stepNative + " " + simpleUnit() + ". " + (preset.note || "") : "No numeric step is assumed for this model. Enter a small step you can make reliably. " + (preset?.note || "")); holder.append(note);
+      text(note, saved?.stepSize != null && !sameUnit ? "Your old saved step used a different or unspecified dial unit. Enter a fresh step in " + unit + " and check it on this grinder." : savedStep != null ? "Your saved step for this individual grinder is proposed here. Check it again after setup changes." + (legacyP64 ? " The old P64 dial-mark label is read as decimal printed numbers." : "") : preset?.stepNative != null ? basis + ": " + preset.stepNative + " " + simpleUnit() + ". " + (preset.note || "") : "No numeric step is assumed for this model. Enter a small step you can make reliably. " + (preset?.note || "")); holder.append(note);
       (preset?.sources || []).forEach(source => { const href = safeHttps(source.url); if (!href) return; const link = document.createElement("a"); link.href = href; link.target = "_blank"; link.rel = "noopener noreferrer"; text(link, source.title); holder.append(link, document.createElement("br")); });
       if (preset?.espressoSupported === false) { const warning = document.createElement("p"); text(warning, "This model is not supported for espresso. No espresso dial adjustment will be proposed."); holder.append(warning); }
     }
@@ -747,7 +882,7 @@
     const profile = activeProfile(), step = simpleNumber("simple-step"), sign = Number($("simple-finer")?.value);
     if (simplePractice || !profile || profile.model !== config().grinder || !$("simple-confirm-dial")?.checked || !(step > 0) || ![-1, 1].includes(sign)) return;
     profile.stepSize = step;
-    profile.nativeSetup = {burrIdentity: config().burrs, calibrationEpoch: config().calibration, numericFinerDelta: sign, min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")};
+    profile.nativeSetup = {settingUnit: simpleUnit(), burrIdentity: config().burrs, calibrationEpoch: config().calibration, numericFinerDelta: sign, min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")};
     persistProfiles();
   }
   function nativeScope() {
@@ -847,7 +982,7 @@
     }
     let coordinate = null;
     try { const normalized = algorithms.normalizeGrinderSetting({model: c.grinder, value: current, burrIdentity: c.burrs, calibrationEpoch: c.calibration, grinderId: c.grinderId, calibration: dialCalibration}); if (normalized.status === "normalized") coordinate = normalized.algorithm.ddDum; } catch (_) { /* Native response does not need a research conversion. */ }
-    const shot = {id: simpleEditingShot ? simpleShots.at(-1).id : "native-shot-" + nextNativeShotId++, scope: nativeScope(), setting: current, time: actual, taste, temperature, minutes, practice: simplePractice,
+    const shot = {id: simpleEditingShot ? simpleShots.at(-1).id : "native-shot-" + nextNativeShotId++, ...(simpleEditingShot ? {researchSeries: simpleShots.at(-1).researchSeries, researchOrdinal: simpleShots.at(-1).researchOrdinal} : {}), scope: nativeScope(), setting: current, time: actual, taste, temperature, minutes, practice: simplePractice,
       target: c.target, tolerance: c.tolerance, clockConfirmed: $("simple-clock-confirmed").checked, pressureConfirmed: $("simple-pressure-confirmed").checked, coordinate, manualInput, manualAction: action, manualWhy: why};
     if (simpleEditingShot) simpleShots[simpleShots.length - 1] = shot; else simpleShots.push(shot);
     simpleEditingShot = true; simpleComparisonStale = false;
@@ -962,7 +1097,7 @@
     $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles().finally(clearRestoredDialConfirmation); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-overall")?.addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.overall = $("assist-overall").value; renderTable(); } });
     $("assist-taste").addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
-    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); initializeResearchSharing(); clearRestoredDialConfirmation();
+    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); initializeResearchSharing(); initializeMechanical(); clearRestoredDialConfirmation();
     window.addEventListener?.("pageshow", () => { clearRestoredDialConfirmation(); setTimeout(clearRestoredDialConfirmation, 0); });
   }
   init();

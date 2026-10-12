@@ -67,6 +67,6 @@ test('guided bounds entry preserves shots and owner step survives a reload witho
   await page.locator('#simple-dial-setup summary').click();
   await expect(page.locator('#simple-step')).toHaveValue('0.25');
   await expect(page.locator('#simple-confirm-dial')).not.toBeChecked();
-  await page.locator('#grinder').selectOption('LAGOM P64');
+  await page.locator('#grinder').selectOption('E65S GbW');
   await expect(page.locator('#simple-step')).toHaveValue('');
 });
