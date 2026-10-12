@@ -154,6 +154,17 @@ clock and recipe checks. Its shot history lasts for the current browser session.
 Missing or conflicting evidence keeps the current setting and explains what
 to check. The clearly labelled practice example uses fictional shots.
 
+Both views show all ten calculations automatically, with the result, a
+plain-language reason and any missing measurements. Timing-only research models
+use independent histories of the settings actually brewed; they do not override
+your taste-based next step. Their native DF54/DF64 outputs need your own two-point
+calibration. DdEff is a test sequence, and the starting table has unknown units;
+neither is a command for your next coffee. Editing feedback replaces the same
+shot until you continue to a new one. Expert mode retains recorded coffee as
+selected evidence and lets you explicitly switch to its experiment or imported
+trace. Imported traces require a complete matching pump clock and a suitable
+stop reason; their coordinates are not mapped onto a different current grinder.
+
 Expert mode lets you plan shots, compare the shipped algorithms, inspect their
 memory, and save or import an experiment. It loads this repository's actual `plugin.js`; the
 research equations and assisted suggestion policy are not separately reimplemented.

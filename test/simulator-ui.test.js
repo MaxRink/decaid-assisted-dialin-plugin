@@ -46,7 +46,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   const ids = [
     "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
     "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
-    "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
+    "view-mode", "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "all-comparison-context", "comparison-source", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
@@ -420,7 +420,7 @@ test("profile browser exposes all stock and supplemental references without repl
 });
 
 test("structured supplemental inputs compute all ten isolated algorithms", () => {
-  const ui = uiFixture(); ui.elements.get("next").click();
+  const ui = uiFixture(); ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change"); ui.elements.get("next").click();
   const values = {
     effectiveDd: {grindDdDum: 500, grindDurationMs: 3000, effectiveBaseline: 50, residue: 50},
     grindTime: {mode: 3, recipeDdUm: 50, targetDdDum: 500, recipeTimeMs: 3000},
@@ -434,7 +434,7 @@ test("structured supplemental inputs compute all ten isolated algorithms", () =>
   }
   ui.elements.get("compare-all-lab").click();
   const rows = ui.elements.get("all-comparison-results").children;
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 10, ui.elements.get("all-comparison-results").textContent);
   for (const row of rows) assert.match(row.children[0].textContent, /computed$/, row.textContent);
 });
 
@@ -447,6 +447,7 @@ test("reset fences an in-flight simulator suggestion", async () => {
 
 test("manual comparison accepts the selectable adjustment intents and retains nonactionable results", () => {
   const ui = uiFixture(), field = key => ui.context.document.getElementById("lab-manual-" + key);
+  ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
   field("enabled").checked = true; field("enabled").dispatch("change");
   for (const [key, value] of Object.entries({profile: "df64_gen2", targetTimeSec: 28, actualTimeSec: 28, currentDial: 20, stepMarks: 1, numericFinerDelta: "-1"})) field(key).value = String(value);
   const options = field("flavor").children.map(node => node.value);
@@ -455,7 +456,7 @@ test("manual comparison accepts the selectable adjustment intents and retains no
     ui.elements.get("compare-all-lab").click();
     const row = ui.elements.get("all-comparison-results").children.find(node => node.children[0].textContent.startsWith("manual ·"));
     assert.match(row.children[0].textContent, /computed$/);
-    const result = JSON.parse(row.children[2].children[1].textContent).result;
+    const result = JSON.parse(row.children.find(node => node.tagName === "DETAILS").children[1].textContent).result;
     assert.equal(result.direction, direction, flavor); assert.equal(result.proposedDial, proposedDial, flavor);
     if (["weak", "channeling"].includes(flavor)) assert.match(result.reasons.join(" "), /not.*used|not state a recognized/);
   }

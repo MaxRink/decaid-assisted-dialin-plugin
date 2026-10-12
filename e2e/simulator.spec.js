@@ -195,3 +195,37 @@ test('decision gallery opens every diagram and fits mobile without broken images
   }
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+test('imported comparisons refresh, enforce pump clock and withhold mismatched native conversion', async ({page, request}) => {
+  const state=await request.get('/__test/state').then(r=>r.json()); await page.goto(lab); await step(page,3);
+  await page.locator('#shot-trace-import').setInputFiles(file('shot.json',state.shots[0])); await step(page,4);
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','computed');
+  await expect(card).toContainText('Native conversion is withheld'); await expect(card).not.toContainText('marks');
+  await step(page,3); await page.locator('#actual-shot-clock').selectOption('pouring'); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('pump-start time');
+  await step(page,3); await page.locator('#shot-trace-import').setInputFiles(file('flow.json',state.shots[1])); await step(page,4); await expect(card).toContainText('flow control');
+  await step(page,3); await page.locator('#clear-shot-trace').click(); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable');
+});
+test('imported aborted shots and unconfirmed manual stops cannot provide timing advice', async ({page,request}) => {
+  const state=await request.get('/__test/state').then(r=>r.json()); const shot=state.shots[0]; await page.goto(lab); await step(page,3);
+  shot.finalStopReason='error'; await page.locator('#shot-trace-import').setInputFiles(file('error.json',shot)); await step(page,4);
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('error or disconnect');
+  await step(page,3); shot.finalStopReason='appStop'; await page.locator('#shot-trace-import').setInputFiles(file('manual.json',shot)); await step(page,4); await expect(card).toContainText('manually stopped');
+  await step(page,3); await page.locator('#manual-stop-confirmed').check(); await step(page,4); await expect(card).toHaveAttribute('data-status','computed');
+});
+
+test('saved pouring feedback and object stop reasons invalidate imported pump comparisons', async ({page,request}) => {
+  const state=await request.get('/__test/state').then(r=>r.json()); await page.goto(lab); await step(page,3);
+  await page.locator('#shot-trace-import').setInputFiles(file('feedback.json',{shot:state.shots[0],feedback:{brewTimeSec:25,brewTimeClock:'pouring'}})); await step(page,4);
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('pump-start time');
+  await step(page,3); state.shots[0].finalStopReason={name:'error'}; await page.locator('#shot-trace-import').setInputFiles(file('object-stop.json',state.shots[0])); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('error or disconnect');
+});
+test('scenario import clears old recorded coffee and owner-calibrated DF64 uses actual marks', async ({page}) => {
+  await seed(page); await step(page,4); const scenario=await downloadJSON(page,()=>page.locator('#export').click());
+  scenario.setup.dialCalibration={model:'DF64 Gen 2',burrIdentity:scenario.setup.burrs,calibrationEpoch:scenario.setup.calibration,grinderId:scenario.setup.grinderId,dialMin:0,dialMax:90,dialA:0,ddDumA:300,dialB:90,ddDumB:1200};
+  await page.locator('#import').setInputFiles(file('calibrated.json',scenario)); await page.locator('#view-mode').selectOption('simple'); await step(page,1);
+  await page.locator('#simple-current-dial').fill('20'); await page.locator('#simple-dial-setup summary').click(); await page.locator('#simple-step').fill('0.5'); await page.locator('#simple-finer').selectOption('-1'); await page.locator('#simple-confirm-dial').check();
+  await step(page,3); await page.locator('#simple-time').fill('22'); await page.locator('#simple-taste').selectOption('too sour'); await page.locator('#simple-clock-confirmed').check(); await page.locator('#simple-pressure-confirmed').check(); await page.locator('#simple-record').click();
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','computed'); await expect(card).toContainText('marks'); expect(JSON.parse(await card.locator('pre').textContent()).case.input.setpointDdDum).toBe(500);
+  await page.locator('#view-mode').selectOption('expert'); await page.locator('#import').setInputFiles(file('new-coffee.json',{...scenario,setup:{...scenario.setup,bean:'Different coffee'}}));
+  await page.locator('#view-mode').selectOption('simple'); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(page.locator('#simple-history li')).toHaveCount(0); await expect(page.locator('#all-comparison-context')).not.toContainText('Recorded shot 1');
+});
