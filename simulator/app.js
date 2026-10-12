@@ -544,6 +544,10 @@
             const mapped = importedShot && !useRecorded ? {status: "unavailable"} : dialConversion(value.returnedDdDum);
             recommendation = mapped.status === "normalized" ? (row.algorithm === "DdEff" ? "Measurement plan coordinate: " : "Timing model returns: ") + Number(mapped.visible.value.toFixed(6)) + " " + mapped.visible.unit + "." + (mapped.achievable === false ? " This lies between physical steps; verify an achievable mark." : "") : importedShot && !useRecorded ? "Research model returns " + value.returnedDdDum + " dD. Native conversion is withheld: the imported grinder may differ from the current setup." : "Research result available; a verified calibration is needed to show it on your dial.";
             explanation += " Current phase: " + value.phase + ". " + (row.algorithm === "DdEff" ? "The returned coordinate follows the test sequence, not a timing correction." : value.locked ? "The model is locked and returns its previous setting." : value.committed === false ? "It holds the returned setting even if its internal candidate differs." : "It returns the model's calculated setting.");
+            if (row.algorithm !== "DdEff") {
+              const input = cases[row.algorithm].input, actual = input.actualBrewTimeMs / 1000, target = input.targetBrewTimeMs / 1000, gap = Number(Math.abs(actual - target).toFixed(3));
+              explanation += " Latest measured time: " + actual + " seconds; target: " + target + " seconds (" + (gap === 0 ? "on target" : gap + " seconds " + (actual < target ? "faster" : "slower")) + "). Tolerance: " + input.toleranceMs / 1000 + " seconds.";
+            }
             if (value.centralSec != null) explanation += " Smoothed time: " + Number(value.centralSec.toFixed(2)) + " seconds.";
             if (useRecorded && row.algorithm !== "DdEff") explanation += " Your recorded dial was " + latest.setting + " " + simpleUnit() + ". This is a timing-only comparison; it does not override your taste-based next step above.";
           } else if (row.algorithm === "manual") {
@@ -554,6 +558,11 @@
           else if (row.algorithm === "inverseRegression") recommendation = "Estimated research setting: " + Number(value.toFixed(3)) + " micrometres. Verify calibration and measured-point range before using it.";
           else recommendation = "Estimated effective research coordinate: " + value.result + ". This is a model estimate, not a dial command.";
         } else if (row.status === "invalid") recommendation = "Check the supplied measurements: " + row.reason;
+        const supplied = cases[row.algorithm];
+        if (row.status === "computed" && supplied && row.algorithm === "proposedDd") explanation += " Chosen inputs: " + supplied.input.model + ", " + supplied.input.roast + " roast, " + supplied.input.weightMg / 1000 + " g coffee.";
+        if (row.status === "computed" && supplied && row.algorithm === "grindTime") explanation += " Chosen mode: " + supplied.input.mode + "; recipe grind time: " + supplied.input.recipeTimeMs / 1000 + " seconds.";
+        if (row.status === "computed" && supplied && row.algorithm === "effectiveDd") explanation += " Measured grind duration: " + supplied.input.grindDurationMs / 1000 + " seconds; supplied baseline: " + supplied.input.effectiveBaseline + " micrometres.";
+        if (row.status === "computed" && supplied && row.algorithm === "inverseRegression") explanation += " Uses " + supplied.points.length + " supplied points; target time: " + supplied.targetSec + " seconds.";
         text(answer, recommendation); text(why, "Why: " + explanation); card.append(heading, label, answer, why);
         if (cases[row.algorithm]) { const details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre"); text(summary, "Exact inputs and calculation"); text(pre, JSON.stringify({case: cases[row.algorithm], ...row}, null, 2)); details.append(summary, pre); card.append(details); }
         holder.append(card);

@@ -101,6 +101,7 @@ test('E64 replays actual settings in all independent research models and preserv
   await shot(page,22,'too sour');
   for (const name of names.slice(0,5)) { await expect(row(page,name)).toHaveAttribute('data-status','computed'); await expect(row(page,name)).toContainText('micrometres'); }
   await expect(row(page,'DdEff')).toContainText('not next-coffee advice');
+  await expect(row(page,'GbS2')).toContainText('Latest measured time: 22 seconds; target: 28 seconds (6 seconds faster)');
   const first = JSON.parse(await row(page,'GbS1').locator('pre').textContent()); expect(first.case.state.lastResultDum).toBe(630); expect(first.case.input.setpointDdDum).toBe(630);
   await page.locator('#simple-continue').click(); await shot(page,26,'too sour');
   const second = JSON.parse(await row(page,'GbS2').locator('pre').textContent()); expect(second.case.input.setpointDdDum).toBe(620); expect(second.case.state.history).toHaveLength(1); expect(second.case.state.history[0].x).toBe(63);
