@@ -1,6 +1,6 @@
 # Grinder mechanics: evidence for all 16 catalog models
 
-Reviewed 12 October 2026. This report separates manufacturer specifications, firsthand measurements, conditional calculations and unresolved quantities. `mechanics.json` contains the model-by-model evidence and source ledger; `implementation-contract.md` defines how these facts can enter an exploratory model without becoming fabricated calibration.
+Reviewed 12 October 2026. This report separates manufacturer specifications, firsthand measurements, conditional calculations and unresolved quantities. [The mechanics catalog](../data/grinder-mechanics.json) contains the model-by-model evidence and source ledger; [the implementation contract](GRINDER_MECHANICS.md) defines how these facts can enter an exploratory model without becoming fabricated calibration.
 
 The strongest useful result is that a mechanical prior is possible for several models even without a measured shot-response curve. That prior describes **relative burr movement**. It does not establish the owner's absolute burr gap, particle-size distribution, or seconds of extraction per dial increment.
 

@@ -549,7 +549,7 @@
     {
       "id": "lagomp64",
       "model": "LAGOM P64",
-      "unit": "dial micro-ticks",
+      "unit": "decimal dial numbers",
       "control": "wheel",
       "markings": "Do not substitute LAGOM 01 pitch; local conversion required",
       "zero": "Recalibrate after burr replacement; generation matters",

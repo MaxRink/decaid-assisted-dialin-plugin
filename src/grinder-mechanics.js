@@ -152,9 +152,15 @@ function createGrinderMechanics(catalog) {
       proposed = origin + (currentIndex + sign * steps) * increment;
       const epsilon = Math.min(increment * 1e-7, 8 * Number.EPSILON * Math.max(1, Math.abs(proposed), Math.abs(input.currentNativeValue)));
       if (!finite(proposed)) return withheld("invalid", "Proposed native value overflowed the finite numeric range.");
+      const normalizeBoundRoundoff = value => {
+        if (finite(input.minNative) && value < input.minNative && input.minNative - value <= epsilon) return input.minNative;
+        if (finite(input.maxNative) && value > input.maxNative && value - input.maxNative <= epsilon) return input.maxNative;
+        return value;
+      };
+      proposed = normalizeBoundRoundoff(proposed);
       if (!validBounds(input, "minNative", "maxNative", proposed) || Math.abs(proposed - input.currentNativeValue) > cap + epsilon) {
         steps--;
-        proposed = origin + (currentIndex + sign * steps) * increment;
+        proposed = normalizeBoundRoundoff(origin + (currentIndex + sign * steps) * increment);
       }
       if (steps <= 0 || !finite(proposed) || !validBounds(input, "minNative", "maxNative", proposed) ||
           sign * (proposed - input.currentNativeValue) <= 0 || Math.abs(proposed - input.currentNativeValue) > cap + epsilon)

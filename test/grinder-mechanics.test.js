@@ -153,6 +153,21 @@ test("decimal physical increments tolerate representation error without changing
   close(result.proposedNative, .45);
 });
 
+test("decimal lattice proposals reach exact bounds despite floating-point roundoff", () => {
+  const base = { signedAxialUmPerNative: 1, umPerResearchUnit: 1, ownerStep: .1,
+    physicalIncrement: .1, minNative: -.3, maxNative: .3 };
+  for (const sign of [-1, 1]) {
+    const result = proposal({ ...base, currentNativeValue: sign * .2, requestedResearchDelta: sign * .1 });
+    assert.equal(result.status, "estimated_relative");
+    assert.equal(result.proposedNative, sign * .3);
+    // A genuinely off-grid bound must not become an achievable physical setting.
+    const held = proposal({ ...base, currentNativeValue: sign * .2, requestedResearchDelta: sign * .1,
+      ...(sign > 0 ? { maxNative: .299999 } : { minNative: -.299999 }) });
+    assert.equal(held.status, "hold");
+    assert.equal(held.proposedNative, null);
+  }
+});
+
 test("bounded proposal invariants hold over signs, steps, requested deltas and fractional boundaries", () => {
   for (const current of [-12, 0, 12]) for (const sign of [-1, 1]) for (const requested of [.1, .5, .99, 1, 1.5, 2, 4, 40])
     for (const cap of [.25, 1, 1.5, 3]) {
