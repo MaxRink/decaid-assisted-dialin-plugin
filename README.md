@@ -349,7 +349,10 @@ website sends only when you press Send; the opted-in plugin automatically sends
 future observations and retries while running. Random observation keys allow corrections and retry deduplication;
 personal text, host shot IDs and permanent visitor identifiers are excluded.
 The collector is self-hosted; no live collector is operated by this repository.
-See [data fields, controls and deployment](docs/RESEARCH_SHARING.md).
+See [data fields, controls and deployment](docs/RESEARCH_SHARING.md). Optional
+[private Prometheus metrics and Grafana dashboards](docs/RESEARCH_METRICS.md) show
+retained brew measurements, taste and algorithm comparisons. Corrections and
+expiry update the snapshot; missing data remains missing.
 
 Dependabot checks GitHub Actions, npm, graph-tool Python dependencies and the
 collector's Docker/Compose images weekly. Updates go through the complete CI.
