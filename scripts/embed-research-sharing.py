@@ -19,7 +19,7 @@ def main():
     if START in original:
         before, remainder = original.split(START, 1)
         _, after = remainder.split(END, 1)
-        updated = before + region + after.lstrip("\n")
+        updated = before + region + "\n" + after.lstrip("\n")
     else:
         marker = "function createPlugin("
         before, after = original.split(marker, 1)

@@ -30,7 +30,7 @@ The strongest model-specific numerical finding is **DF64 Gen 2: 0.5 scale mark**
 | Sculptor 064S | 0.1 printed-number interval | 0.1 / 0.2 / 0.25 | Low-confidence visual-movement heuristic, only if owner can reproduce it. |
 | Sculptor 078S | 0.1 printed-number interval | 0.1 / 0.2 / 0.25 | Same evidence limit; not a click and not transferred from non-S models. |
 | LAGOM 01 | Owner-supplied step | Unknown | Tick mechanics are documented, but the owner must confirm the tick-to-printed-number mapping and variant. |
-| LAGOM P64 | Owner-supplied step | Unknown | Exact tick-to-number mapping and physical pitch unverified here; no numerical preset is supplied. |
+| LAGOM P64 | 0.1 printed number | Owner-editable | Manufacturer specifies 10 µm vertical movement per 0.1 line; the app chooses one line as a trial, not a guaranteed shot correction. |
 | 1Zpresso X-Pro | 1 click | 1 | Verified 60 clicks/turn and 12.5 µm burr movement/click; effect on shot unknown. |
 | 1Zpresso J-Max | 1 click | 1 | Verified 90 clicks/turn and 8.8 µm burr movement/click; effect on shot unknown. |
 | 1Zpresso K-Pro/K-Max/K-Plus | 1 click | 1 | Verified 90 clicks/turn and 22 µm burr movement/click; excludes K-Ultra. |
@@ -74,7 +74,7 @@ Ode Gen2 remains excluded from espresso presets regardless of what aftermarket-b
 
 ## What remains unverified
 
-No hardware trials were performed. No universal response curve, DF physical pitch, P64 physical pitch, Sculptor numeric correction size, or E65S/E80S repeatable DDD increment was established. Some vendor-linked PDF downloads and embedded videos were unavailable; their unseen contents were not used as evidence. Sources that merely aggregate user settings or estimate particle sizes were excluded. All published shot-time examples remain local observations under particular recipes; they do not establish grind direction for flow-controlled Decent profiles or prove extraction quality from taste words alone.
+No hardware trials were performed. No universal response curve, DF physical pitch, Sculptor numeric correction size, or E65S/E80S repeatable DDD increment was established. Some vendor-linked PDF downloads and embedded videos were unavailable; their unseen contents were not used as evidence. Sources that merely aggregate user settings or estimate particle sizes were excluded. All published shot-time examples remain local observations under particular recipes; they do not establish grind direction for flow-controlled Decent profiles or prove extraction quality from taste words alone.
 
 
 ## Learn from your shots: ELI5
