@@ -1132,3 +1132,20 @@ test("legacy LAGOM micro-tick steps cannot silently become decimal-number steps"
   assert.equal(current.elements.get("simple-step").value, "0.1"); assert.equal(current.elements.get("simple-confirm-dial").checked, false);
   assert.equal(JSON.parse(current.context.localStorage.getItem(key)).find(profile => profile.model === "LAGOM 01").nativeSetup.settingUnit, "decimal dial numbers");
 });
+
+test("legacy P64 micro-tick steps are cleared before decimal-number migration", async () => {
+  const ui = uiFixture(); await settleResearch();
+  ui.elements.get("grinder").value = "LAGOM P64"; ui.elements.get("grinder").dispatch("change");
+  ui.elements.get("simple-step").value = "1"; ui.elements.get("simple-finer").value = "-1";
+  ui.elements.get("simple-confirm-dial").checked = true; ui.elements.get("simple-confirm-dial").dispatch("change");
+  const key = "decaid.assisted-dialin.grinder-instances.v1";
+  const profiles = JSON.parse(ui.context.localStorage.getItem(key));
+  const p64 = profiles.find(profile => profile.model === "LAGOM P64");
+  p64.nativeSetup.settingUnit = "dial micro-ticks";
+  ui.context.localStorage.setItem(key, JSON.stringify(profiles));
+  const restored = uiFixture(undefined, ui.context.localStorage); await settleResearch();
+  assert.equal(restored.elements.get("simple-step").value, "");
+  assert.equal(restored.elements.get("simple-finer").value, "");
+  assert.equal(restored.elements.get("simple-confirm-dial").checked, false);
+  assert.match(restored.elements.get("simple-step-preset").textContent, /different or unspecified dial unit/);
+});

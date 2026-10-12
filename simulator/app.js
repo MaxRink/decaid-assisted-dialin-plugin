@@ -862,10 +862,11 @@
     const owner = saved?.nativeSetup;
     const unit = simpleUnit(), savedUnit = owner?.settingUnit;
     const legacyP64 = config().grinder === "LAGOM P64" && [undefined, "marks", "dial marks"].includes(savedUnit) && researchUnit(unit) === "printed-decimal";
-    const sameUnit = savedUnit ? researchUnit(savedUnit) === researchUnit(unit) || legacyP64 : config().grinder !== "LAGOM 01";
+    const staleP64MicroTicks = config().grinder === "LAGOM P64" && ["dial micro-ticks", "micro-ticks"].includes(savedUnit) && researchUnit(unit) === "printed-decimal";
+    const sameUnit = savedUnit ? researchUnit(savedUnit) === researchUnit(unit) || (legacyP64 && !staleP64MicroTicks) : config().grinder !== "LAGOM 01";
     const sameSetup = sameUnit && owner?.burrIdentity === config().burrs && owner?.calibrationEpoch === config().calibration;
     const savedStep = sameUnit ? saved?.stepSize : null;
-    const proposed = {"simple-step": savedStep ?? preset?.stepNative, "simple-finer": sameSetup ? owner.numericFinerDelta : preset?.numericFinerDelta,
+    const proposed = {"simple-step": savedStep ?? (staleP64MicroTicks ? null : preset?.stepNative), "simple-finer": sameSetup ? owner.numericFinerDelta : preset?.numericFinerDelta,
       "simple-bound-min": sameSetup ? owner.min : null, "simple-bound-max": sameSetup ? owner.max : null};
     Object.entries(proposed).forEach(([id, value]) => { if ($(id) && !nativeSetupEdited.has(id) && $(id).value === "" && Number.isFinite(value)) $(id).value = String(value); });
     const holder = $("simple-step-preset"); if (holder) {
@@ -1103,7 +1104,21 @@
     const wizardPanels = typeof document.querySelectorAll === "function" ? [...document.querySelectorAll("section[data-wizard-step]")] : [];
     let wizardStep = 1;
     const wizardNames = ["Coffee and grinder", "Your recipe", "Brew and taste", "Your next step"];
-    const showWizardStep = (step, focus = true) => { wizardStep = Math.max(1, Math.min(4, step)); wizardPanels.forEach(panel => { panel.hidden = Number(panel.getAttribute("data-wizard-step")) !== wizardStep; }); wizardButtons.forEach(button => { const active = Number(button.getAttribute("data-wizard-step")) === wizardStep; button.setAttribute("aria-current", active ? "step" : "false"); }); const status = $("wizard-status"); if (status) text(status, "Step " + wizardStep + " of 4 · " + wizardNames[wizardStep - 1]); const back = $("wizard-back"), next = $("wizard-next"); if (back) back.disabled = wizardStep === 1; if (next) { next.disabled = false; next.hidden = viewMode === "simple" && wizardStep >= 3; text(next, wizardStep === 1 ? "Next: recipe" : wizardStep === 2 ? "Next: brew and taste" : "Next"); } if (focus) { const panel = wizardPanels.find(item => !item.hidden && !item.className.split(" ").includes(viewMode === "simple" ? "expert-only" : "simple-only")); if (panel) { panel.setAttribute("tabindex", "-1"); panel.focus?.({preventScroll: true}); panel.scrollIntoView?.({block: "start"}); } } };
+    const showWizardStep = (step, focus = true) => {
+      wizardStep = Math.max(1, Math.min(4, step));
+      const sync = () => {
+        wizardPanels.forEach(panel => { panel.hidden = Number(panel.getAttribute("data-wizard-step")) !== wizardStep; });
+        wizardButtons.forEach(button => { const active = Number(button.getAttribute("data-wizard-step")) === wizardStep; button.setAttribute("aria-current", active ? "step" : "false"); });
+        const status = $("wizard-status"); if (status) text(status, "Step " + wizardStep + " of 4 · " + wizardNames[wizardStep - 1]);
+        const back = $("wizard-back"), next = $("wizard-next"); if (back) back.disabled = wizardStep === 1; if (next) { next.disabled = false; next.hidden = viewMode === "simple" && wizardStep >= 3; text(next, wizardStep === 1 ? "Next: recipe" : wizardStep === 2 ? "Next: brew and taste" : "Next"); }
+      };
+      sync();
+      if (focus) { const panel = wizardPanels.find(item => !item.hidden && !item.className.split(" ").includes(viewMode === "simple" ? "expert-only" : "simple-only")); if (panel) { panel.setAttribute("tabindex", "-1"); panel.focus?.({preventScroll: true}); panel.scrollIntoView?.({block: "start"}); } }
+      // Focus and scrolling can trigger a synchronous render on mobile browsers.
+      // Reapply the complete state in the same turn so the active panel and its
+      // aria-current marker cannot diverge.
+      sync();
+    };
     navigateSimple = showWizardStep;
     wizardButtons.forEach(button => button.addEventListener("click", () => showWizardStep(Number(button.getAttribute("data-wizard-step")))));
     $("wizard-back")?.addEventListener("click", () => showWizardStep(wizardStep - 1)); $("wizard-next")?.addEventListener("click", () => showWizardStep(wizardStep + 1)); showWizardStep(1, false);
