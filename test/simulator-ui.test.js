@@ -973,10 +973,13 @@ test("LAGOM 01 printed decimal dial requires an owner step instead of adding one
 
 test("boot and restored pages clear dial confirmation without erasing the owner step", async () => {
   const ui = uiFixture(), confirmation = ui.elements.get("simple-confirm-dial"), step = ui.elements.get("simple-step");
-  step.value = "0.25"; confirmation.checked = true;
-  await new Promise(setImmediate);
-  assert.equal(confirmation.checked, false, "async metadata boot clears restored approval");
-  assert.equal(step.value, "0.25");
+  ui.windowEvents.get("pageshow")({persisted: false});
+  step.value = "99"; confirmation.checked = true;
+  assert.equal(confirmation.disabled, true, "setup stays unavailable during browser restoration");
+  await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(confirmation.checked, false, "browser-restored approval is cleared before setup becomes interactive");
+  assert.equal(step.value, "0.5", "unconfirmed restored input is replaced by the model preset");
+  assert.equal(confirmation.disabled, false);
   assert.equal(confirmation.autocomplete, "off");
   const record = nativeSession(ui); record(22, 34);
   assert.equal(ui.elements.get("simple-continue").disabled, false);

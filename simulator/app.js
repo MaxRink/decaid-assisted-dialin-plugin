@@ -1016,13 +1016,31 @@
     compareAllCalculators(); renderNativeResponse(learned); captureResearchShot(shot, c, simpleProposal);
     $("simple-continue").disabled = false; text($("simple-brew-status"), ""); setNotice("Shot recorded. Your next step is below."); navigateSimple(4);
   }
-  function clearRestoredDialConfirmation() {
-    const confirmation = $("simple-confirm-dial");
-    if (!confirmation) return;
-    confirmation.autocomplete = "off";
-    const restored = confirmation.checked;
-    confirmation.checked = false;
-    if (restored) invalidateSimpleAdvice();
+  function initializeNativeRestoration() {
+    const ids = ["simple-step", "simple-finer", "simple-bound-min", "simple-bound-max", "simple-confirm-dial"];
+    const clearConfirmation = () => {
+      const wasChecked = $("simple-confirm-dial")?.checked;
+      if ($("simple-confirm-dial")) $("simple-confirm-dial").checked = false;
+      if (wasChecked) invalidateSimpleAdvice();
+    };
+    const restore = () => {
+      clearConfirmation();
+      // Browsers may restore form state after our script runs. Only the saved,
+      // unit-checked profile can supply initial setup values; acknowledgement is fresh.
+      ids.forEach(id => { if ($(id)) $(id).disabled = true; });
+      const finish = () => {
+        ids.filter(id => id !== "simple-confirm-dial").forEach(id => { if ($(id) && !nativeSetupEdited.has(id)) $(id).value = ""; });
+        clearConfirmation();
+        applyNativeDefaults();
+        ids.forEach(id => { if ($(id)) $(id).disabled = false; });
+      };
+      // pageshow precedes some browsers' persisted-form restoration.
+      if (window.addEventListener) setTimeout(finish, 0); else finish();
+    };
+    ids.forEach(id => { if ($(id)) { $(id).autocomplete = "off"; $(id).disabled = true; } });
+    clearConfirmation();
+    if (window.addEventListener) window.addEventListener("pageshow", restore);
+    else restore();
   }
   function initializeSimple() {
     if (!$("simple-record")) return;
@@ -1094,11 +1112,10 @@
     try { lightTheme = storage()?.getItem("decaid.assisted-dialin.theme") === "light"; } catch (_) {}
     document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode");
     $("theme").addEventListener("click", () => { lightTheme = !lightTheme; document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode"); try { storage()?.setItem("decaid.assisted-dialin.theme", lightTheme ? "light" : "dark"); } catch (_) {} });
-    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles().finally(clearRestoredDialConfirmation); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
+    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-overall")?.addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.overall = $("assist-overall").value; renderTable(); } });
     $("assist-taste").addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
-    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); initializeResearchSharing(); initializeMechanical(); clearRestoredDialConfirmation();
-    window.addEventListener?.("pageshow", () => { clearRestoredDialConfirmation(); setTimeout(clearRestoredDialConfirmation, 0); });
+    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); initializeResearchSharing(); initializeMechanical(); initializeNativeRestoration();
   }
   init();
 }());
