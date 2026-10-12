@@ -18,7 +18,7 @@ Keep pull requests focused. Include the affected host/plugin version, tests run,
 | An improvement or integration proposal | [Feature form](https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=feature-request.yml) |
 | Skale device/Bluetooth behavior | [Skale issues](https://github.com/MaxRink/decaid-skale-plugin/issues/new/choose) |
 | E64 WS connection, protocol or grinder mock | [E64 WS issues](https://github.com/MaxRink/decaid-e64ws-plugin/issues/new/choose) |
-| Recovered E64 firmware implementation | [Research issues](https://github.com/MaxRink/mahlkoenig-e64ws-local-research/issues/new/choose) |
+| Recovered E64 firmware implementation | [Research/source correction form](https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=source-correction.yml) |
 | Host beans, shot capture or device APIs | [Decaid issues](https://github.com/decentespresso/decaid/issues) and [discussions](https://github.com/decentespresso/decaid/discussions) |
 | Streamline navigation or skin integration | [Streamline issues](https://github.com/decentespresso/streamline-js/issues) |
 | A security vulnerability | [Private report](https://github.com/MaxRink/decaid-assisted-dialin-plugin/security/advisories/new) |
