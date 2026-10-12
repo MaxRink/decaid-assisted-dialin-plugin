@@ -44,6 +44,7 @@ class Element {
 function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null, unavailable = {}) {
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
+    "research-local-enabled", "research-sharing-consent", "research-sharing-status", "research-sharing-destination", "research-sharing-export", "research-sharing-send", "research-sharing-disable", "research-sharing-delete", "research-sharing-endpoint", "research-sharing-apply",
     "simple-bound-min", "simple-bound-max", "simple-step-preset", "simple-bounds-help", "simple-reset-defaults", "simple-zero-changed", "simple-profile-name", "native-response", "research-calibration", "research-inputs", "simple-dial-setup", "simple-grinder-context", "simple-brew",
     "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
     "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
@@ -112,6 +113,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
     URL,
     URLSearchParams,
     location: { href: "https://example.test/simulator/" },
+    DECAID_RESEARCH_CONFIG: unavailable.researchConfig,
     document,
     window: null,
     globalThis: null,
@@ -126,7 +128,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   context.window = context;
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(`${pluginSource}\nthis.createResearchAlgorithms = createResearchAlgorithms;`, context);
+  vm.runInContext(`${pluginSource}\nthis.createResearchAlgorithms = createResearchAlgorithms; this.createResearchSharing = typeof createResearchSharing === "function" ? createResearchSharing : undefined;`, context);
   vm.runInContext(engineSource, context);
   vm.runInContext(appSource, context);
   return { context, elements, downloads };
@@ -814,4 +816,96 @@ test("changed target and tolerance refresh the last recorded shot instead of inv
   }
   assert.equal(comparisonValue(ui,"GbS2").case.input.targetBrewTimeMs, 25000);
   assert.equal(comparisonValue(ui,"GbS2").case.input.toleranceMs, 2000);
+});
+
+const settleResearch = () => new Promise(resolve => setImmediate(resolve));
+function recordResearchFixture(ui, time = 22) {
+  const field = id => ui.elements.get("simple-" + id);
+  field("current-dial").value = "20"; field("step").value = "0.5"; field("finer").value = "-1"; field("confirm-dial").checked = true;
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true;
+  field("time").value = String(time); field("taste").value = "too sour"; field("record").click();
+}
+
+test("research archive defaults local-only and exports amended shots without personal details", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const calls = []; ui.context.fetch = async (...args) => { calls.push(args); throw new Error("Unexpected remote request"); };
+  ui.elements.get("bean").value = "PERSONAL COFFEE NAME"; ui.elements.get("roaster").value = "PERSONAL ROASTER";
+  recordResearchFixture(ui); await settleResearch();
+  assert.equal(ui.elements.get("research-local-enabled").checked, true);
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  assert.equal(ui.elements.get("research-sharing-consent").disabled, true);
+  assert.match(ui.elements.get("research-sharing-status").textContent, /1 record\(s\).*0 queued/);
+  recordResearchFixture(ui, 24); await settleResearch();
+  await ui.elements.get("research-sharing-export").click();
+  const exported = JSON.parse(ui.downloads.at(-1).parts.join(""));
+  assert.equal(exported.records.length, 1, "amendment replaces the record");
+  assert.equal(exported.records[0].measurements.pumpTimeSec, 24);
+  assert.equal(exported.records[0].grinder.settingUnit, "dial-marks");
+  assert.equal(exported.records[0].taste.intent, "too_sour");
+  assert.equal(exported.records[0].advice.proposedSetting, 19.5);
+  assert.doesNotMatch(JSON.stringify(exported), /PERSONAL|grinderId|beanId|native-shot|timestamp|burrIdentity|calibrationEpoch|token|serial/i);
+  assert.equal(calls.length, 0);
+});
+
+test("remote research requires consent and explicit send; opt-out and local-off persist", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const calls = []; ui.context.fetch = async (url, init) => { calls.push({url, init}); return {ok: true, json: async () => ({accepted: JSON.parse(init.body).records.length})}; };
+  const endpoint = ui.elements.get("research-sharing-endpoint"); endpoint.value = "https://collector.example/records";
+  await ui.elements.get("research-sharing-apply").click();
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  ui.elements.get("research-sharing-consent").checked = true; await ui.elements.get("research-sharing-consent").dispatch("change");
+  recordResearchFixture(ui); await settleResearch(); recordResearchFixture(ui, 23); await settleResearch();
+  assert.match(ui.elements.get("research-sharing-status").textContent, /1 queued/);
+  assert.equal(calls.length, 0);
+  await ui.elements.get("research-sharing-send").click();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.credentials, "omit"); assert.equal(calls[0].init.redirect, "error");
+  const batch = JSON.parse(calls[0].init.body); assert.equal(batch.records.length, 1); assert.equal(batch.records[0].measurements.pumpTimeSec, 23);
+  recordResearchFixture(ui, 24); await settleResearch();
+  await ui.elements.get("research-sharing-disable").click();
+  ui.elements.get("research-local-enabled").checked = false; await ui.elements.get("research-local-enabled").dispatch("change");
+  const restored = uiFixture(undefined, ui.context.localStorage); await settleResearch();
+  assert.equal(restored.elements.get("research-sharing-consent").checked, false);
+  assert.equal(restored.elements.get("research-local-enabled").checked, false);
+  assert.match(restored.elements.get("research-sharing-status").textContent, /1 record\(s\).*0 queued/);
+  recordResearchFixture(restored); await settleResearch();
+  await restored.elements.get("research-sharing-export").click();
+  assert.equal(JSON.parse(restored.downloads.at(-1).parts.join("")).records.length, 1);
+  await restored.elements.get("research-sharing-delete").click();
+  await restored.elements.get("research-sharing-export").click();
+  assert.equal(JSON.parse(restored.downloads.at(-1).parts.join("")).records.length, 0);
+});
+
+test("research endpoint changes revoke consent and unsafe endpoints cannot enable sharing", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const endpoint = ui.elements.get("research-sharing-endpoint");
+  endpoint.value = "https://collector.example/records?token=private"; await ui.elements.get("research-sharing-apply").click();
+  assert.match(ui.elements.get("research-sharing-status").textContent, /HTTPS without credentials, query or fragment/);
+  assert.equal(ui.elements.get("research-sharing-consent").disabled, true);
+  endpoint.value = "https://collector.example/records"; await ui.elements.get("research-sharing-apply").click();
+  ui.elements.get("research-sharing-consent").checked = true; await ui.elements.get("research-sharing-consent").dispatch("change");
+  recordResearchFixture(ui); await settleResearch();
+  endpoint.value = "https://another.example/records"; await ui.elements.get("research-sharing-apply").click();
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  assert.match(ui.elements.get("research-sharing-status").textContent, /0 queued/);
+  assert.match(ui.elements.get("research-sharing-destination").textContent, /another.example/);
+});
+
+test("deployment research destination never grants consent and unknown measured clocks stay unknown", async () => {
+  const ui = uiFixture(undefined, null, {researchConfig: {endpoint: "https://deployment.example/records"}}); await settleResearch();
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  assert.equal(ui.elements.get("research-sharing-consent").disabled, false);
+  assert.match(ui.elements.get("research-sharing-destination").textContent, /deployment.example/);
+  recordResearchFixture(ui);
+  ui.elements.get("simple-clock-confirmed").checked = false;
+  ui.elements.get("simple-pressure-confirmed").checked = false;
+  ui.elements.get("simple-record").click(); await settleResearch();
+  await ui.elements.get("research-sharing-export").click();
+  const record = JSON.parse(ui.downloads.at(-1).parts.join("")).records[0];
+  assert.equal(record.recipe.targetClock, "unknown");
+  assert.equal(record.measurements?.pumpTimeSec, undefined);
+  assert.equal(record.measurements?.recordingTimeSec, undefined);
+  assert.equal(record.measurements?.doseG, undefined);
+  assert.equal(record.recipe.targetDoseG, 18);
+  assert.equal(record.advice.direction, "none");
 });

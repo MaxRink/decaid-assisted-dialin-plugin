@@ -135,6 +135,23 @@
       </article>
 </details></div></section>
 
+    <aside class="card research-sharing" aria-labelledby="research-sharing-title">
+      <details id="research-sharing-panel"><summary id="research-sharing-title">Local research archive · remote sharing off</summary>
+        <p>Help improve dial-in guidance with a small record of your shots. Sharing is off until you choose it.</p>
+        <p><strong>Local research archive is on by default;</strong> you can turn it off or delete it below. Records include numeric coffee weights, grinder settings and shot times, broad coffee and grinder categories, taste choices and calculation results. They exclude coffee names, personal grinder names, device identifiers, credentials, raw timestamps and measurement traces.</p>
+        <label class="check"><input id="research-local-enabled" type="checkbox" checked> Keep a small research archive in this browser (up to 200 records).</label>
+        <label class="check"><input id="research-sharing-consent" type="checkbox"> I choose to share these research records with the configured collector.</label>
+        <p id="research-sharing-status" role="status" aria-live="polite">Sharing is off. No collector is configured.</p>
+        <p id="research-sharing-destination" class="hint"></p>
+        <div class="actions"><button id="research-sharing-export" type="button">Save a research file locally</button><button id="research-sharing-send" type="button" disabled>Send queued records</button><button id="research-sharing-disable" type="button">Turn off and delete queued records</button><button id="research-sharing-delete" type="button">Delete all research records</button></div>
+        <p class="hint">Local export works without a collector or sharing consent. Turning sharing off deletes unsent records from this browser. Your collector may receive network connection metadata.</p>
+        <details class="expert-only"><summary>Configure your research collector</summary>
+          <label>Collector HTTPS URL<input id="research-sharing-endpoint" type="url" placeholder="https://your-collector.example/records" autocomplete="off" spellcheck="false"></label>
+          <button id="research-sharing-apply" type="button">Use this collector</button>
+          <p class="hint">Use an endpoint you trust and control. There is no built-in collector. Changing the destination asks for fresh sharing consent.</p>
+        </details>
+      </details>
+    </aside>
     <div class="wizard-actions"><button id="wizard-back" type="button" disabled>Back</button><button id="wizard-next" class="primary" type="button">Next</button></div>
   </main>
   <footer class="wrap footer"><a href="../docs/decision-trees/">How the assistant decides: illustrated decision guide</a><br>Decaid · manual guidance and fictional practice · no hardware access</footer>

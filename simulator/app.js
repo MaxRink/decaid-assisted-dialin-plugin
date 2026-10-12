@@ -28,6 +28,86 @@
   let nextNativeShotId = 1;
   let navigateSimple = () => {};
 
+  const RESEARCH_KEY = "decaid.assisted-dialin.research.v1";
+  const RESEARCH_ENDPOINT_KEY = "decaid.assisted-dialin.research-endpoint.v1";
+  let researchFactory = null, researchClient = null, researchEndpoint = null;
+  const researchSession = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
+  async function renderResearchSharing(message) {
+    if (!researchClient) return;
+    const state = await researchClient.status();
+    if ($("research-sharing-title")) text($("research-sharing-title"), "Local archive " + (state.localEnabled ? "on" : "off") + " · remote sharing " + (state.sharing ? "on" : "off"));
+    $("research-local-enabled").checked = state.localEnabled;
+    $("research-sharing-consent").checked = state.sharing;
+    $("research-sharing-consent").disabled = !researchEndpoint || Boolean(state.error);
+    $("research-sharing-send").disabled = !state.sharing || !state.queuedCount || Boolean(state.error);
+    text($("research-sharing-status"), message || (state.error ? "Research storage is unavailable. Remote sharing is off. " + state.error :
+      "Local archive " + (state.localEnabled ? "on" : "off") + ": " + state.localCount + " record(s). Remote sharing " + (state.sharing ? "on" : "off") + "; " + state.queuedCount + " queued. " + (researchEndpoint ? "Nothing is sent until you choose Send queued records." : "No collector is configured.")));
+    text($("research-sharing-destination"), researchEndpoint ? "Collector: " + researchEndpoint : "");
+  }
+  async function researchAction(action, message) {
+    try { await action(); await renderResearchSharing(message); }
+    catch (error) { await renderResearchSharing("Research action failed: " + error.message); }
+  }
+  function researchRecord(shot, c, proposedSetting) {
+    const settingUnit = shot.scope.settingUnit === "micrometres" || shot.scope.settingUnit === "µm" ? "micrometres" : shot.scope.settingUnit === "marks" ? "dial-marks" : "unknown";
+    const native = ["suggestion", "hold"].includes(shot.nativeResponse?.status);
+    const model = c.grinder === "DF64" ? "DF64 Gen 1" : c.grinder === "LAGOM P64" ? "Lagom P64" : ["E64 WS", "DF54", "DF64 Gen 1", "DF64 Gen 2", "EK43"].includes(c.grinder) ? c.grinder : "other";
+    const moved = proposedSetting !== shot.setting;
+    return researchFactory.sanitizeRecord({source: "website", kind: "shot", mode: shot.practice ? "practice" : "manual",
+      grinder: {model, settingUnit, setting: shot.setting, step: simpleNumber("simple-step"), finerSign: Number($("simple-finer").value), ownerConfirmed: $("simple-confirm-dial").checked === true},
+      recipe: {controlMode: shot.scope.controlMode, targetClock: shot.clockConfirmed ? "pump" : "unknown", targetTimeSec: shot.target, targetDoseG: c.dose, targetYieldG: c.yield},
+      measurements: {...(shot.clockConfirmed ? {pumpTimeSec: shot.time, pumpComplete: true} : {}), ...(shot.pressureConfirmed ? {doseG: c.dose, yieldG: c.yield} : {})},
+      coffee: {species: String(c.species).toLowerCase(), roast: c.roast},
+      taste: {intent: {"too sour": "too_sour", "too bitter": "too_bitter", "too astringent": "too_astringent", channeling: "uneven_flow"}[shot.taste] || shot.taste || "unknown", tastingTemperatureC: shot.temperature, minutesAfterBrew: shot.minutes},
+      advice: {algorithm: native ? "native-response" : "manual", status: moved ? "suggestion" : "retained", direction: moved ? (proposedSetting - shot.setting) * Number($("simple-finer").value) > 0 ? "finer" : "coarser" : "none", settingUnit, proposedSetting, evidenceCount: native ? shot.nativeResponse?.fit?.points?.length : undefined}});
+  }
+  function captureResearchShot(shot, c, proposedSetting) {
+    if (!researchClient) return;
+    try {
+      const record = researchRecord(shot, c, proposedSetting);
+      researchAction(() => researchClient.capture(record, researchSession + ":" + shot.id));
+    } catch (_) { text($("research-sharing-status"), "This shot could not be added to the research archive. Your dial-in history is still available."); }
+  }
+  function initializeResearchSharing() {
+    if (!$("research-sharing-consent")) return;
+    $("research-sharing-consent").disabled = true;
+    if (typeof window.createResearchSharing !== "function") { text($("research-sharing-status"), "Research archiving is unavailable. Your dial-in tools still work."); return; }
+    researchFactory = window.createResearchSharing();
+    try {
+      const saved = storage()?.getItem(RESEARCH_ENDPOINT_KEY);
+      const configured = saved === null || saved === undefined ? window.DECAID_RESEARCH_CONFIG?.endpoint : saved;
+      if (configured) researchEndpoint = researchFactory.validateEndpoint(configured);
+    } catch (_) { researchEndpoint = null; }
+    $("research-sharing-endpoint").value = researchEndpoint || "";
+    researchClient = researchFactory.createClient({
+      load: async () => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); return JSON.parse(store.getItem(RESEARCH_KEY) || "null"); },
+      save: async state => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); store.setItem(RESEARCH_KEY, JSON.stringify(state)); },
+      send: (url, init) => fetch(url, init)
+    });
+    researchClient.ready.then(async state => {
+      if (state.sharing && state.endpoint !== researchEndpoint) await researchClient.setSharing(false);
+      await renderResearchSharing();
+    }).catch(() => { text($("research-sharing-status"), "Research storage could not be opened. Remote sharing is off."); });
+    $("research-local-enabled").addEventListener("change", () => researchAction(() => researchClient.setLocalCollection($("research-local-enabled").checked)));
+    $("research-sharing-consent").addEventListener("change", () => researchAction(() => researchClient.setSharing($("research-sharing-consent").checked, researchEndpoint)));
+    $("research-sharing-disable").addEventListener("click", () => researchAction(() => researchClient.setSharing(false)));
+    $("research-sharing-delete").addEventListener("click", () => researchAction(() => researchClient.clear(), "All local research records and queued records were deleted. Remote sharing is off."));
+    $("research-sharing-send").addEventListener("click", () => researchAction(() => researchClient.flush()));
+    $("research-sharing-apply").addEventListener("click", () => researchAction(async () => {
+      const entered = $("research-sharing-endpoint").value.trim();
+      const endpoint = entered ? researchFactory.validateEndpoint(entered) : null;
+      await researchClient.setSharing(false);
+      const store = storage(); if (!store) throw new Error("Browser storage is unavailable.");
+      store.setItem(RESEARCH_ENDPOINT_KEY, endpoint || ""); researchEndpoint = endpoint;
+    }));
+    $("research-sharing-export").addEventListener("click", () => researchAction(async () => {
+      const archive = await researchClient.exportLocal();
+      const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(archive, null, 2)], {type: "application/json"}));
+      link.download = "dial-in-research.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    }, "Research file saved locally. Nothing was sent to a collector."));
+  }
+
   const slug = (value) => String(value || "grinder").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "grinder";
   function storage() { try { return window.localStorage; } catch (_) { return null; } }
   function profileId(model, suffix) { return "grinder-" + slug(model) + "-" + suffix; }
@@ -785,7 +865,7 @@
     if (simpleProposal !== current) { const note = document.createElement("p"); note.className = "hint"; text(note, "Move the dial yourself, following your grinder’s adjustment instructions. This page cannot move it."); holder.append(note); }
     $("simple-history").replaceChildren();
     simpleShots.forEach((saved, index) => { const entry = document.createElement("li"); text(entry, (saved.practice ? "Practice " : "Shot ") + (index + 1) + " · " + saved.setting + " " + (saved.scope?.settingUnit || simpleUnit()) + " · " + saved.time + " s · " + (saved.taste || "not tasted")); $("simple-history").append(entry); });
-    compareAllCalculators(); renderNativeResponse(learned);
+    compareAllCalculators(); renderNativeResponse(learned); captureResearchShot(shot, c, simpleProposal);
     $("simple-continue").disabled = false; text($("simple-brew-status"), ""); setNotice("Shot recorded. Your next step is below."); navigateSimple(4);
   }
   function initializeSimple() {
@@ -861,7 +941,7 @@
     $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-overall")?.addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.overall = $("assist-overall").value; renderTable(); } });
     $("assist-taste").addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
-    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple();
+    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); initializeResearchSharing();
   }
   init();
 }());
