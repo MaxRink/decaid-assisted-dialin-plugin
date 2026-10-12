@@ -136,6 +136,7 @@ test('all reviewed grinder models and their labeled display coordinates survive 
     const clean = schema.sanitizeRecord({ ...record(), grinder: { model: model.model, setting: 12, settingUnit: model.unit } });
     assert.equal(clean.grinder.model, model.model);
     assert.equal(clean.grinder.setting, 12, model.unit);
+    if (model.unit === "decimal dial numbers") assert.equal(clean.grinder.settingUnit, "printed-decimal");
   }
   const clean = schema.sanitizeRecord({ ...record(), advice: { algorithm: 'native-response', status: 'collecting' },
     phases: [{ role: 'preinfusion', source: 'recorded_substate', durationSec: 5, meanMachineFlowMlPerSec: 2.1, profileName: 'private name' }] });

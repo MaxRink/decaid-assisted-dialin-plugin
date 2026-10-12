@@ -2006,6 +2006,7 @@ function createResearchSharing() {
   };
   const object = value => value != null && typeof value === "object" && !Array.isArray(value);
   const clone = value => JSON.parse(JSON.stringify(value));
+  const canonicalUnit = value => ["decimal dial numbers", "printed numbers"].includes(value) ? "printed-decimal" : value;
   const choice = (out, key, value, choices) => { if (choices.includes(value)) out[key] = value; };
   const numeric = (out, key, value, min, max) => {
     if (typeof value === "number" && Number.isFinite(value) && value >= min && value <= max)
@@ -2040,7 +2041,7 @@ function createResearchSharing() {
     }
     part("grinder", (out, value) => {
       choice(out, "model", value.model, enums.model);
-      choice(out, "settingUnit", value.settingUnit, enums.unit);
+      choice(out, "settingUnit", canonicalUnit(value.settingUnit), enums.unit);
       numeric(out, "setting", value.setting, 0, 100000);
       numeric(out, "step", value.step, 0, 10000);
       choice(out, "finerSign", value.finerSign, [-1, 1]);
@@ -2099,7 +2100,7 @@ function createResearchSharing() {
       choice(out, "coordinateStatus", value.coordinateStatus, ["native", "measured", "estimated_relative", "estimated_absolute", "unknown"]);
       choice(out, "direction", value.direction, enums.direction);
       choice(out, "status", value.status, enums.status);
-      choice(out, "settingUnit", value.settingUnit, enums.unit);
+      choice(out, "settingUnit", canonicalUnit(value.settingUnit), enums.unit);
       numeric(out, "proposedSetting", value.proposedSetting, 0, 100000);
       numeric(out, "evidenceCount", value.evidenceCount, 0, 250);
       if (!out.settingUnit || out.settingUnit === "unknown") delete out.proposedSetting;
