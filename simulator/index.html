@@ -37,6 +37,7 @@
 
 
         </div></fieldset>
+        <p class="hint"><a id="missing-grinder" href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=new-grinder.yml" target="_blank" rel="noopener noreferrer">My grinder is missing</a> · Ask us to add your model.</p>
         <div id="grinder-load-status" role="status"></div>
         <details><summary>More about this coffee (optional)</summary><div class="fields"><label>Species / blend<input id="species" value="Arabica"></label><label>Roast level<input id="roast" value="light"></label></div><p class="hint">Use the bag’s label if you know it. Your measured shot and the taste you want guide the next small step.</p></details>
         <p class="hint expert-only">Bean and burr details identify the experiment. The shipped GBS formulas use timing and grinder coordinates; this lab keeps those context fields visible so you can see what is and is not used.</p>
@@ -166,7 +167,29 @@
     </aside>
     <div class="wizard-actions"><button id="wizard-back" type="button" disabled>Back</button><button id="wizard-next" class="primary" type="button">Next</button></div>
   </main>
-  <footer class="wrap footer"><a href="../docs/decision-trees/">How the assistant decides: illustrated decision guide</a><br>Decaid · manual guidance and fictional practice · no hardware access</footer>
+  <footer class="wrap footer">
+    <section id="help-contribute" aria-labelledby="help-title">
+      <h2 id="help-title">Help and contribute</h2>
+      <nav class="help-links" aria-label="Get help or suggest a change">
+        <a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=new-grinder.yml" target="_blank" rel="noopener noreferrer">My grinder is missing</a>
+        <a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=bug-report.yml" target="_blank" rel="noopener noreferrer">Report a problem</a>
+        <a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=feature-request.yml" target="_blank" rel="noopener noreferrer">Suggest an improvement</a>
+      </nav>
+      <p class="hint">These links open a GitHub form in a new tab. Your coffee and grinder details are not sent with the link.</p>
+      <details id="help-more"><summary>Correct a reference or report a device problem</summary>
+        <ul>
+          <li><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=source-correction.yml" target="_blank" rel="noopener noreferrer">Correct a grinder fact or research source</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=coffee-catalog-correction.yml" target="_blank" rel="noopener noreferrer">Correct a coffee catalogue or recipe entry</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-skale-plugin/issues/new?template=bug-report.yml" target="_blank" rel="noopener noreferrer">Skale connection or scale readings</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-e64ws-plugin/issues/new?template=bug-report.yml" target="_blank" rel="noopener noreferrer">E64 WS connection or grinder controls</a></li>
+          <li><a href="https://github.com/MaxRink/mahlkoenig-e64ws-local-research/issues/new?template=protocol-mock-device.yml" target="_blank" rel="noopener noreferrer">E64 protocol or research findings</a></li>
+          <li><a href="https://github.com/decentespresso/decaid/issues/new/choose" target="_blank" rel="noopener noreferrer">Decaid host or saved-shot problems</a></li>
+          <li><a href="https://github.com/decentespresso/streamline-js/issues/new/choose" target="_blank" rel="noopener noreferrer">Streamline navigation or display problems</a></li>
+        </ul>
+      </details>
+    </section>
+    <p><a href="../docs/decision-trees/">How the assistant decides: illustrated decision guide</a><br>Decaid · manual guidance and fictional practice · no hardware access</p>
+  </footer>
   <script src="../plugin.js"></script>
   <script src="engine.js"></script>
   <script src="app.js"></script>
