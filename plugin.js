@@ -1952,14 +1952,14 @@ function createResearchSharing() {
   const enums = {
     source: ["website", "plugin"], mode: ["measured", "manual", "practice", "replay"],
     kind: ["shot", "feedback", "advice", "setting_change", "flow_summary"],
-    model: ["E64 WS", "DF54", "DF64 Gen 1", "DF64 Gen 2", "EK43", "Lagom P64", "other", "unknown"],
-    unit: ["micrometres", "dial-marks", "deci-micrometre", "unknown"],
+    model: ["E64 WS", "E65S GbW", "E80S GbW", "DF54", "DF64 Gen 1", "DF64 Gen 2", "Niche Zero", "Baratza Encore ESP", "Timemore Sculptor 064S", "Timemore Sculptor 078S", "LAGOM 01", "LAGOM P64", "1Zpresso X-Pro", "1Zpresso J-Max", "1Zpresso K series", "Fellow Ode Gen 2", "EK43", "other", "unknown"],
+    unit: ["micrometres", "dial-marks", "deci-micrometre", "clicks", "total-clicks", "numbered-settings", "micro-ticks", "printed-decimal", "dial-positions", "µm", "µm (DDD readout only)", "dial marks", "numbered settings", "dial micro-ticks", "clicks from zero", "dial positions", "unknown"],
     control: ["pressure", "mixed_preinfusion_flow", "flow", "mixed_dynamic_flow", "flow_preinfusion_only", "unknown"],
     clock: ["pump", "pouring", "recording", "unknown"],
     taste: ["balanced", "too_sour", "too_bitter", "too_astringent", "weak", "uneven_flow", "unknown"],
     overall: ["under-extracted", "over-extracted", "balanced", "uncertain"],
     direction: ["finer", "coarser", "none"],
-    status: ["suggestion", "abstain", "retained", "invalid", "unavailable"],
+    status: ["suggestion", "abstain", "retained", "hold", "collecting", "computed", "invalid", "unavailable"],
     algorithm: ["manual", "native-response", "rich", "GbS1", "GbS2", "GbS3", "GbS4", "DdEff", "effectiveDd", "grindTime", "inverseRegression", "proposedDd"],
   };
   const object = value => value != null && typeof value === "object" && !Array.isArray(value);
@@ -1970,6 +1970,15 @@ function createResearchSharing() {
       out[key] = Math.round(value * 1000) / 1000;
   };
   const flag = (out, key, value) => { if (typeof value === "boolean") out[key] = value; };
+  const validId = value => typeof value === "string" && /^[a-f0-9]{32}$/.test(value);
+  function randomId() {
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+      const bytes = new Uint8Array(16); crypto.getRandomValues(bytes);
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    }
+    // Record keys are not secrets or authentication tokens. No personal input is used.
+    return Array.from({ length: 4 }, () => Math.floor(Math.random() * 4294967296).toString(16).padStart(8, "0")).join("");
+  }
   function sanitizeRecord(input) {
     if (!object(input)) throw new Error("Research record must be an object");
     const record = { schemaVersion: VERSION };
@@ -1977,6 +1986,11 @@ function createResearchSharing() {
       if (!enums[key].includes(input[key])) throw new Error("Invalid research " + key);
       record[key] = input[key];
     }
+    if (validId(input.observationId) && Number.isSafeInteger(input.revision) && input.revision > 0) {
+      record.observationId = input.observationId; record.revision = input.revision;
+    }
+    if (validId(input.researchSeries)) record.researchSeries = input.researchSeries;
+    if (record.researchSeries && Number.isInteger(input.shotOrdinal) && input.shotOrdinal >= 1 && input.shotOrdinal <= 10000) record.shotOrdinal = input.shotOrdinal;
     function part(key, build) {
       if (!object(input[key])) return;
       const out = {}; build(out, input[key]);
@@ -1998,6 +2012,8 @@ function createResearchSharing() {
     part("recipe", (out, value) => {
       choice(out, "controlMode", value.controlMode, enums.control);
       choice(out, "targetClock", value.targetClock, enums.clock);
+      choice(out, "profileFamily", value.profileFamily, ["traditional", "flow", "bloom", "turbo", "allonge", "adaptive", "unknown"]);
+      choice(out, "preinfusionSource", value.preinfusionSource, ["recorded", "owner_entered", "programmed", "synthetic", "unknown"]);
       numeric(out, "targetTimeSec", value.targetTimeSec, 0.001, 600);
       numeric(out, "targetDoseG", value.targetDoseG, 0.001, 100);
       numeric(out, "targetYieldG", value.targetYieldG, 0.001, 300);
@@ -2028,6 +2044,7 @@ function createResearchSharing() {
       numeric(out, "daysAfterRoast", value.daysAfterRoast, 0, 365);
     });
     part("taste", (out, value) => {
+      flag(out, "good", value.good);
       choice(out, "intent", value.intent, enums.taste);
       choice(out, "overall", value.overall, enums.overall);
       for (const key of ["acidity", "bitterness", "sweetness", "body", "astringency"])
@@ -2035,16 +2052,36 @@ function createResearchSharing() {
       numeric(out, "tastingTemperatureC", value.tastingTemperatureC, 0, 150);
       numeric(out, "minutesAfterBrew", value.minutesAfterBrew, 0, 10080);
     });
-    part("advice", (out, value) => {
+    const advice = (out, value) => {
       choice(out, "algorithm", value.algorithm, enums.algorithm);
+      choice(out, "coordinateStatus", value.coordinateStatus, ["native", "measured", "estimated_relative", "estimated_absolute", "unknown"]);
       choice(out, "direction", value.direction, enums.direction);
       choice(out, "status", value.status, enums.status);
       choice(out, "settingUnit", value.settingUnit, enums.unit);
       numeric(out, "proposedSetting", value.proposedSetting, 0, 100000);
       numeric(out, "evidenceCount", value.evidenceCount, 0, 250);
       if (!out.settingUnit || out.settingUnit === "unknown") delete out.proposedSetting;
-    });
-    if (Object.keys(record).length === 4) throw new Error("No research measurements or categories supplied");
+    };
+    part("advice", advice);
+    if (Array.isArray(input.approaches)) {
+      const approaches = input.approaches.slice(0, 11).filter(object).map(value => { const out = {}; advice(out, value); return out; }).filter(value => value.algorithm);
+      if (approaches.length) record.approaches = approaches;
+    }
+    if (Array.isArray(input.phases)) {
+      const phases = input.phases.slice(0, 12).filter(object).map(value => {
+        const out = {};
+        choice(out, "role", value.role, ["preinfusion", "extraction", "decline", "bloom", "outside_pump", "unknown"]);
+        choice(out, "source", value.source, ["recorded_frame", "recorded_substate", "recorded_annotation", "owner_entered", "programmed_target", "synthetic", "unknown"]);
+        choice(out, "control", value.control, ["pressure", "flow", "unknown"]);
+        for (const key of ["startSec", "endSec", "durationSec", "coverageSec"]) numeric(out, key, value[key], 0, 600);
+        for (const key of ["meanPressureBar", "targetPressureBar"]) numeric(out, key, value[key], 0, 15);
+        for (const key of ["meanMachineFlowMlPerSec", "targetMachineFlowMlPerSec", "meanBeverageFlowGPerSec"]) numeric(out, key, value[key], 0, 30);
+        numeric(out, "meanTemperatureC", value.meanTemperatureC, 0, 150);
+        return out;
+      }).filter(value => Object.keys(value).length);
+      if (phases.length) record.phases = phases;
+    }
+    if (!Object.keys(record).some(key => ["grinder", "recipe", "measurements", "coffee", "taste", "advice", "approaches", "phases"].includes(key))) throw new Error("No research measurements or categories supplied");
     return record;
   }
   function canonical(value) {
@@ -2061,7 +2098,7 @@ function createResearchSharing() {
     if (!object(value) || Object.keys(value).some(key => !["schemaVersion", "policyVersion", "records"].includes(key)) ||
         value.schemaVersion !== VERSION || value.policyVersion !== POLICY || !Array.isArray(value.records) ||
         !value.records.length || value.records.length > MAX_BATCH) throw new Error("Invalid research batch");
-    return { schemaVersion: VERSION, policyVersion: POLICY, records: value.records.map(validateRecord) };
+    return { schemaVersion: VERSION, policyVersion: POLICY, records: value.records.map(record => { const clean = validateRecord(record); if (!validId(clean.observationId) || !clean.revision) throw new Error("Observation identity required for upload"); return clean; }) };
   }
   function endpoint(value) {
     // URL and AbortController are optional runtime adapters; the factory is QuickJS-safe.
@@ -2070,15 +2107,24 @@ function createResearchSharing() {
     const authority = value.slice(8).split("/")[0], host = authority.split(":")[0];
     if (!host || host.startsWith(".") || host.endsWith(".") || host.includes("..") || /%|@/.test(authority))
       throw new Error("Invalid research endpoint host");
+    const port = authority.split(":")[1];
+    if (port != null && (+port < 1 || +port > 65535)) throw new Error("Invalid research endpoint port");
     return value;
+  }
+  function observationContent(record) { const out = { ...record }; delete out.observationId; delete out.revision; return out; }
+  // Non-security fingerprint used only for bounded local duplicate suppression.
+  function fingerprint(value) {
+    const text = canonical(value); let a = 2166136261, b = 5381;
+    for (let n = 0; n < text.length; n++) { a = Math.imul(a ^ text.charCodeAt(n), 16777619); b = Math.imul(b, 33) ^ text.charCodeAt(n); }
+    return text.length + ":" + (a >>> 0).toString(16) + ":" + (b >>> 0).toString(16);
   }
   function createClient(adapters) {
     if (!adapters || typeof adapters.load !== "function" || typeof adapters.save !== "function")
       throw new Error("Acknowledged local load/save adapters required");
     const fresh = () => ({ schemaVersion: VERSION, policyVersion: POLICY, localEnabled: true, sharing: false, endpoint: null,
-      nextRevision: 0, records: [], queue: [] });
+      nextRevision: 0, records: [], queue: [], fingerprints: [] });
     const localKey = key => {
-      if (typeof key !== "string" || !/^[a-zA-Z0-9._:-]{1,128}$/.test(key)) throw new Error("Invalid local research key");
+      if (typeof key !== "string" || !key.length || key.length > 256) throw new Error("Invalid local research key");
       return key;
     };
     const entry = value => {
@@ -2092,16 +2138,21 @@ function createResearchSharing() {
       if (!object(value) || value.schemaVersion !== VERSION || value.policyVersion !== POLICY ||
           typeof value.sharing !== "boolean" || typeof value.localEnabled !== "boolean" || !Number.isSafeInteger(value.nextRevision) || value.nextRevision < 0 ||
           !Array.isArray(value.records) || value.records.length > MAX_LOCAL ||
-          !Array.isArray(value.queue) || value.queue.length > MAX_QUEUE) throw new Error("Invalid or outdated research storage");
+          !Array.isArray(value.queue) || value.queue.length > MAX_QUEUE || !Array.isArray(value.fingerprints) || value.fingerprints.length > MAX_LOCAL) throw new Error("Invalid or outdated research storage");
       const records = value.records.map(entry), queue = value.queue.map(entry);
       for (const list of [records, queue]) {
         if (new Set(list.map(item => item.key)).size !== list.length || list.some(item => item.revision > value.nextRevision))
           throw new Error("Invalid local research revisions");
       }
+      const fingerprints = value.fingerprints.map(item => {
+        if (!object(item) || typeof item.fingerprint !== "string" || !/^\d+:[a-f0-9]+:[a-f0-9]+$/.test(item.fingerprint)) throw new Error("Invalid local research fingerprint");
+        if (!validId(item.observationId) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw new Error("Invalid observation ledger");
+        return { key: localKey(item.key), fingerprint: item.fingerprint, observationId: item.observationId, revision: item.revision };
+      });
       state = { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
-        endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue };
+        endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
       permitted = generation === 0 && state.sharing;
-      if (!permitted) { state.sharing = false; state.queue = []; }
+      if (!permitted) { state.sharing = false; state.queue = []; state.fingerprints = []; }
     }).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
     const serial = operation => { const result = chain.then(() => ready).then(operation); chain = result.catch(() => {}); return result; };
     async function save(next) {
@@ -2118,23 +2169,33 @@ function createResearchSharing() {
       permitted = false; abort?.();
       return serial(async () => {
         const current = requestGeneration === generation;
-        await save({ ...state, sharing: current && enabled, endpoint: current ? targetEndpoint : null, queue: [] });
+        await save({ ...state, sharing: current && enabled, endpoint: current ? targetEndpoint : null, queue: [], fingerprints: [] });
         permitted = current && requestGeneration === generation && enabled;
         return status();
       });
     }
     function capture(input, key) {
-      const record = sanitizeRecord(input);
+      const record = sanitizeRecord(observationContent(input));
       if (key != null) localKey(key);
       return serial(async () => {
         if (storageError) throw new Error(storageError);
+        if (!state.localEnabled && !permitted) return { record: clone(record), ...status() };
+        const prior = key == null ? null : state.records.find(item => item.key === key) || state.queue.find(item => item.key === key);
+        const digest = fingerprint(record);
+        const ledger = key == null ? null : state.fingerprints.find(item => item.key === key);
+        if (prior && canonical(observationContent(prior.record)) === canonical(record) || ledger && ledger.fingerprint === digest)
+          return { record: clone(record), ...status() };
         const revision = state.nextRevision + 1;
         if (!Number.isSafeInteger(revision)) throw new Error("Local research revision limit reached; export and clear");
-        const item = { key: key == null ? "entry:" + revision : key, revision, record };
+        const observationId = prior?.record.observationId || ledger?.observationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
+        if (!validId(observationId)) throw new Error("Random observation key must contain 32 lowercase hexadecimal characters");
+        const observationRevision = (prior?.record.revision || ledger?.revision || 0) + 1;
+        const item = { key: key == null ? "entry:" + revision : key, revision, record: { ...record, observationId, revision: observationRevision } };
         const replace = list => list.filter(prior => prior.key !== item.key).concat([item]);
         let queue = state.queue;
         if (permitted && state.sharing && (queue.length < MAX_QUEUE || queue.some(prior => prior.key === item.key))) queue = replace(queue);
-        await save({ ...state, records: state.localEnabled ? replace(state.records).slice(-MAX_LOCAL) : state.records, queue, nextRevision: revision });
+        const fingerprints = permitted ? state.fingerprints.filter(prior => prior.key !== item.key).concat([{ key: item.key, fingerprint: digest, observationId, revision: observationRevision }]).slice(-MAX_LOCAL) : [];
+        await save({ ...state, fingerprints, records: state.localEnabled ? replace(state.records).slice(-MAX_LOCAL) : state.records, queue, nextRevision: revision });
         return { record: clone(record), ...status() };
       });
     }
@@ -2144,7 +2205,12 @@ function createResearchSharing() {
         const batch = await serial(() => {
           if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint) return null;
           if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
-          return { generation, endpoint: state.endpoint, entries: clone(state.queue.slice(0, MAX_BATCH)) };
+          const entries = [];
+          for (const item of state.queue.slice(0, MAX_BATCH)) {
+            if (JSON.stringify(entries.concat([item]).map(entry => entry.record)).length > 60000) break;
+            entries.push(item);
+          }
+          return { generation, endpoint: state.endpoint, entries: clone(entries) };
         });
         if (!batch) return { sent: 0, ...status() };
         if (batch.generation !== generation || !permitted) return { sent: 0, ...status() };
@@ -2170,7 +2236,7 @@ function createResearchSharing() {
     }
     function setLocalCollection(enabled) {
       if (typeof enabled !== "boolean") throw new Error("Explicit local collection choice required");
-      return serial(async () => { await save({ ...state, localEnabled: enabled }); return status(); });
+      return serial(async () => { await save({ ...state, localEnabled: enabled, fingerprints: enabled || permitted ? state.fingerprints : [] }); return status(); });
     }
     function clear() {
       generation++; permitted = false; abort?.();
@@ -2180,10 +2246,9 @@ function createResearchSharing() {
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };
   }
   return { schemaVersion: VERSION, policyVersion: POLICY, limits: { local: MAX_LOCAL, queue: MAX_QUEUE, batch: MAX_BATCH },
-    sanitizeRecord, validateRecord, validateBatch, validateEndpoint: endpoint, createClient };
+    sanitizeRecord, validateRecord, validateBatch, validateEndpoint: endpoint, randomId, createClient };
 }
 /* GENERATED RESEARCH SHARING END */
-
 function createPlugin(host, services) {
   "use strict";
   services = services || {};
