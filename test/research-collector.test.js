@@ -101,3 +101,51 @@ test('lost acknowledgments, stale revisions and corrected feedback keep one obse
   assert.equal((await fs.readdir(f.directory)).length, 1);
   assert.equal(JSON.parse(await fs.readFile(path.join(f.directory, names[0]), 'utf8')).records[0].revision, 2);
 });
+
+test('observation count cap rejects new keys but permits corrections and retry at capacity', async t => {
+  const f = await fixture(t, { maxRecords: 1 });
+  assert.equal((await f.post()).status, 201);
+  const another = { ...record, observationId: 'b'.repeat(32) };
+  assert.equal((await f.post({ ...batch(), records: [another] })).status, 507);
+  const correction = { ...record, revision: 2, taste: { good: true } };
+  assert.equal((await f.post({ ...batch(), records: [correction] })).status, 201);
+  assert.equal((await f.post()).status, 201);
+  const names = await fs.readdir(f.directory); assert.equal(names.length, 1);
+  assert.equal(JSON.parse(await fs.readFile(path.join(f.directory, names[0]), 'utf8')).records[0].revision, 2);
+});
+
+test('legacy over-cap directory starts, permits updates and recovers when retention prunes it', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'dialin-overcap-test-'));
+  let clock = Date.now();
+  const values = ['a', 'b', 'c'].map(id => ({ ...record, observationId: id.repeat(32) }));
+  for (const value of values) await fs.writeFile(path.join(directory, 'research-' + value.observationId + '.json'), JSON.stringify({ ...batch(), records: [value] }));
+  await fs.writeFile(path.join(directory, 'owner-notes.txt'), 'preserve');
+  const server = await createCollector({ directory, maxRecords: 1, retentionDays: 1, now: () => clock });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); await fs.rm(directory, { recursive: true, force: true }); });
+  const post = value => fetch('http://127.0.0.1:' + server.address().port + '/v1/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...batch(), records: [value] }) });
+  const fresh = { ...record, observationId: 'd'.repeat(32) };
+  assert.equal((await post(fresh)).status, 507);
+  assert.equal((await post({ ...values[0], revision: 2 })).status, 201);
+  clock += 2 * 86400000;
+  assert.equal((await post(fresh)).status, 201);
+  assert.deepEqual((await fs.readdir(directory)).sort(), ['owner-notes.txt', 'research-' + fresh.observationId + '.json']);
+});
+
+test('directory-sync failure withholds acknowledgment and a retry must complete the sync', async t => {
+  const f = await fixture(t);
+  const originalOpen = fs.open; let fail = true, directorySyncs = 0;
+  t.mock.method(fs, 'open', async (name, ...args) => {
+    const handle = await originalOpen(name, ...args);
+    if (name !== f.directory) return handle;
+    return { close: () => handle.close(), sync: async () => {
+      directorySyncs++; if (fail) throw new Error('simulated directory sync failure'); await handle.sync();
+    } };
+  });
+  assert.equal((await f.post()).status, 503);
+  assert.equal((await fs.readdir(f.directory)).length, 1);
+  fail = false;
+  assert.equal((await f.post()).status, 201);
+  assert.equal(directorySyncs, 2);
+  assert.equal((await fs.readdir(f.directory)).length, 1);
+});

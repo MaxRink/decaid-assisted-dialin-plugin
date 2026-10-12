@@ -20,29 +20,39 @@ async function createCollector(options = {}) {
   const retentionDays = options.retentionDays ?? 30;
   const maxStorageBytes = options.maxStorageBytes ?? 256 * 1024 * 1024;
   const perMinute = options.perMinute ?? 60;
+  const maxRecords = options.maxRecords ?? 100000;
   if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 90 ||
       !Number.isInteger(maxStorageBytes) || maxStorageBytes < 1024 ||
+      !Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > 1000000 ||
       !Number.isInteger(perMinute) || perMinute < 1 || perMinute > 10000) throw new Error("Invalid collector limits");
   const now = options.now || Date.now;
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   const info = await fs.lstat(directory);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Collector directory must be a real private directory");
   await fs.chmod(directory, 0o700);
-  let storedBytes = 0, lastCleanup = 0, writing = Promise.resolve();
+  let storedBytes = 0, storedCount = 0, lastCleanup = 0, writing = Promise.resolve();
   const buckets = new Map();
+  async function syncDirectory() {
+    const handle = await fs.open(directory, "r");
+    try { await handle.sync(); } finally { await handle.close(); }
+  }
   async function cleanup() {
-    storedBytes = 0;
-    const names = await fs.readdir(directory);
-    if (names.length > 100000) throw new Error("Collector directory exceeds file-count limit");
-    for (const name of names) {
+    let bytes = 0, count = 0, changed = false;
+    // Stream directory entries: a legacy over-cap directory must still be
+    // prunable, without allocating an unbounded array or blocking the event loop.
+    const entries = await fs.opendir(directory, { bufferSize: 32 });
+    for await (const entry of entries) {
+      const name = entry.name;
       // A stopped process may have left an unacknowledged temporary write.
-      if (/^\.pending-[a-f0-9-]+$/.test(name)) { await fs.unlink(path.join(directory, name)); continue; }
+      if (/^\.pending-[a-f0-9-]+$/.test(name)) { await fs.unlink(path.join(directory, name)); changed = true; continue; }
       const match = FILE.exec(name); if (!match) continue;
       const file = path.join(directory, name), stat = await fs.lstat(file);
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unexpected collector data file");
-      if (stat.mtimeMs < now() - retentionDays * 86400000) await fs.unlink(file);
-      else storedBytes += stat.size;
+      if (stat.mtimeMs < now() - retentionDays * 86400000) { await fs.unlink(file); changed = true; }
+      else { bytes += stat.size; count++; }
     }
+    storedBytes = bytes; storedCount = count;
+    if (changed) await syncDirectory();
     lastCleanup = now();
   }
   await cleanup();
@@ -60,7 +70,7 @@ async function createCollector(options = {}) {
     if (origin && origins.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
     res.writeHead(status, headers); res.end(JSON.stringify(value));
   }
-  const server = http.createServer({ maxHeaderSize: 8192 }, async (req, res) => {
+  const server = http.createServer({ maxHeaderSize: 8192, connectionsCheckingInterval: 1000 }, async (req, res) => {
     const origin = req.headers.origin;
     if (origin && !origins.has(origin)) return answer(res, 403, { error: "Origin not allowed" });
     // Addresses are used only in a bounded, expiring in-memory abuse counter.
@@ -105,7 +115,7 @@ async function createCollector(options = {}) {
           if (previous && previous.revision >= record.revision) continue;
           const serialized = JSON.stringify({ schemaVersion: batch.schemaVersion, policyVersion: batch.policyVersion, records: [record] }) + "\n";
           const length = Buffer.byteLength(serialized);
-          if (storedBytes - oldSize + length > maxStorageBytes) { const error = new Error("Storage limit"); error.capacity = true; throw error; }
+          if ((!previous && storedCount >= maxRecords) || storedBytes - oldSize + length > maxStorageBytes) { const error = new Error("Storage limit"); error.capacity = true; throw error; }
           const temporary = path.join(directory, ".pending-" + randomUUID());
           try {
             const handle = await fs.open(temporary, "wx", 0o600);
@@ -113,8 +123,12 @@ async function createCollector(options = {}) {
             finally { await handle.close(); }
             await fs.rename(temporary, file);
             storedBytes += length - oldSize;
+            if (!previous) storedCount++;
           } finally { await fs.unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; }); }
         }
+        // Includes a retried record whose earlier rename succeeded but whose
+        // directory sync failed: never acknowledge it until this barrier passes.
+        await syncDirectory();
       });
       writing = write.catch(() => {});
       try { await write; }
@@ -139,6 +153,7 @@ if (require.main === module) {
   const allowedOrigins = (process.env.RESEARCH_ALLOWED_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean);
   createCollector({ directory, allowedOrigins, retentionDays: Number(process.env.RESEARCH_RETENTION_DAYS || 30),
     maxStorageBytes: Number(process.env.RESEARCH_MAX_STORAGE_BYTES || 268435456),
+    maxRecords: Number(process.env.RESEARCH_MAX_RECORDS || 100000),
     perMinute: Number(process.env.RESEARCH_REQUESTS_PER_MINUTE || 60) }).then(server => {
     const port = Number(process.env.PORT || 8787);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");

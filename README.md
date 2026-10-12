@@ -329,3 +329,27 @@ settings can support a bounded numerical suggestion. Plateaus, noisy repeats,
 changed conditions and conflicting taste ask for a repeat. See the
 [grinder setup guide](docs/GRINDER_SETUP.md) for preset evidence, ELI5 explanations,
 the complete decision flow and the native-response contract.
+
+## Rough mechanical estimates
+
+The simulator can optionally use a sourced or explicitly assumed mechanical
+movement estimate to explore research suggestions in native dial units after
+one shot. It labels assumptions, asks for the reference and finer direction,
+shows sensitivity scenarios, and caps every candidate to the owner's confirmed
+step and allowed window. Estimated coordinates never become owner calibration.
+Measured native trends and hold advice take priority. See the
+[mechanics evidence and limitations](docs/GRINDER_MECHANICS.md).
+
+## Research archive and sharing
+
+The website and plugin keep a separate, bounded local research archive by
+default; you can disable it, export it or delete it. Remote sharing is off by
+default and requires an explicit choice and a configured HTTPS collector. The
+website sends only when you press Send; the opted-in plugin automatically sends
+future observations and retries while running. Random observation keys allow corrections and retry deduplication;
+personal text, host shot IDs and permanent visitor identifiers are excluded.
+The collector is self-hosted; no live collector is operated by this repository.
+See [data fields, controls and deployment](docs/RESEARCH_SHARING.md).
+
+Dependabot checks GitHub Actions, npm, graph-tool Python dependencies and the
+collector's Docker/Compose images weekly. Updates go through the complete CI.
