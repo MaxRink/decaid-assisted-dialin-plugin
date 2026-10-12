@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const catalog = require("../data/grinder-mechanics.json");
-const evidenceCatalog = require("../data/mechanics-evidence.json");
+const evidenceCatalog = catalog;
 const { createGrinderMechanics } = require("../src/grinder-mechanics");
 
 const mechanics = createGrinderMechanics(catalog);
@@ -15,9 +15,16 @@ test("known native disk distance is reported as mechanical distance only", () =>
   assert.match(result.warnings[0], /particle size/);
 });
 
+test("E64 relative delta and P64 printed-number conversion stay explicit", () => {
+  const e64 = mechanics.toRelativeCoordinate({ model: "E64 WS", nativeValue: 62, baselineNativeValue: 60, finerSign: -1, signedAxialUmPerNative: 1, umPerResearchUnit: 0.1 });
+  assert.equal(e64.relativeCoordinate, 20);
+  const p64 = mechanics.estimate({ model: "LAGOM P64", nativeValue: 1.1, baselineNativeValue: 1, nativeUnit: "printed_number" });
+  assert.ok(Math.abs(p64.axialMovementUm - 10) < 1e-9);
+});
+
 test("DF64 dial fraction is provisional and does not invent a coordinate", () => {
   const result = mechanics.estimate({ model: "DF64 Gen 1", nativeValue: 45 });
-  assert.equal(result.status, "unavailable");
+  assert.equal(result.status, "needs_baseline");
   const withheld = mechanics.toPhysicalCoordinate({ model: "DF64 Gen 1", nativeValue: 45, zeroOffsetUm: 0 });
   assert.equal(withheld.coordinate, null);
   assert.match(withheld.reason, /relative movement/);
@@ -59,9 +66,23 @@ test("relative adapter keeps offset separate and caps native proposals", () => {
   const evidence = createGrinderMechanics(evidenceCatalog);
   const relative = evidence.toRelativeCoordinate({ model: "DF64 Gen 1", nativeValue: 2, baselineNativeValue: 0, finerSign: 1, umPerResearchUnit: 10.4, baselineResearchCoordinate: 500 });
   assert.equal(relative.coordinateStatus, "estimated_relative");
-  assert.equal(relative.researchCoordinate, 502);
+  assert.equal(relative.researchCoordinate, 498);
   const proposal = evidence.proposeNative({ currentNativeValue: 40, requestedResearchDelta: 25, umPerResearchUnit: 10.4, finerSign: 1, ownerStep: 1, minNative: 0, maxNative: 90, acceptScenario: true });
-  assert.equal(proposal.status, "out_of_bounds");
-  assert.equal(proposal.proposedNative, 90);
+  assert.equal(proposal.status, "estimated_relative");
+  assert.equal(proposal.proposedNative, 39);
   assert.equal(evidence.proposeNative({ currentNativeValue: 40, requestedResearchDelta: 1, umPerResearchUnit: 1, finerSign: 1, ownerStep: 1 }).status, "withheld");
+});
+
+test("conical movement does not silently become dD", () => {
+  const result = mechanics.toRelativeCoordinate({ model: "1Zpresso X-Pro", nativeValue: 2, baselineNativeValue: 0, finerSign: -1, umPerResearchUnit: 0.1, signedAxialUmPerNative: 12.5 });
+  assert.match(result.reason, /Conical axial movement/);
+  const accepted = mechanics.toRelativeCoordinate({ model: "1Zpresso X-Pro", nativeValue: 2, baselineNativeValue: 0, finerSign: -1, umPerResearchUnit: 0.1, signedAxialUmPerNative: 12.5, acceptGeometryAssumption: true });
+  assert.equal(accepted.relativeCoordinate, 250);
+});
+
+test("owner supplied slope is explicit and physical resolution cannot exceed the owner cap", () => {
+  const owner = mechanics.toRelativeCoordinate({ model: "Owner DF54", nativeValue: 2, baselineNativeValue: 0, signedAxialUmPerNative: 8, umPerResearchUnit: 0.1, acceptScenario: true });
+  assert.equal(owner.relativeCoordinate, 160);
+  const capped = mechanics.proposeNative({ currentNativeValue: 1.5, requestedResearchDelta: 100, signedAxialUmPerNative: 1, umPerResearchUnit: 1, ownerStep: 1.5, physicalIncrement: 1, acceptScenario: true });
+  assert.equal(capped.proposedNative, 3);
 });

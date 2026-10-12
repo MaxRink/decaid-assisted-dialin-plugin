@@ -24,7 +24,8 @@ function createGrinderMechanics(catalog) {
     if (profile.nativeUnit === "micrometres" || relative?.umPerUnit === 1 && /micrometre/i.test(nativeUnit)) {
       return { status: "mechanical_reference", model: profile.model, nativeValue: value, nativeUnit, axialMovementUm: value, uncertainty: profile.uncertainty, warnings: ["This is an indicated burr-disk distance, not particle size or a calibrated espresso response."] };
     }
-    const movementPerUnit = finite(profile.axialMovementUmPerNative) ? profile.axialMovementUmPerNative : relative?.umPerUnit;
+    const sourceScale = input.nativeUnit === "printed_number" && /0\.1|minor line|micro.?tick/i.test(nativeUnit) ? 10 : 1;
+    const movementPerUnit = (finite(profile.axialMovementUmPerNative) ? profile.axialMovementUmPerNative : relative?.umPerUnit) * sourceScale;
     if (finite(movementPerUnit)) {
       if (!finite(input.baselineNativeValue)) return { status: "needs_baseline", model: profile.model, nativeValue: value, nativeUnit: profile.nativeUnit, uncertainty: profile.uncertainty, reason: "A pitch is a relative movement; provide baselineNativeValue before estimating axial displacement." };
       return { status: "mechanical_reference", model: profile.model, nativeValue: value, baselineNativeValue: input.baselineNativeValue, nativeUnit, axialMovementUm: (value - input.baselineNativeValue) * movementPerUnit, uncertainty: profile.uncertainty, warnings: ["Mechanical movement is a relative geometry prior; it does not establish an espresso setting or particle-size conversion."] };
@@ -33,11 +34,6 @@ function createGrinderMechanics(catalog) {
     if (scenario && input.acceptScenario === true && scenario.requiresExplicitAssumptionAcceptance === true && finite(scenario.centralUmPerUnit)) {
       if (!finite(input.baselineNativeValue)) return { status: "needs_baseline", model: profile.model, nativeValue: value, nativeUnit: scenario.coordinateUnit || nativeUnit, uncertainty: scenario.sensitivityIntervalUmPerUnit || null, reason: "This is an explicit scenario candidate; provide baselineNativeValue." };
       return { status: "provisional_scenario", model: profile.model, nativeValue: value, baselineNativeValue: input.baselineNativeValue, nativeUnit: scenario.coordinateUnit || nativeUnit, axialMovementUm: (value - input.baselineNativeValue) * scenario.centralUmPerUnit, uncertainty: scenario.sensitivityIntervalUmPerUnit || null, scenario, warnings: ["This candidate is an explicit engineering scenario, not a measured default or owner calibration."] };
-    }
-    const candidate = Array.isArray(profile.candidates) && profile.candidates.find(item => item && item.usableAsDefault !== true && input.acceptScenario === true && finite(item.value) && /µm|um/i.test(String(item.unit || "")));
-    if (candidate) {
-      if (!finite(input.baselineNativeValue)) return { status: "needs_baseline", model: profile.model, nativeValue: value, nativeUnit, uncertainty: profile.uncertainty, reason: "This is an explicit scenario candidate; provide baselineNativeValue." };
-      return { status: "provisional_scenario", model: profile.model, nativeValue: value, baselineNativeValue: input.baselineNativeValue, nativeUnit, axialMovementUm: (value - input.baselineNativeValue) * candidate.value, candidate, warnings: ["This candidate is an explicit engineering scenario, not a measured default or owner calibration."] };
     }
     return { status: "unavailable", model: profile.model, nativeValue: value, nativeUnit, uncertainty: profile.uncertainty, reason: "No defensible pitch or dial-range prior is available." };
   }
@@ -49,25 +45,39 @@ function createGrinderMechanics(catalog) {
   }
 
   function toRelativeCoordinate(input = {}) {
-    const estimateResult = estimate(input);
+    let estimateResult = estimate(input);
+    if (!['mechanical_reference', 'provisional_scenario'].includes(estimateResult.status) && input.acceptScenario === true && finite(input.signedAxialUmPerNative)) {
+      estimateResult = { status: "provisional_scenario", model: input.model, nativeValue: input.nativeValue, baselineNativeValue: input.baselineNativeValue, nativeUnit: input.nativeUnit || "owner units", uncertainty: "owner supplied", axialMovementUm: null, warnings: ["Owner-supplied slope is an explicit scenario and is not a reviewed grinder prior."] };
+    }
     if (!['mechanical_reference', 'provisional_scenario'].includes(estimateResult.status)) return { ...estimateResult, relativeCoordinate: null };
-    const finerSign = input.finerSign === -1 ? -1 : input.finerSign === 1 ? 1 : null;
-    if (finerSign === null || !finite(input.umPerResearchUnit) || input.umPerResearchUnit <= 0) return { ...estimateResult, relativeCoordinate: null, reason: "finerSign and an explicit mechanical-to-research slope are required for a relative coordinate." };
-    const relativeCoordinate = estimateResult.axialMovementUm * finerSign / input.umPerResearchUnit;
+    if (!finite(input.baselineNativeValue) || !finite(input.umPerResearchUnit) || input.umPerResearchUnit <= 0) return { ...estimateResult, relativeCoordinate: null, reason: "baselineNativeValue and an explicit mechanical-to-research slope are required for a relative coordinate." };
+    if (profileFor(input.model)?.burrGeometry === "conical" && input.acceptGeometryAssumption !== true) return { ...estimateResult, relativeCoordinate: null, reason: "Conical axial movement requires explicit geometry-assumption acceptance before it can be mapped to research dD." };
+    const slope = finite(input.signedAxialUmPerNative) ? input.signedAxialUmPerNative : (input.finerSign === 1 || input.finerSign === -1) ? -input.finerSign * Math.abs(estimateResult.axialMovementUm / (input.nativeValue - input.baselineNativeValue || 1)) : null;
+    if (!finite(slope) || slope === 0) return { ...estimateResult, relativeCoordinate: null, reason: "signedAxialUmPerNative is required for a deterministic relative coordinate." };
+    const deltaNative = input.nativeValue - input.baselineNativeValue;
+    if (!finite(deltaNative)) return { ...estimateResult, relativeCoordinate: null, reason: "Native baseline delta must be finite." };
+    const relativeCoordinate = deltaNative * slope / input.umPerResearchUnit;
+    if (!finite(relativeCoordinate)) return { ...estimateResult, relativeCoordinate: null, reason: "Relative coordinate overflowed the finite numeric range." };
     const absolute = finite(input.baselineResearchCoordinate) ? input.baselineResearchCoordinate + relativeCoordinate : null;
     return { ...estimateResult, relativeCoordinate, researchCoordinate: absolute, coordinateStatus: "estimated_relative", warnings: [...(estimateResult.warnings || []), "Relative research movement is an exploratory adapter; it has no absolute calibration offset."] };
   }
 
   function proposeNative(input = {}) {
-    const required = ['currentNativeValue', 'requestedResearchDelta', 'umPerResearchUnit', 'finerSign', 'ownerStep'];
-    if (required.some(key => !finite(input[key])) || input.umPerResearchUnit <= 0 || input.ownerStep <= 0 || ![1, -1].includes(input.finerSign)) return { status: "invalid", reason: "Native proposal requires an explicit slope, direction and owner step." };
+    const required = ['currentNativeValue', 'requestedResearchDelta', 'umPerResearchUnit', 'ownerStep'];
+    if (required.some(key => !finite(input[key])) || input.umPerResearchUnit <= 0 || input.ownerStep <= 0 || (!finite(input.signedAxialUmPerNative) && ![1, -1].includes(input.finerSign))) return { status: "invalid", reason: "Native proposal requires an explicit signed slope and owner step." };
     if (input.acceptScenario !== true) return { status: "withheld", reason: "Native proposal requires explicit acceptance of the mechanical scenario." };
-    const rawDelta = input.requestedResearchDelta * input.umPerResearchUnit / input.finerSign;
+    const signedSlope = finite(input.signedAxialUmPerNative) ? input.signedAxialUmPerNative : -input.finerSign * Math.abs(input.umPerNative || 1);
+    if (!finite(signedSlope) || signedSlope === 0) return { status: "invalid", reason: "signedAxialUmPerNative must be finite and nonzero." };
+    let rawDelta = input.requestedResearchDelta * input.umPerResearchUnit / signedSlope;
+    if (!finite(rawDelta)) return { status: "invalid", reason: "Requested native movement is non-finite." };
+    if (Math.abs(rawDelta) > input.ownerStep) rawDelta = Math.sign(rawDelta) * input.ownerStep;
     let proposed = input.currentNativeValue + rawDelta;
-    proposed = Math.round(proposed / input.ownerStep) * input.ownerStep;
-    if (finite(input.physicalIncrement) && input.physicalIncrement > 0) proposed = Math.round(proposed / input.physicalIncrement) * input.physicalIncrement;
-    if (finite(input.minNative) && proposed < input.minNative) return { status: "out_of_bounds", proposedNative: input.minNative, reason: "Requested movement is below the owner-declared native bound." };
-    if (finite(input.maxNative) && proposed > input.maxNative) return { status: "out_of_bounds", proposedNative: input.maxNative, reason: "Requested movement is above the owner-declared native bound." };
+    if (finite(input.physicalIncrement) && input.physicalIncrement > 0) {
+      const quantized = Math.round(rawDelta / input.physicalIncrement) * input.physicalIncrement;
+      proposed = input.currentNativeValue + Math.sign(quantized) * Math.min(Math.abs(quantized), input.ownerStep);
+    }
+    if (finite(input.minNative) && proposed < input.minNative) return { status: "out_of_bounds", proposedNative: null, reason: "Requested movement is below the owner-declared native bound." };
+    if (finite(input.maxNative) && proposed > input.maxNative) return { status: "out_of_bounds", proposedNative: null, reason: "Requested movement is above the owner-declared native bound." };
     return { status: "estimated_relative", proposedNative: proposed, coordinateStatus: "estimated_relative", warnings: ["This is a bounded owner-step proposal under an accepted mechanical scenario; it is not calibration."] };
   }
 
