@@ -151,7 +151,6 @@ test('directory-sync failure withholds acknowledgment and a retry must complete 
   assert.equal((await fs.readdir(f.directory)).length, 1);
 });
 
-
 test('incomplete headers and bodies expire within their configured request deadlines', { timeout: 12000 }, async t => {
   const f = await fixture(t);
   const incomplete = request => new Promise((resolve, reject) => {

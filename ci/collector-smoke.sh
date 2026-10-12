@@ -25,6 +25,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 (async () => {
   assert.notEqual(process.getuid(), 0, 'collector must run unprivileged');
+  for (const unused of ['/usr/local/lib/node_modules/npm', '/usr/local/bin/npm', '/usr/local/bin/npx']) await assert.rejects(fs.lstat(unused), { code: 'ENOENT' });
   await assert.rejects(fs.writeFile('/tmp/collector-rootfs-probe', 'no'), { code: 'EROFS' });
   const base = 'http://127.0.0.1:8787';
   for (let attempt = 0; ; attempt++) {

@@ -155,15 +155,64 @@ jobs:
           flutter test --no-pub test/plugins/dialin_external_runtime_test.dart --reporter expanded
 
   collector:
-    name: Collector deployment image and durable ingestion
+    name: Collector deployment images and durable ingestion
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24.x
+      - name: Build patched Caddy and validate deployment proxy configuration
+        run: sh ci/caddy-smoke.sh
       - name: Build and exercise unprivileged read-only collector
         run: sh ci/collector-smoke.sh
+      - name: Build final deployment images for vulnerability scanning
+        id: collector_scan_images
+        run: |
+          docker build --tag decaid-collector:${{ github.sha }} --file collector/Dockerfile .
+          docker build --tag decaid-caddy:${{ github.sha }} collector/caddy
+          mkdir -p collector-security-results
+      - name: Scan final collector image for HIGH and CRITICAL vulnerabilities
+        if: ${{ !cancelled() && steps.collector_scan_images.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IMAGE_SRC: docker
+        with:
+          version: v0.75.0
+          scan-type: image
+          image-ref: decaid-collector:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: json
+          output: collector-security-results/collector.json
+          timeout: 5m
+      - name: Scan final Caddy image for HIGH and CRITICAL vulnerabilities
+        if: ${{ !cancelled() && steps.collector_scan_images.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IMAGE_SRC: docker
+        with:
+          version: v0.75.0
+          scan-type: image
+          image-ref: decaid-caddy:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: json
+          output: collector-security-results/caddy.json
+          timeout: 5m
+      - name: Retain deployment image vulnerability reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector-security-${{ github.sha }}
+          path: collector-security-results/*.json
+          if-no-files-found: warn
       - name: Validate private Prometheus and Grafana monitoring
         run: sh ci/monitoring-smoke.sh
