@@ -136,3 +136,7 @@ To delete received research, stop the collector and remove only its explicitly i
 Run `node --test test/research-sharing.test.js test/research-collector.test.js`. Tests cover minimization, all catalog model coordinates, consent/storage failures, bounded queues, corrections/races, retry/restart idempotence, exact origins, request/storage limits, private permissions, retention, and real local HTTP ingestion. The existing `npm test` includes these files automatically.
 
 This implementation has been exercised with local HTTP integration tests. The deployment configuration is provided for your server; this change does not provision DNS, issue production certificates, start a public collector, or verify an external host. Browser/native integration tests belong to their respective app/runtime suites.
+
+## Private aggregate monitoring
+
+See [research metrics and Grafana deployment](RESEARCH_METRICS.md) for the optional private Prometheus listener, revision-aware retained-data distributions, bounded label budget and populated dashboard examples. No metrics route is exposed by the public collector/Caddy endpoint.

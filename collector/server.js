@@ -6,6 +6,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { createResearchSharing } = require("../research-sharing.js");
 const schema = createResearchSharing();
+const { createResearchMetrics } = require("./metrics.js");
 const FILE = /^research-([a-f0-9]{32})\.json$/;
 
 async function createCollector(options = {}) {
@@ -25,6 +26,8 @@ async function createCollector(options = {}) {
       !Number.isInteger(maxStorageBytes) || maxStorageBytes < 1024 ||
       !Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > 1000000 ||
       !Number.isInteger(perMinute) || perMinute < 1 || perMinute > 10000) throw new Error("Invalid collector limits");
+  const metricsEnabled = options.metricsEnabled === true;
+  let metrics = createResearchMetrics(), metricsText = null;
   const now = options.now || Date.now;
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   const info = await fs.lstat(directory);
@@ -38,6 +41,7 @@ async function createCollector(options = {}) {
   }
   async function cleanup() {
     let bytes = 0, count = 0, changed = false;
+    const rebuilt = createResearchMetrics();
     // Stream directory entries: a legacy over-cap directory must still be
     // prunable, without allocating an unbounded array or blocking the event loop.
     const entries = await fs.opendir(directory, { bufferSize: 32 });
@@ -49,9 +53,18 @@ async function createCollector(options = {}) {
       const file = path.join(directory, name), stat = await fs.lstat(file);
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unexpected collector data file");
       if (stat.mtimeMs < now() - retentionDays * 86400000) { await fs.unlink(file); changed = true; }
-      else { bytes += stat.size; count++; }
+      else {
+        bytes += stat.size; count++;
+        if (metricsEnabled) {
+          if (stat.size > 65536) throw new Error("Oversized stored record");
+          const stored = schema.validateBatch(JSON.parse(await fs.readFile(file, "utf8")));
+          if (stored.records.length !== 1 || stored.records[0].observationId !== match[1]) throw new Error("Invalid stored observation");
+          rebuilt.observe(stored.records[0], 1);
+        }
+      }
     }
     storedBytes = bytes; storedCount = count;
+    if (metricsEnabled) { metrics = rebuilt; metricsText = null; }
     if (changed) await syncDirectory();
     lastCleanup = now();
   }
@@ -124,6 +137,7 @@ async function createCollector(options = {}) {
             await fs.rename(temporary, file);
             storedBytes += length - oldSize;
             if (!previous) storedCount++;
+            if (metricsEnabled) { metricsText = null; if (previous) metrics.observe(previous, -1); metrics.observe(record, 1); }
           } finally { await fs.unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; }); }
         }
         // Includes a retried record whose earlier rename succeeded but whose
@@ -136,6 +150,29 @@ async function createCollector(options = {}) {
       answer(res, 201, { accepted: batch.records.length }, origin);
     } catch (_) { if (!res.headersSent) answer(res, 400, { error: "Incomplete request" }, origin); }
   });
+  if (metricsEnabled) {
+    // Separate listener: no metrics route is attached to public ingestion.
+    const metricsServer = http.createServer({ maxHeaderSize: 8192, connectionsCheckingInterval: 1000 }, async (req, res) => {
+      const headers = { "Content-Type": "text/plain; version=0.0.4; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+      if (req.headers.origin) { res.writeHead(403, headers); return res.end("Browser access is disabled\n"); }
+      if (req.method !== "GET" || req.url !== "/metrics") { res.writeHead(404, headers); return res.end("Not found\n"); }
+      try {
+        // Serialize with retention/writes, but never reread the directory on a scrape.
+        const read = writing.then(() => {
+          if (metricsText === null) metricsText = metrics.render({ count: storedCount, bytes: storedBytes, maxRecords, maxStorageBytes });
+          return metricsText;
+        });
+        writing = read.then(() => {}, () => {});
+        const body = await read;
+        res.writeHead(200, headers); res.end(body);
+      } catch (_) { res.writeHead(503, headers); res.end("Metrics unavailable\n"); }
+    });
+    metricsServer.requestTimeout = 10000; metricsServer.headersTimeout = 5000;
+    metricsServer.keepAliveTimeout = 1000; metricsServer.maxHeadersCount = 32;
+    metricsServer.maxConnections = 16;
+    server.metricsServer = metricsServer;
+    server.on("close", () => { metricsServer.closeAllConnections(); metricsServer.close(); });
+  }
   const retentionTimer = setInterval(() => {
     const prune = writing.then(cleanup); writing = prune.catch(() => {});
   }, 3600000);
@@ -154,11 +191,19 @@ if (require.main === module) {
   createCollector({ directory, allowedOrigins, retentionDays: Number(process.env.RESEARCH_RETENTION_DAYS || 30),
     maxStorageBytes: Number(process.env.RESEARCH_MAX_STORAGE_BYTES || 268435456),
     maxRecords: Number(process.env.RESEARCH_MAX_RECORDS || 100000),
-    perMinute: Number(process.env.RESEARCH_REQUESTS_PER_MINUTE || 60) }).then(server => {
+    perMinute: Number(process.env.RESEARCH_REQUESTS_PER_MINUTE || 60),
+    metricsEnabled: !!process.env.RESEARCH_METRICS_PORT }).then(server => {
     const port = Number(process.env.PORT || 8787);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
     const bind = process.env.RESEARCH_BIND_HOST || "127.0.0.1";
     if (!["127.0.0.1", "0.0.0.0", "::1"].includes(bind)) throw new Error("Invalid RESEARCH_BIND_HOST");
+    if (server.metricsServer) {
+      const metricsPort = Number(process.env.RESEARCH_METRICS_PORT);
+      const metricsBind = process.env.RESEARCH_METRICS_BIND_HOST || "127.0.0.1";
+      if (!Number.isInteger(metricsPort) || metricsPort < 1 || metricsPort > 65535 || metricsPort === port ||
+          !["127.0.0.1", "::1", "0.0.0.0"].includes(metricsBind)) throw new Error("Invalid private metrics listener configuration");
+      server.metricsServer.listen(metricsPort, metricsBind);
+    }
     server.listen(port, bind, () => process.stdout.write("Research collector listening on configured port " + port + "\n"));
   }).catch(error => { process.stderr.write(error.message + "\n"); process.exitCode = 1; });
 }

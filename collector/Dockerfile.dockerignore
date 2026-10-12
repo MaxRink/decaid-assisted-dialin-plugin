@@ -2,4 +2,5 @@
 !research-sharing.js
 !collector/
 !collector/server.js
+!collector/metrics.js
 !collector/Dockerfile

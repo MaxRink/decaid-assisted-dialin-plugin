@@ -157,8 +157,13 @@ jobs:
   collector:
     name: Collector deployment image and durable ingestion
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.x
       - name: Build and exercise unprivileged read-only collector
         run: sh ci/collector-smoke.sh
+      - name: Validate private Prometheus and Grafana monitoring
+        run: sh ci/monitoring-smoke.sh

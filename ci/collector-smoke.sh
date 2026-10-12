@@ -17,6 +17,7 @@ docker run --detach --name "$run_id" --read-only --cap-drop ALL \
   --security-opt no-new-privileges:true \
   --mount "type=volume,source=$run_id,target=/var/lib/research" \
   --env RESEARCH_ALLOWED_ORIGINS=https://lab.example.org \
+  --env RESEARCH_METRICS_PORT=8788 --env RESEARCH_METRICS_BIND_HOST=0.0.0.0 \
   "$image" >/dev/null
 docker exec -i "$run_id" node <<'NODE'
 const assert = require('node:assert/strict');
@@ -44,7 +45,12 @@ const path = require('node:path');
   assert.equal((await fs.stat(directory)).mode & 0o777, 0o700);
   assert.equal((await fs.stat(path.join(directory, names[0]))).mode & 0o777, 0o600);
   assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory, names[0]), 'utf8')), batch(correction));
-  console.log('Deployment image: non-root, read-only root filesystem, private volume, ingestion, origin/schema rejection and idempotent corrections passed');
+  assert.equal((await fetch(base + '/metrics')).status, 404);
+  const metrics = await fetch('http://127.0.0.1:8788/metrics'); assert.equal(metrics.status, 200);
+  const text = await metrics.text(); assert.match(text, /^decaid_research_retained_records 1$/m);
+  assert.equal(text.includes(record.observationId), false);
+  assert.equal((await fetch('http://127.0.0.1:8788/metrics', { headers: { Origin: 'https://lab.example.org' } })).status, 403);
+  console.log('Deployment image: non-root, read-only root filesystem, private volume, ingestion, origin/schema rejection, idempotent corrections and private aggregate metrics passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 NODE
 docker restart "$run_id" >/dev/null

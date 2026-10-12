@@ -1,0 +1,1273 @@
+{
+  "uid": "decaid-research",
+  "title": "Decaid \u00b7 retained espresso research",
+  "description": "Private aggregate snapshots of the current retained dataset. Corrections and retention can decrease every series. No user/device/shot identifiers. Never apply rate() to these gauges.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "decaid",
+    "research",
+    "private"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {
+          "text": "Decaid research",
+          "value": "decaid-research"
+        }
+      },
+      {
+        "name": "kind",
+        "label": "Observation kind",
+        "type": "custom",
+        "query": "shot,feedback,advice,setting_change,flow_summary",
+        "current": {
+          "text": "shot",
+          "value": "shot"
+        }
+      },
+      {
+        "name": "mode",
+        "label": "Evidence mode",
+        "type": "custom",
+        "query": "manual,measured,practice,replay",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": [
+            "manual",
+            "measured"
+          ],
+          "value": [
+            "manual",
+            "measured"
+          ]
+        }
+      },
+      {
+        "name": "model",
+        "label": "Grinder (measurement panels)",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(decaid_research_grinder_count, model)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 99,
+      "title": "Research exporter availability",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "description": "If unavailable, stored records and ingestion remain intact; research aggregates are withheld until a scheduled/startup rebuild fits the fixed20,000-series budget. Blank plots are not zero measurements.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "decaid_research_metrics_available",
+          "instant": true,
+          "range": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "UNAVAILABLE \u2014 series limit exceeded; records remain stored",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Complete retained research snapshot",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 1,
+      "title": "Retained observations \u2014 all grinders, selected kind/mode",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Current retained records, not people or unique grinders. Grinder filter applies only to measurement panels. Corrections replace earlier revisions.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(decaid_research_observations{kind=\"$kind\",mode=~\"$mode\"}) or (decaid_research_retained_records == 0)",
+          "legendFormat": "Observations",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Mean pump duration",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"pump_time_seconds\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"pump_time_seconds\"})",
+          "legendFormat": "{{mode}} \u00b7 {{model}}",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Mean measured beverage yield",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "massg",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"yield_grams\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"yield_grams\"})",
+          "legendFormat": "{{mode}} \u00b7 {{model}}",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Collector storage used",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * decaid_research_storage_bytes / decaid_research_storage_limit_bytes",
+          "legendFormat": "Storage",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pump duration \u2014 retained population over time",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Each point is the mean of current retained observations at scrape time. This is not a per-shot event timeline.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"pump_time_seconds\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"pump_time_seconds\"})",
+          "legendFormat": "{{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Pump-duration distribution (p50 / p90)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Quantiles use cumulative gauge buckets directly. Do not apply rate(). Quantiles are bucket estimates, not exact individual times.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (mode,model,le) (decaid_research_distribution_bucket{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"pump_time_seconds\"}))",
+          "legendFormat": "p50 \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.9, sum by (mode,model,le) (decaid_research_distribution_bucket{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"pump_time_seconds\"}))",
+          "legendFormat": "p90 \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Dose and yield \u2014 separate gram measurements",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "massg",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"dose_grams\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"dose_grams\"})",
+          "legendFormat": "Dose \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"yield_grams\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"yield_grams\"})",
+          "legendFormat": "Yield \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Brew and tasting temperatures",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Missing temperatures are omitted, never replaced by recipe targets.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"mix_temperature_celsius\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"mix_temperature_celsius\"})",
+          "legendFormat": "Mix \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"group_temperature_celsius\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"group_temperature_celsius\"})",
+          "legendFormat": "Group \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"tasting_temperature_celsius\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"tasting_temperature_celsius\"})",
+          "legendFormat": "Tasting \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Machine flow \u2014 ml/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Machine volume flow is distinct from beverage mass flow.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"machine_flow_ml_per_second\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"machine_flow_ml_per_second\"})",
+          "legendFormat": "{{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Beverage flow \u2014 g/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode,model) (decaid_research_measurement_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"beverage_flow_grams_per_second\"}) / sum by (mode,model) (decaid_research_measurement_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"beverage_flow_grams_per_second\"})",
+          "legendFormat": "{{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Taste preference \u2014 current observation counts",
+      "type": "bargauge",
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Explicit taste preferences, not an extraction diagnosis. These describe the current shot, not the outcome caused by its next-shot recommendation.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color",
+        "namePlacement": "auto",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 30
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model,value,mode) (decaid_research_categories{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",field=\"taste_intent\"})",
+          "legendFormat": "{{model}} \u00b7 {{value}} \u00b7 {{mode}}",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Algorithm results \u2014 all reported approaches",
+      "type": "bargauge",
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "One result per algorithm per observation. Computed, collecting and held results are not successful recommendations. Missing approaches are not inferred.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color",
+        "namePlacement": "auto",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 30
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model,algorithm,status,coordinate_status) (decaid_research_approaches{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\"})",
+          "legendFormat": "{{model}} \u00b7 {{algorithm}} \u00b7 {{status}} \u00b7 {{coordinate_status}}",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Proposed directions",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Current retained proposal counts, not accepted changes or causal outcomes.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model,algorithm,direction) (decaid_research_directions{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\"})",
+          "legendFormat": "{{model}} \u00b7 {{algorithm}} \u00b7 {{direction}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Proposed native delta \u2014 model, unit and provenance stay separate",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Proposed minus current setting, only when explicit units match. Positive is not universally coarser. Estimated coordinates are visibly separate from measured/native coordinates; no physical gap or particle-size inference.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "decaid_research_recommendation_delta_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\"} / decaid_research_recommendation_delta_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\"}",
+          "legendFormat": "{{algorithm}} \u00b7 {{model}} \u00b7 {{unit}} \u00b7 {{coordinate_status}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Grinder settings \u2014 labeled coordinates",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Do not compare numbers across models or coordinate units. These are observation averages, not a starting-setting recommendation.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "decaid_research_grinder_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"setting\"} / decaid_research_grinder_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"setting\"}",
+          "legendFormat": "{{model}} \u00b7 {{unit}} \u00b7 {{mode}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Coverage and supplied outcome flags",
+      "type": "bargauge",
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Missing flags do not mean false. No per-user success rate or causal algorithm ranking is calculated.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color",
+        "namePlacement": "auto",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 30
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model,field,value) (decaid_research_categories{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",field=~\"taste_good|interrupted|pumpComplete|pouringComplete\"})",
+          "legendFormat": "{{model}} \u00b7 {{field}} \u00b7 {{value}}",
+          "range": false,
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Beverage yield distribution (p50 / p90)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "massg",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (mode,model,le) (decaid_research_distribution_bucket{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"yield_grams\"}))",
+          "legendFormat": "p50 \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.9, sum by (mode,model,le) (decaid_research_distribution_bucket{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"yield_grams\"}))",
+          "legendFormat": "p90 \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Mix-temperature distribution (p50 / p90)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 12,
+            "showPoints": "always",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "axisPlacement": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (mode,model,le) (decaid_research_distribution_bucket{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"mix_temperature_celsius\"}))",
+          "legendFormat": "p50 \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.9, sum by (mode,model,le) (decaid_research_distribution_bucket{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"mix_temperature_celsius\"}))",
+          "legendFormat": "p90 \u00b7 {{mode}} \u00b7 {{model}}",
+          "range": true,
+          "instant": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    }
+  ]
+}
