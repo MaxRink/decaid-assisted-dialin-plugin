@@ -6,13 +6,11 @@ const destinations = [
   ['Report a problem', assisted, 'bug-report.yml'],
   ['Suggest an improvement', assisted, 'feature-request.yml'],
   ['Report a security issue privately', assisted, null, '/security/advisories/new'],
-  ['Dial-in integration or mock-device report', assisted, 'protocol-mock-device.yml'],
-  ['Correct a grinder fact or research source', assisted, 'source-correction.yml'],
+  ['Protocol, integration or mock-device findings', assisted, 'protocol-mock-device.yml'],
+  ['Correct grinder facts or research evidence', assisted, 'source-correction.yml'],
   ['Correct a coffee catalogue or recipe entry', assisted, 'coffee-catalog-correction.yml'],
   ['Skale connection or scale readings', 'MaxRink/decaid-skale-plugin', 'bug-report.yml'],
   ['E64 WS connection or grinder controls', 'MaxRink/decaid-e64ws-plugin', 'bug-report.yml'],
-  ['E64 protocol or mock-device findings', 'MaxRink/mahlkoenig-e64ws-local-research', 'protocol-mock-device.yml'],
-  ['Correct E64 firmware research or source evidence', 'MaxRink/mahlkoenig-e64ws-local-research', 'source-correction.yml'],
   ['Decaid host or saved-shot problems', 'decentespresso/decaid', null],
   ['Streamline navigation or display problems', 'decentespresso/streamline-js', null],
 ];
@@ -24,6 +22,7 @@ test('help routes reach the right issue drafts without sending entered coffee de
   const help = page.getByRole('region', {name:'Help and contribute'});
   await expect(help.getByRole('navigation').getByRole('link')).toHaveCount(3);
   await page.locator('#help-more summary').click();
+  await expect(help.getByRole('link')).toHaveCount(destinations.length);
   for (const [name, repo, template, path] of destinations) {
     const link = help.getByRole('link', {name, exact:true});
     const destination = new URL(await link.getAttribute('href'));
