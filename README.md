@@ -41,9 +41,26 @@ auxiliary bean-scale capture. Until that Streamline change is merged, open the
 plugin through the existing Extensions settings or its `ui` URL.
 
 Streamline can pass a selected `shotId`, `action=analyze|feedback`, and a
-same-host, same-protocol `return` URL. The UI also accepts `returnTo` for the
-generic launcher proposal in Streamline #99. It fetches and analyses the saved
-shot; current catalog data never silently fills historical context.
+same-hostname, same-protocol `returnTo` URL. Legacy `return` is also accepted;
+`returnTo` takes precedence. Credential-bearing and other-host links are hidden.
+It fetches and analyses the saved shot; current catalog data never silently fills
+historical context.
+
+The optional bean-scale launch parameters only prefill the feedback form:
+
+| Parameter | Meaning |
+| --- | --- |
+| `beanScaleId` | Opaque scale device ID |
+| `beanScaleRole` | `auxiliary`; defaults to this role |
+| `beanWeight` | Positive bean mass in grams |
+| `beanCapturedAt` | ISO timestamp with a timezone for the user's capture |
+| `beanSampleTimestamp` | Optional ISO timestamp with a timezone for the device sample |
+
+These URL hints are untrusted, client-reported context. They do not confirm freshness,
+prove which shot was weighed, or replace dose targets. The plugin requires its own
+“Confirm these beans were weighed for this shot” acknowledgement before saving a
+`measuredBeanDose` observation. Streamline checks the sample's role, connection and
+age again at capture; capture time and sample time describe different events.
 
 An optional `measuredBeanDose` feedback record contains an explicitly confirmed
 auxiliary scale observation: device ID, role, purpose, grams and timestamps.
