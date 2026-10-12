@@ -14,13 +14,13 @@ test("help links expose only fixed HTTPS issue routes and never prefill private 
   const footer = ui.html.match(/<footer id="pluginHelp">([\s\S]*?)<\/footer>/)?.[1];
   assert.ok(footer);
   const anchors = [...footer.matchAll(/<a\s+([^>]+)>([^<]+)<\/a>/g)];
-  assert.equal(anchors.length, 9);
+  assert.equal(anchors.length, 11);
   const routes = anchors.map(([, attributes]) => {
     const href = attributes.match(/href="([^"]+)"/)[1];
     const url = new URL(href);
     assert.equal(url.protocol, "https:"); assert.equal(url.hostname, "github.com");
     assert.equal(url.username, ""); assert.equal(url.password, "");
-    assert.match(url.pathname, /^\/[^/]+\/[^/]+\/issues(?:\/new)?$/);
+    assert.match(url.pathname, /^\/[^/]+\/[^/]+\/(?:issues(?:\/new)?|security\/advisories\/new)$/);
     assert.ok([...url.searchParams.keys()].every(key => key === "template"));
     assert.match(attributes, /target="_blank"/);
     assert.match(attributes, /rel="noopener noreferrer"/);
@@ -28,7 +28,9 @@ test("help links expose only fixed HTTPS issue routes and never prefill private 
     assert.doesNotMatch(href, /PRIVATE-/);
     return url.pathname;
   });
-  assert.equal(routes.filter(route => route === "/MaxRink/decaid-assisted-dialin-plugin/issues/new").length, 5);
+  assert.equal(routes.filter(route => route === "/MaxRink/decaid-assisted-dialin-plugin/issues/new").length, 6);
+  assert.ok(routes.includes("/MaxRink/decaid-assisted-dialin-plugin/security/advisories/new"));
+  assert.ok(anchors.some(([, attributes]) => new URL(attributes.match(/href="([^"]+)"/)[1]).searchParams.get("template") === "protocol-mock-device.yml"));
   assert.ok(routes.includes("/decentespresso/decaid/issues"));
   assert.ok(routes.includes("/decentespresso/streamline-js/issues"));
 });

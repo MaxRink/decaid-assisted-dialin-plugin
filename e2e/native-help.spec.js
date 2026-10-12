@@ -6,7 +6,9 @@ test('native help stays visible in Simple mode and opens an empty grinder form w
   const footer = page.locator('#pluginHelp');
   await expect(page.locator('#modeToggle')).toHaveAttribute('aria-pressed', 'false');
   await expect(footer).toBeVisible();
-  await expect(footer.getByRole('link')).toHaveCount(9);
+  await expect(footer.getByRole('link')).toHaveCount(11);
+  await expect(footer.getByRole('link', {name: 'report privately', exact: true})).toHaveAttribute('href', 'https://github.com/MaxRink/decaid-assisted-dialin-plugin/security/advisories/new');
+  await expect(footer.getByRole('link', {name: 'Protocol or mock-device report', exact: true})).toHaveAttribute('href', 'https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=protocol-mock-device.yml');
   const before = (await (await request.get('/__test/state')).json()).requests;
   const outgoing = [];
   await context.route('https://github.com/**', async route => {
