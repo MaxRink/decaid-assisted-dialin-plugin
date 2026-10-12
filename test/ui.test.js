@@ -5,6 +5,34 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync("plugin.js", "utf8");
 
+test("help links expose only fixed HTTPS issue routes and never prefill private launch context", async () => {
+  const ui = await uiFixture(async () => response({}), {location: {
+    href: "http://127.0.0.1/api/v1/plugins/assisted-dialin.reaplugin/ui?shotId=PRIVATE-SHOT&beanScaleId=PRIVATE-SCALE",
+    pathname: "/api/v1/plugins/assisted-dialin.reaplugin/ui",
+    search: "?shotId=PRIVATE-SHOT&beanScaleId=PRIVATE-SCALE",
+  }});
+  const footer = ui.html.match(/<footer id="pluginHelp">([\s\S]*?)<\/footer>/)?.[1];
+  assert.ok(footer);
+  const anchors = [...footer.matchAll(/<a\s+([^>]+)>([^<]+)<\/a>/g)];
+  assert.equal(anchors.length, 9);
+  const routes = anchors.map(([, attributes]) => {
+    const href = attributes.match(/href="([^"]+)"/)[1];
+    const url = new URL(href);
+    assert.equal(url.protocol, "https:"); assert.equal(url.hostname, "github.com");
+    assert.equal(url.username, ""); assert.equal(url.password, "");
+    assert.match(url.pathname, /^\/[^/]+\/[^/]+\/issues(?:\/new)?$/);
+    assert.ok([...url.searchParams.keys()].every(key => key === "template"));
+    assert.match(attributes, /target="_blank"/);
+    assert.match(attributes, /rel="noopener noreferrer"/);
+    assert.match(attributes, /referrerpolicy="no-referrer"/);
+    assert.doesNotMatch(href, /PRIVATE-/);
+    return url.pathname;
+  });
+  assert.equal(routes.filter(route => route === "/MaxRink/decaid-assisted-dialin-plugin/issues/new").length, 5);
+  assert.ok(routes.includes("/decentespresso/decaid/issues"));
+  assert.ok(routes.includes("/decentespresso/streamline-js/issues"));
+});
+
 class Element {
   constructor(name) {
     this.name = name;
