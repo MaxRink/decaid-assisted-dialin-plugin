@@ -14,13 +14,16 @@ const shot = {id: 'PRIVATE-SHOT', timestamp: '2026-10-12T09:11:22.000Z', notes: 
     grinderSetting: '50', targetDoseWeight: 18, targetYield: 36, extras: {grinderSettingUnit: 'micrometres'}},
     profile: {title: 'PRIVATE-PROFILE', steps: [{pump: 'pressure', pressure: 9}]}},
   measurements: timedMeasurements('2026-10-12T09:11:22.000Z', 25), annotations: {actualDoseWeight: 18}};
-function fixture(t, {stored = new Map(), send = async (_, init) => reply({accepted: JSON.parse(init.body).records.length}), delayWrite = false, readShot = async () => reply(clone(shot))} = {}) {
+function fixture(t, {stored = new Map(), send = async (_, init) => reply({accepted: JSON.parse(init.body).records.length}), delayWrite = false, delayRead = false, readShot = async () => reply(clone(shot))} = {}) {
   let plugin;
-  const posts = [], writes = [], pendingWrites = [];
+  const posts = [], writes = [], pendingWrites = [], pendingReads = [];
   const context = vm.createContext({console, Date, JSON, Math, Promise, setTimeout, clearTimeout});
   vm.runInContext(sharedSource + '\n' + source + '\nthis.make = createPlugin;', context);
   plugin = context.make({log() {}, storage(command) {
-    if (command.type === 'read') queueMicrotask(() => plugin.onEvent({name:'storageRead',payload:{key:command.key,value:clone(stored.get(command.key) ?? null)}}));
+    if (command.type === 'read') {
+      const respond = () => plugin.onEvent({name:'storageRead',payload:{key:command.key,value:clone(stored.get(command.key) ?? null)}});
+      if (delayRead && command.key === KEY) pendingReads.push(respond); else queueMicrotask(respond);
+    }
     else {
       writes.push(clone(command));
       const acknowledge = () => { stored.set(command.key,clone(command.data)); plugin.onEvent({name:'storageWrite',payload:clone(command.data)}); };
@@ -37,7 +40,7 @@ function fixture(t, {stored = new Map(), send = async (_, init) => reply({accept
     const response = await plugin.handleHttpRequest({endpoint,method,body});
     return {status:response.status,body:JSON.parse(response.body)};
   };
-  return {plugin,posts,writes,pendingWrites,stored,request};
+  return {plugin,posts,writes,pendingWrites,pendingReads,stored,request};
 }
 async function captured(f,count=1) {
   for(let i=0;i<30;i++){await tick();const result=await f.request();if(result.body.localCount===count)return result.body;}
@@ -86,6 +89,22 @@ test('local opt-out stops capture and deleting all removes the archive',async t=
   await f.request('POST',{operation:'local',enabled:false});await f.request('DELETE');
   f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await tick();await tick();
   const state=await f.request();assert.equal(state.body.localEnabled,false);assert.equal(state.body.localCount,0);assert.equal(state.body.sharing,false);
+});
+
+test('delete all during startup cannot restore the private series ledger from a delayed storage read',async t=>{
+  const stored=new Map(), first=fixture(t,{stored});await enable(first);
+  first.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(first);
+  assert.equal(stored.get(KEY).series.shots.length,1);first.plugin.onUnload();
+  const next=fixture(t,{stored,delayRead:true});
+  const deleting=next.request('DELETE');await tick();assert.equal(next.pendingReads.length,1);
+  next.pendingReads.shift()();
+  const cleared=await deleting;assert.equal(cleared.status,200);
+  assert.equal(cleared.body.localCount,0);assert.equal(cleared.body.queuedCount,0);assert.equal(cleared.body.sharing,false);
+  assert.deepEqual(stored.get(KEY).series,{current:null,shots:[]});
+  assert.doesNotMatch(JSON.stringify(stored.get(KEY)),/PRIVATE-/);
+  next.plugin.onUnload();
+  const reloaded=fixture(t,{stored});assert.equal((await reloaded.request()).body.localCount,0);
+  await reloaded.request('POST',{operation:'retry'});assert.equal(reloaded.posts.length,0);
 });
 test('sharing storage acknowledgment cannot acknowledge a feedback write',async t=>{
   const f=fixture(t,{delayWrite:true});await f.request();

@@ -2550,6 +2550,7 @@ function createPlugin(host, services) {
   let researchError = null, researchBusy = false;
   // Private comparison keys stay in plugin storage, never the exported records.
   let researchSeries = { current: null, shots: [] };
+  let researchSeriesReset = 0;
   const researchCaptures = new Map();
   function researchStorage(type, state) {
     return new Promise((resolve, reject) => {
@@ -2571,14 +2572,14 @@ function createPlugin(host, services) {
     if (researchClient) return researchClient;
     const factory = services.researchSharing || (typeof createResearchSharing === "function" ? createResearchSharing : null);
     if (!factory) throw new Error("research sharing module unavailable");
-    const epoch = sessionEpoch;
+    const epoch = sessionEpoch, seriesReset = researchSeriesReset;
     researchClient = factory().createClient({
       load: async () => {
         if (!active || epoch !== sessionEpoch) throw new Error("plugin unloaded");
         const stored = await researchStorage("read");
         if (stored == null) return null;
         if (stored.key !== RESEARCH_KEY || !stored.state) throw new Error("invalid research storage");
-        if (stored.series != null) {
+        if (stored.series != null && seriesReset === researchSeriesReset) {
           const valid = item => item && typeof item.context === "string" && item.context.length <= 10000 && /^[a-f0-9]{32}$/.test(item.id);
           if (!Array.isArray(stored.series.shots) || stored.series.shots.length > 200 ||
               (stored.series.current != null && !valid(stored.series.current)) ||
@@ -2690,6 +2691,7 @@ function createPlugin(host, services) {
     if (request.method === "GET") return researchStatus();
     if (request.method === "DELETE") {
       researchGeneration++; stopResearchTimer();
+      researchSeriesReset++; // A pending startup read must not restore deleted linkage.
       researchSeries = { current: null, shots: [] };
       await client.clear(); researchError = null;
       return researchStatus();
