@@ -153,3 +153,12 @@ jobs:
           test -n "$QUICKJS_LIB_DIR"
           export LD_LIBRARY_PATH="$QUICKJS_LIB_DIR:${LD_LIBRARY_PATH:-}"
           flutter test --no-pub test/plugins/dialin_external_runtime_test.dart --reporter expanded
+
+  collector:
+    name: Collector deployment image and durable ingestion
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and exercise unprivileged read-only collector
+        run: sh ci/collector-smoke.sh

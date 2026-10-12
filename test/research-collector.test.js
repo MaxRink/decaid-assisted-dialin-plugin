@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const net = require('node:net');
 const { once } = require('node:events');
 const { createCollector } = require('../collector/server.js');
 const { createResearchSharing } = require('../research-sharing.js');
@@ -148,4 +149,24 @@ test('directory-sync failure withholds acknowledgment and a retry must complete 
   assert.equal((await f.post()).status, 201);
   assert.equal(directorySyncs, 2);
   assert.equal((await fs.readdir(f.directory)).length, 1);
+});
+
+
+test('incomplete headers and bodies expire within their configured request deadlines', { timeout: 12000 }, async t => {
+  const f = await fixture(t);
+  const incomplete = request => new Promise((resolve, reject) => {
+    const socket = net.connect(f.server.address().port, '127.0.0.1');
+    let response = '';
+    const deadline = setTimeout(() => { socket.destroy(); reject(new Error('Incomplete request remained open beyond 11.5 seconds')); }, 11500);
+    socket.on('connect', () => socket.write(request));
+    socket.on('data', chunk => { response += chunk; });
+    socket.on('error', reject);
+    socket.on('close', () => { clearTimeout(deadline); resolve(response); });
+  });
+  const responses = await Promise.all([
+    incomplete('POST /v1/events HTTP/1.1\r\nHost: localhost\r\n'),
+    incomplete('POST /v1/events HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{'),
+  ]);
+  for (const response of responses) assert.match(response, /^HTTP\/1\.1 408 /);
+  assert.deepEqual(await fs.readdir(f.directory), []);
 });
