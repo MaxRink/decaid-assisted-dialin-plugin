@@ -86,7 +86,8 @@ test('Simple lists every approach before a brew and explains missing evidence', 
   await page.goto('/simulator/'); await step(page,4);
   await expect(page.locator('#all-comparison-results article')).toHaveCount(10);
   for (const name of names) { await expect(row(page,name)).toBeVisible(); await expect(row(page,name)).toContainText('Why:'); }
-  await expect(row(page,'GbS1')).toContainText('Needs a completed shot');
+  await expect(row(page,'GbS1')).toHaveAttribute('data-status','unavailable');
+  await expect(row(page,'GbS1')).toContainText('recorded shot with its measured grinder coordinate');
   await expect(row(page,'proposedDd')).toContainText('unit cannot be used as a dial');
 });
 test('uncalibrated DF54 shows manual dial advice and explicit research limits', async ({page}) => {
