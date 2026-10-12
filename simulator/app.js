@@ -23,6 +23,7 @@
   let activeInstanceId = null;
   let viewMode = "simple";
   let simpleShots = [], simpleProposal = null, simplePractice = false;
+  let simpleEditingShot = false, simpleComparisonStale = false;
   let navigateSimple = () => {};
 
   const slug = (value) => String(value || "grinder").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "grinder";
@@ -349,7 +350,7 @@
   function loadDialProfiles() {
     return fetch("../data/grinder-dials.json", { credentials: "same-origin" }).then(response => { if (!response.ok) throw new Error("dial profiles unavailable"); return response.json(); }).then(value => { const list = value && Array.isArray(value.models) ? value.models : []; if (!list.length) throw new Error("unsupported grinder references"); $("grinder-load-status")?.replaceChildren(); dialMetadata = Object.fromEntries(list.filter(profile => profile && profile.model).map(profile => [profile.model, profile])); const select = $("grinder"), selected = (select && select.value) || activeProfile()?.model; if (select && list.length) { select.replaceChildren(); list.forEach(profile => { const option = document.createElement("option"); option.value = profile.model; text(option, profile.model + " · " + (profile.unit || "native")); select.append(option); }); select.value = list.some(profile => profile.model === selected) ? selected : list[0].model; } renderInstanceManager(); renderDialPanel(); renderSimpleRecipe(); }).catch(() => showResourceRetry($("grinder-load-status"), "Extra grinder references unavailable. You can keep using your selected grinder and enter its settings yourself.", "Retry grinder references", loadDialProfiles));
   }
-  function render() { renderSimpleRecipe(); renderTable(); renderChart(); renderFlowChart(); compare(); renderCatalog(); }
+  function render() { renderSimpleRecipe(); renderTable(); renderChart(); renderFlowChart(); compare(); renderCatalog(); compareAllCalculators(); }
   function inputField(id, label, value, step) { const wrapper = document.createElement("label"); text(wrapper, label); const input = document.createElement("input"); input.id = id; input.type = "number"; input.value = value; input.step = step || "1"; wrapper.append(input); return wrapper; }
   function renderHelperFields() {
     const holder = $("helper-fields"); holder.replaceChildren();
@@ -426,15 +427,15 @@
     });
     value.shots.forEach((row) => { if (!row || typeof row !== "object" || Object.keys(row).some((key) => !["setting", "actual", "target", "pressure", "flow", "preinfusionSec", "preinfusionPressure", "taste", "overall", "context"].includes(key)) || !validImportNumber(row.setting, 0, 100000, true) || !validImportNumber(row.target, 1, 600, false) || !validImportNumber(row.pressure, 0, 15, false) || !validImportNumber(row.flow, 0, 20, false) || (row.preinfusionSec != null && !validImportNumber(row.preinfusionSec, 0, 30, false)) || (row.preinfusionPressure != null && !validImportNumber(row.preinfusionPressure, 0, 15, false)) || (row.overall != null && !["", "under-extracted", "over-extracted", "balanced", "uncertain"].includes(row.overall)) || (row.actual !== "" && !validImportNumber(row.actual, 0.1, 600, false)) || !["none", "balanced", "sour", "bitter", "astringent", "weak", "channeling"].includes(row.taste || "none") || (row.context != null && (typeof row.context !== "object" || Array.isArray(row.context) || JSON.stringify(row.context).length > 4096))) throw new Error("Scenario contains an invalid shot."); });
   }
-  function importFile(event) { const file = event.target.files && event.target.files[0]; if (!file) return; if (file.size > 256 * 1024) { setNotice("Scenario file is too large.", true); return; } const reader = new FileReader(); reader.onload = () => { try { const value = JSON.parse(String(reader.result)); if (value.setup && value.setup.dialCalibration && !value.setup.dialCalibration.grinderId) value.setup.dialCalibration = { ...value.setup.dialCalibration, grinderId: value.setup.activeGrinderInstanceId || value.setup.grinderId || activeInstanceId }; validateScenario(value); simulationEngine.run(engineScenario(value.shots, value.setup)); const importedProfiles = Array.isArray(value.setup.grinderInstances) ? value.setup.grinderInstances.map(profile => ({ ...profile, anchors: profile.anchors ? { ...profile.anchors } : null })) : null; if (importedProfiles) grinderInstances = importedProfiles; const inputIds = { preinfusionSec: "preinfusion", preinfusionPressure: "preinfusion-pressure", viewMode: "view-mode" }; Object.keys(value.setup).forEach((key) => { if (["dialCalibration", "grinderInstances", "activeGrinderInstanceId", "grinderId"].includes(key)) return; const input = $(inputIds[key] || key); if (input && typeof value.setup[key] === "string") input.value = value.setup[key]; else if (input) input.value = String(value.setup[key]); }); activeInstanceId = value.setup.activeGrinderInstanceId || value.setup.grinderId || activeInstanceId; if (!grinderInstances.some(profile => profile.id === activeInstanceId)) activeInstanceId = grinderInstances[0].id; const profile = activeProfile(); $("grinder").value = profile.model; $("burrs").value = profile.burrIdentity; $("calibration").value = profile.calibrationEpoch; dialCalibration = profileCalibration(profile) || value.setup.dialCalibration || null; if (profile && value.setup.dialCalibration) { profile.anchors = { ...value.setup.dialCalibration, grinderId: activeInstanceId }; dialCalibration = profileCalibration(profile); } viewMode = value.setup.viewMode || viewMode; document.body.classList.toggle("simple-mode", viewMode === "simple"); if ($("view-mode")) $("view-mode").value = viewMode; invalidateAssistant(); persistProfiles(); renderInstanceManager(); rows = value.shots.map((row) => ({ ...row, result: null })); rows.forEach((row, index) => { if (row.actual !== "") consumeRow(row, index); }); render(); showResult(rows.length ? rows[rows.length - 1].result : null); setNotice("Scenario imported and replayed safely."); } catch (error) { setNotice(error.message, true); } }; reader.readAsText(file); }
+  function importFile(event) { const file = event.target.files && event.target.files[0]; if (!file) return; if (file.size > 256 * 1024) { setNotice("Scenario file is too large.", true); return; } const reader = new FileReader(); reader.onload = () => { try { const value = JSON.parse(String(reader.result)); if (value.setup && value.setup.dialCalibration && !value.setup.dialCalibration.grinderId) value.setup.dialCalibration = { ...value.setup.dialCalibration, grinderId: value.setup.activeGrinderInstanceId || value.setup.grinderId || activeInstanceId }; validateScenario(value); simulationEngine.run(engineScenario(value.shots, value.setup)); const importedProfiles = Array.isArray(value.setup.grinderInstances) ? value.setup.grinderInstances.map(profile => ({ ...profile, anchors: profile.anchors ? { ...profile.anchors } : null })) : null; if (importedProfiles) grinderInstances = importedProfiles; const inputIds = { preinfusionSec: "preinfusion", preinfusionPressure: "preinfusion-pressure", viewMode: "view-mode" }; Object.keys(value.setup).forEach((key) => { if (["dialCalibration", "grinderInstances", "activeGrinderInstanceId", "grinderId"].includes(key)) return; const input = $(inputIds[key] || key); if (input && typeof value.setup[key] === "string") input.value = value.setup[key]; else if (input) input.value = String(value.setup[key]); }); activeInstanceId = value.setup.activeGrinderInstanceId || value.setup.grinderId || activeInstanceId; if (!grinderInstances.some(profile => profile.id === activeInstanceId)) activeInstanceId = grinderInstances[0].id; const profile = activeProfile(); $("grinder").value = profile.model; $("burrs").value = profile.burrIdentity; $("calibration").value = profile.calibrationEpoch; dialCalibration = profileCalibration(profile) || value.setup.dialCalibration || null; if (profile && value.setup.dialCalibration) { profile.anchors = { ...value.setup.dialCalibration, grinderId: activeInstanceId }; dialCalibration = profileCalibration(profile); } clearSimpleSetup(); clearSimpleShots(); viewMode = value.setup.viewMode || viewMode; document.body.classList.toggle("simple-mode", viewMode === "simple"); if ($("view-mode")) $("view-mode").value = viewMode; invalidateAssistant(); persistProfiles(); renderInstanceManager(); rows = value.shots.map((row) => ({ ...row, result: null })); rows.forEach((row, index) => { if (row.actual !== "") consumeRow(row, index); }); render(); showResult(rows.length ? rows[rows.length - 1].result : null); setNotice("Scenario imported and replayed safely."); } catch (error) { setNotice(error.message, true); } }; reader.readAsText(file); }
   let uiTools, supplemental, importedShot = null, importedMetrics = null, importedFeedback = {}, assistantGeneration = 0, traceGeneration = 0;
-  function invalidateAssistant() { assistantGeneration++; const holder = $("assist-result"); if (holder) { holder.replaceChildren(); text(holder, "Evidence changed. Run the assessment again."); } }
+  function invalidateAssistant() { assistantGeneration++; compareAllCalculators(); const holder = $("assist-result"); if (holder) { holder.replaceChildren(); text(holder, "Evidence changed. Run the assessment again."); } }
   function clearImportedTrace() { traceGeneration++; importedShot = null; importedMetrics = null; importedFeedback = {}; if ($("manual-stop-confirmed")) $("manual-stop-confirmed").checked = false; $("actual-shot-trace")?.replaceChildren(); if ($("actual-shot-details")) text($("actual-shot-details"), ""); if ($("shot-trace-status")) text($("shot-trace-status"), "No saved trace imported."); if ($("actual-shot-time")) $("actual-shot-time").value = ""; invalidateAssistant(); }
   function useImportedClock() { const clock = $("actual-shot-clock")?.value || "pump", measured = importedMetrics?.timing?.[clock]; const input = $("actual-shot-time"); if (input) input.value = measured && (clock === "recording" || measured.complete) && Number.isFinite(measured.durationSec) ? String(measured.durationSec) : ""; invalidateAssistant(); }
   function importShotTrace(event) {
     const file = event.target.files?.[0]; if (!file) return; const generation = ++traceGeneration;
     if (file.size > 4 * 1024 * 1024) { setNotice("Saved shot exceeds the 4 MiB limit. Existing trace retained.", true); return; }
-    const reader = new FileReader(); reader.onload = () => { if (generation !== traceGeneration) return; try { const parsed = JSON.parse(String(reader.result)), shot = parsed.shot || parsed; if (!shot || typeof shot !== "object" || Array.isArray(shot) || !Array.isArray(shot.measurements) || shot.measurements.length > 20000 || !Number.isFinite(Date.parse(shot.timestamp))) throw new Error("Use a full saved shot with a valid timestamp and at most 20,000 measurements."); const metrics = window.createBrewMetrics().analyze(shot, null); if (!metrics.trace?.points?.length) throw new Error("The shot has no valid timestamped trace. Existing trace retained."); const feedback = parsed.shot && parsed.feedback || {}; if (feedback.taste != null && !["balanced","sour","bitter","astringent","weak","channeling"].includes(feedback.taste)) throw new Error("Invalid saved taste feedback."); if (feedback.manualStopConfirmed != null && typeof feedback.manualStopConfirmed !== "boolean") throw new Error("Invalid manual-stop confirmation: expected a boolean."); const flavour = feedback.flavour || {}; if (flavour.overall && !["under-extracted","over-extracted","balanced","uncertain"].includes(flavour.overall)) throw new Error("Invalid overall feedback."); if (flavour.tastingTemperatureC != null && (!Number.isFinite(flavour.tastingTemperatureC) || flavour.tastingTemperatureC < 0 || flavour.tastingTemperatureC > 150)) throw new Error("Invalid tasting temperature."); if (flavour.sinceBrewMin != null && (!Number.isFinite(flavour.sinceBrewMin) || flavour.sinceBrewMin < 0 || flavour.sinceBrewMin > 10080)) throw new Error("Invalid tasting delay."); if (feedback.brewTimeSec != null && (!Number.isFinite(feedback.brewTimeSec) || feedback.brewTimeSec <= 0 || feedback.brewTimeSec > 600 || !["pump","pouring","recording"].includes(feedback.brewTimeClock || "pump"))) throw new Error("Invalid saved timing feedback."); importedShot = shot; importedMetrics = metrics; importedFeedback = feedback; if ($("manual-stop-confirmed")) $("manual-stop-confirmed").checked = feedback.manualStopConfirmed === true; $("assist-taste").value = feedback.taste || ""; if ($("assist-overall")) $("assist-overall").value = flavour.overall || ""; if ($("taste-temperature")) $("taste-temperature").value = flavour.tastingTemperatureC ?? ""; if ($("taste-minutes")) $("taste-minutes").value = flavour.sinceBrewMin ?? ""; uiTools.renderTrace($("actual-shot-trace"), metrics); text($("actual-shot-details"), JSON.stringify(metrics, null, 2)); text($("shot-trace-status"), "Imported " + (shot.id || "unnamed saved shot") + ": " + shot.measurements.length + " records. Actual saved profile steps remain authoritative."); useImportedClock(); if (feedback.brewTimeSec != null) { $("actual-shot-clock").value = feedback.brewTimeClock || "pump"; $("actual-shot-time").value = String(feedback.brewTimeSec); } setNotice("Real saved-shot measurements analysed. Synthetic pass history was not rewritten."); } catch (error) { setNotice(error.message, true); } }; reader.onerror = () => setNotice("Could not read this saved shot. Existing trace retained.", true); reader.readAsText(file);
+    const reader = new FileReader(); reader.onload = () => { if (generation !== traceGeneration) return; try { const parsed = JSON.parse(String(reader.result)), shot = parsed.shot || parsed; if (!shot || typeof shot !== "object" || Array.isArray(shot) || !Array.isArray(shot.measurements) || shot.measurements.length > 20000 || !Number.isFinite(Date.parse(shot.timestamp))) throw new Error("Use a full saved shot with a valid timestamp and at most 20,000 measurements."); const metrics = window.createBrewMetrics().analyze(shot, null); if (!metrics.trace?.points?.length) throw new Error("The shot has no valid timestamped trace. Existing trace retained."); const feedback = parsed.shot && parsed.feedback || {}; if (feedback.taste != null && !["balanced","sour","bitter","astringent","weak","channeling"].includes(feedback.taste)) throw new Error("Invalid saved taste feedback."); if (feedback.manualStopConfirmed != null && typeof feedback.manualStopConfirmed !== "boolean") throw new Error("Invalid manual-stop confirmation: expected a boolean."); const flavour = feedback.flavour || {}; if (flavour.overall && !["under-extracted","over-extracted","balanced","uncertain"].includes(flavour.overall)) throw new Error("Invalid overall feedback."); if (flavour.tastingTemperatureC != null && (!Number.isFinite(flavour.tastingTemperatureC) || flavour.tastingTemperatureC < 0 || flavour.tastingTemperatureC > 150)) throw new Error("Invalid tasting temperature."); if (flavour.sinceBrewMin != null && (!Number.isFinite(flavour.sinceBrewMin) || flavour.sinceBrewMin < 0 || flavour.sinceBrewMin > 10080)) throw new Error("Invalid tasting delay."); if (feedback.brewTimeSec != null && (!Number.isFinite(feedback.brewTimeSec) || feedback.brewTimeSec <= 0 || feedback.brewTimeSec > 600 || !["pump","pouring","recording"].includes(feedback.brewTimeClock || "pump"))) throw new Error("Invalid saved timing feedback."); importedShot = shot; importedMetrics = metrics; importedFeedback = feedback; if ($("manual-stop-confirmed")) $("manual-stop-confirmed").checked = feedback.manualStopConfirmed === true; $("assist-taste").value = feedback.taste || ""; if ($("assist-overall")) $("assist-overall").value = flavour.overall || ""; if ($("taste-temperature")) $("taste-temperature").value = flavour.tastingTemperatureC ?? ""; if ($("taste-minutes")) $("taste-minutes").value = flavour.sinceBrewMin ?? ""; uiTools.renderTrace($("actual-shot-trace"), metrics); text($("actual-shot-details"), JSON.stringify(metrics, null, 2)); text($("shot-trace-status"), "Imported " + (shot.id || "unnamed saved shot") + ": " + shot.measurements.length + " records. Actual saved profile steps remain authoritative."); useImportedClock(); if (feedback.brewTimeSec != null) { $("actual-shot-clock").value = feedback.brewTimeClock || "pump"; $("actual-shot-time").value = String(feedback.brewTimeSec); } invalidateAssistant(); setNotice("Real saved-shot measurements analysed. Synthetic pass history was not rewritten."); } catch (error) { setNotice(error.message, true); } }; reader.onerror = () => setNotice("Could not read this saved shot. Existing trace retained.", true); reader.readAsText(file);
   }
   function currentImportedFeedback() {
     const flavour = {}; const overall = $("assist-overall")?.value; if (overall) flavour.overall = overall; const temperature = $("taste-temperature")?.value, minutes = $("taste-minutes")?.value;
@@ -451,18 +452,140 @@
     instance.onLoad({TargetTimeSec: String(c.target), TargetTimeClock: $("actual-shot-clock")?.value || "pump", TimeToleranceSec: String(c.tolerance)});
     try { const saved = await instance.handleHttpRequest({endpoint: "feedback", method: "POST", body: feedback}); if (saved.status !== 200) throw new Error(JSON.parse(saved.body).error || "Feedback rejected"); const result = await instance.handleHttpRequest({endpoint: "suggestion", method: "GET"}); const body = JSON.parse(result.body); if (generation !== assistantGeneration) return; importedFeedback = feedback; const holder = $("assist-result"); holder.replaceChildren(); const summary = document.createElement("p"); text(summary, "Saved shot " + shot.id + " · " + body.status + " · " + (body.direction || "retain / gather evidence") + ". " + (body.reason || "")); holder.append(summary); const why = document.createElement("p"); text(why, "This assessment used the imported timestamps, controller steps and recorded context. Missing bean catalogue or calibration stays unavailable. " + (body.warnings || []).join(" ")); holder.append(why); const detail = document.createElement("details"), caption = document.createElement("summary"), pre = document.createElement("pre"); text(caption, "Why / complete evidence"); text(pre, JSON.stringify(body, null, 2)); detail.append(caption, pre); holder.append(detail); } finally { instance.onUnload(); }
   }
+  function replayCases(shots, failures, names = algorithmNames) {
+    const cases = {}, first = shots[0]?.setpointDdDum;
+    if (first == null) return cases;
+    names.forEach(name => {
+      const options = name === "DdEff" ? {initialDdDum: first} : name === "GbS1"
+        ? {lastResultDum: first, continuousUm: first * .1, previousQuantizedUm: first * .1}
+        : {lastResultDum: first, lastAdjustmentDum: first, lastTargetDum: first};
+      try {
+        let state = algorithms.createState(name, options);
+        for (const input of shots.slice(0, -1)) state = algorithms.adjust(name, state, input).nextState;
+        cases[name] = {state, input: shots.at(-1)};
+      } catch (error) { failures[name] = error.message; }
+    });
+    return cases;
+  }
+  const comparisonHelp = {
+    GbS1: ["Smooth recent shots", "Smooths recent brew times and makes a bounded change. It keeps the returned setting when the latest time is inside the tolerance."],
+    GbS2: ["Learn from settings and times", "Fits a line to up to six recorded setting/time pairs, then moves partway toward the target-time estimate. With too little variation it uses a firmware fallback."],
+    GbS3: ["Blend two timing models", "Blends an inverse timing response with a fitted line. Its phase and hold counter choose the blend; an early near phase does not prove the shot is near the target. It cancels when the supplied setting moves too far from its previous target."],
+    GbS4: ["Blend, then lock", "Uses the phase-based timing model and can lock its previous setting after enough shots are close to the target. It does not judge flavour."],
+    DdEff: ["Plan test measurements", "Repeats the starting coordinate six times, then tests lower and higher coordinates. It ignores time and taste. This is a measurement sequence, not next-coffee advice."],
+    effectiveDd: ["Estimate a grind's settling", "Models how the effective setting approaches the new setting over the measured grind duration, using the previous baseline and retained state. It does not measure particle size."],
+    grindTime: ["Estimate grinding time", "Only firmware mode 3 scales the recipe grind time using a modeled grind-speed ratio. Other modes keep the recipe time. This does not guarantee the dose weight."],
+    inverseRegression: ["Fit measured points", "Fits the supplied setting/time pairs and estimates the setting for the target time. The firmware fallback and slope limit can affect it; it does not bound extrapolation."],
+    proposedDd: ["Look up a starting point", "Uses the selected grinder, roast and dose in a recovered research table. The output unit is unknown, so it cannot tell you a number on your grinder."],
+    manual: ["Your taste and small dial step", "Uses your time, target and taste preference. It holds when you like the coffee or the signals conflict; a numbered move needs your confirmed step and finer direction."]
+  };
+  const missingComparison = {
+    effectiveDd: "Needs a measured grind duration, current coordinate, previous effective baseline and retained state. Add these independent measurements in Expert mode.",
+    grindTime: "Needs the firmware mode, recipe grind time and verified recipe/target coordinates. Add these independent measurements in Expert mode.",
+    inverseRegression: "Needs at least two measured setting/time points on the same clock, in verified research units. Add these in Expert mode.",
+    proposedDd: "Needs an explicitly chosen supported grinder, roast and dose. Add these in Expert mode; its unknown output unit cannot be used as a dial setting."
+  };
   function compareAllCalculators() {
-    const holder = $("all-comparison-results"); if (!holder) return;
-    try { const cases = supplemental.cases();
-      if (importedShot) { const context = importedShot.workflow?.context || {}, raw = context.grinderSetting, actual = $("actual-shot-time")?.value, unit = context.extras?.grinderSettingUnit; if (raw != null && String(raw).trim() && Number.isInteger(Number(raw)) && unit === "deci-micrometre" && actual && Number(actual) > 0) { const input = {actualBrewTimeMs: Math.round(Number(actual) * 1000), targetBrewTimeMs: Math.round(config().target * 1000), toleranceMs: Math.round(config().tolerance * 1000), estimatedDdDum: Number(raw), setpointDdDum: Number(raw)}; algorithmNames.forEach(name => { cases[name] = {input: {...input}}; }); } }
-      else { const completed = rows.filter(row => row.actual !== "" && Number(row.actual) > 0); if (completed.length) algorithmNames.forEach(name => { const scenario = engineScenario(completed); let state = algorithms.createState(name); const shots = scenario.shots; for (const input of shots.slice(0, -1)) state = algorithms.adjust(name, state, input).nextState; cases[name] = {state, input: shots.at(-1)}; }); }
-      uiTools.renderComparisons(holder, algorithms.compareAll({cases}));
-    } catch (error) { text(holder, error.message); }
+    const holder = $("all-comparison-results"); if (!holder || !algorithms) return;
+    try {
+      const cases = supplemental?.cases() || {}, reasons = {}, failures = {};
+      const latest = simpleShots.at(-1);
+      let source = "No completed shot yet. Every approach is listed below.", timing, measurement, importedMappingMatches = false;
+      const useRecorded = viewMode === "simple" || simpleShots.length > 0 && $("comparison-source")?.value !== "experiment";
+      if (useRecorded) {
+        delete cases.manual;
+        source = latest && !simpleComparisonStale ? (latest.practice ? "Fictional practice " : "Recorded shot ") + simpleShots.length + " · " + latest.time + " seconds against " + latest.target + " seconds. Research models do not use taste, bean type or roast; manual guidance uses your taste preference." : "Record this shot to refresh the comparisons. No missing measurement is guessed.";
+        if (simpleComparisonStale) measurement = "Inputs changed. Record this shot again to refresh its results; it replaces the previous entry until you continue to a new shot.";
+        else if (!latest) measurement = "Needs a recorded shot with its measured grinder coordinate.";
+        else if (latest.coordinate == null) measurement = "This grinder needs two owner calibration points before research results can be converted to its dial marks. Manual guidance still uses your own small step. Add calibration in Expert mode.";
+        timing = measurement;
+        if (!timing && !latest.clockConfirmed) timing = "Confirm timing from pump start and stopping at the target cup weight. Different clocks cannot be compared.";
+        else if (!timing && !latest.pressureConfirmed) timing = "A programmed flow target can control shot time. These timing-only models cannot recommend a grind change from that time.";
+        for (const names of [algorithmNames.slice(0, 4), ["DdEff"]]) {
+          const sequence = names[0] === "DdEff";
+          if (sequence ? measurement : timing) continue;
+          // Missing coordinates break every replay; clock/profile gaps only break timing models.
+          let start = simpleShots.length - 1;
+          while (start > 0) {
+            const previous = simpleShots[start - 1];
+            if (previous.coordinate == null || !sequence && (!previous.clockConfirmed || !previous.pressureConfirmed)) break;
+            start--;
+          }
+          const shots = simpleShots.slice(start).map(shot => ({actualBrewTimeMs: Math.round(shot.time * 1000), targetBrewTimeMs: Math.round(shot.target * 1000), toleranceMs: Math.round(shot.tolerance * 1000), estimatedDdDum: shot.coordinate, setpointDdDum: shot.coordinate}));
+          Object.assign(cases, replayCases(shots, failures, names));
+          source += sequence ? " Measurement sequence uses " + shots.length + " recorded coordinate(s)." : " Each timing model independently replays " + shots.length + " comparable shot(s), using the settings you actually brewed.";
+        }
+        if (latest?.manualInput && !simpleComparisonStale) cases.manual = {input: latest.manualInput};
+        else reasons.manual = simpleComparisonStale ? timing : latest?.why || "Brew, time and taste your coffee first. Confirm your own small dial movement for a numbered adjustment.";
+      } else if (importedShot) {
+        const context = importedShot.workflow?.context || {}, raw = context.grinderSetting, actual = $("actual-shot-time")?.value, unit = context.extras?.grinderSettingUnit;
+        source = "Imported saved shot · independent research comparison. Actual controller steps remain authoritative.";
+        const c = config(), extras = context.extras || {};
+        importedMappingMatches = [[context.grinderId, c.grinderId], [extras.grinderInstanceId, c.grinderId], [context.grinderModel, c.grinder], [context.grinderBurrs || extras.burrIdentity, c.burrs], [extras.calibrationEpoch, c.calibration]].every(([saved, current]) => typeof saved === "string" && saved.trim() !== "" && saved === current);
+        if (raw == null || !String(raw).trim() || !Number.isInteger(Number(raw)) || unit !== "deci-micrometre") measurement = "Needs the saved grinder coordinate in verified research units.";
+        timing = measurement;
+        if (!timing && importedMetrics?.trace?.recommendation?.status === "abstain") timing = "This saved profile uses flow control or a flow limiter. Time alone cannot support a grind change.";
+        else if (!timing && !["pressure", "mixed_preinfusion_flow"].includes(importedMetrics?.trace?.controlMode)) timing = "The saved profile does not establish pressure-controlled extraction. Unknown control mode cannot support timing-only advice.";
+        else if (!timing && /error|disconnected|stopping.?backstop/i.test(importedMetrics?.stopReason || "")) timing = "This shot ended with an error or disconnect. Repeat the recipe before interpreting a timing-only grind change.";
+        else if (!timing && /api.?stop|app.?stop/i.test(importedMetrics?.stopReason || "") && !$("manual-stop-confirmed")?.checked) timing = "Confirm that this manually stopped shot reached its intended recipe before comparing it.";
+        else if (!timing && ($("actual-shot-clock")?.value !== "pump" || !importedMetrics?.timing?.pump?.complete || !actual || !(Number(actual) > 0) || Math.abs(Number(actual) - importedMetrics.timing.pump.durationSec) > .001)) timing = "The recipe target is pump-start time. Select the complete observed pump clock; a pouring, recording or unverified override time cannot be compared with that target.";
+        if (!measurement) {
+          // DdEff ignores timing; use valid neutral fields when the imported clock is unavailable.
+          const input = {actualBrewTimeMs: 0, targetBrewTimeMs: 1, toleranceMs: 0, estimatedDdDum: Number(raw), setpointDdDum: Number(raw)};
+          Object.assign(cases, replayCases([input], failures, ["DdEff"]));
+          if (!timing) Object.assign(cases, replayCases([{...input, actualBrewTimeMs: Math.round(Number(actual) * 1000), targetBrewTimeMs: Math.round(c.target * 1000), toleranceMs: Math.round(c.tolerance * 1000)}], failures, algorithmNames.slice(0, 4)));
+        }
+      } else {
+        const completed = rows.filter(row => row.actual !== "" && Number(row.actual) > 0);
+        if (completed.length) { Object.assign(cases, replayCases(engineScenario(completed).shots, failures)); source = "Expert experiment · independent replay of the same entered or fictional shot inputs. These research models ignore taste."; }
+      }
+      algorithmNames.forEach(name => { const reason = name === "DdEff" ? measurement : timing; if (reason) { delete cases[name]; reasons[name] = reason; } });
+      text($("all-comparison-context"), source);
+      holder.replaceChildren();
+      algorithms.compareAll({cases}).results.forEach(row => {
+        if (failures[row.algorithm]) row = {...row, status: "invalid", result: null, reason: failures[row.algorithm]};
+        const card = document.createElement("article"), heading = document.createElement("h3"), label = document.createElement("p"), answer = document.createElement("p"), why = document.createElement("p");
+        card.setAttribute("data-algorithm", row.algorithm); card.setAttribute("data-status", row.status);
+        text(heading, row.algorithm + " · " + row.status); label.className = "hint"; text(label, comparisonHelp[row.algorithm][0]);
+        const value = row.result;
+        let recommendation = reasons[row.algorithm] || missingComparison[row.algorithm] || "Needs a completed shot with verified timing and grinder coordinates.";
+        let explanation = comparisonHelp[row.algorithm][1];
+        if (row.status === "computed") {
+          if (value.returnedDdDum != null) {
+            const mapped = importedShot && !useRecorded && !importedMappingMatches ? {status: "unavailable"} : dialConversion(value.returnedDdDum);
+            recommendation = mapped.status === "normalized" ? (row.algorithm === "DdEff" ? "Measurement plan coordinate: " : "Timing model returns: ") + Number(mapped.visible.value.toFixed(6)) + " " + mapped.visible.unit + "." + (mapped.achievable === false ? " This lies between physical steps; verify an achievable mark." : "") : importedShot && !useRecorded ? "Research model returns " + value.returnedDdDum + " dD. Native conversion is withheld: the saved individual grinder, model, burrs and calibration epoch must exactly match the current setup, with a usable scoped conversion." : "Research result available; a verified calibration is needed to show it on your dial.";
+            explanation += " Current phase: " + value.phase + ". " + (row.algorithm === "DdEff" ? "The returned coordinate follows the test sequence, not a timing correction." : value.locked ? "The model is locked and returns its previous setting." : value.committed === false ? "It holds the returned setting even if its internal candidate differs." : "It returns the model's calculated setting.");
+            if (row.algorithm !== "DdEff") {
+              const input = cases[row.algorithm].input, actual = input.actualBrewTimeMs / 1000, target = input.targetBrewTimeMs / 1000, gap = Number(Math.abs(actual - target).toFixed(3));
+              explanation += " Latest measured time: " + actual + " seconds; target: " + target + " seconds (" + (gap === 0 ? "on target" : gap + " seconds " + (actual < target ? "faster" : "slower")) + "). Tolerance: " + input.toleranceMs / 1000 + " seconds.";
+            }
+            if (value.centralSec != null) explanation += " Smoothed time: " + Number(value.centralSec.toFixed(2)) + " seconds.";
+            if (useRecorded && row.algorithm !== "DdEff") explanation += " Your recorded dial was " + latest.setting + " " + simpleUnit() + ". This is a timing-only comparison; it does not override your taste-based next step above.";
+          } else if (row.algorithm === "manual") {
+            recommendation = useRecorded ? latest.action : value.proposedDial != null ? "Suggested dial: " + value.proposedDial + "." : "Direction only: " + value.direction + "; confirm your small step before a numbered move.";
+            explanation = useRecorded ? latest.why + " " + comparisonHelp.manual[1] : (value.reasons || []).join(". ") + ". " + explanation;
+          } else if (row.algorithm === "grindTime") recommendation = value.adjustedTimeMs == null ? "Keep the recipe grind time; this mode does not adjust it." : "Estimated grind time: " + Number((value.adjustedTimeMs / 1000).toFixed(3)) + " seconds.";
+          else if (row.algorithm === "proposedDd") recommendation = "Table result: " + value.proposedDd + " (unit unknown). Do not use this number on your dial.";
+          else if (row.algorithm === "inverseRegression") recommendation = "Estimated research setting: " + Number(value.toFixed(3)) + " micrometres. Verify calibration and measured-point range before using it.";
+          else recommendation = "Estimated effective research coordinate: " + value.result + ". This is a model estimate, not a dial command.";
+        } else if (row.status === "invalid") recommendation = "Check the supplied measurements: " + row.reason;
+        const supplied = cases[row.algorithm];
+        if (row.status === "computed" && supplied && row.algorithm === "proposedDd") explanation += " Chosen inputs: " + supplied.input.model + ", " + supplied.input.roast + " roast, " + supplied.input.weightMg / 1000 + " g coffee.";
+        if (row.status === "computed" && supplied && row.algorithm === "grindTime") explanation += " Chosen mode: " + supplied.input.mode + "; recipe grind time: " + supplied.input.recipeTimeMs / 1000 + " seconds.";
+        if (row.status === "computed" && supplied && row.algorithm === "effectiveDd") explanation += " Measured grind duration: " + supplied.input.grindDurationMs / 1000 + " seconds; supplied baseline: " + supplied.input.effectiveBaseline + " micrometres.";
+        if (row.status === "computed" && supplied && row.algorithm === "inverseRegression") explanation += " Uses " + supplied.points.length + " supplied points; target time: " + supplied.targetSec + " seconds.";
+        text(answer, recommendation); text(why, "Why: " + explanation); card.append(heading, label, answer, why);
+        if (cases[row.algorithm]) { const details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre"); text(summary, "Exact inputs and calculation"); text(pre, JSON.stringify({case: cases[row.algorithm], ...row}, null, 2)); details.append(summary, pre); card.append(details); }
+        holder.append(card);
+      });
+    } catch (error) { holder.replaceChildren(); text(holder, "Comparison could not be refreshed: " + error.message); }
   }
   function initializeEvidenceUi() {
     uiTools = window.createDialinUiTools(document); supplemental = uiTools.supplementalInputs($("all-comparison-inputs"), "lab");
     $("export-shot-trace")?.addEventListener("click", () => { if (!importedShot) { setNotice("Import a saved shot first.", true); return; } const blob = new Blob([JSON.stringify({shot: importedShot, feedback: currentImportedFeedback()}, null, 2)], {type: "application/json"}), link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "analysed-shot-and-feedback.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0); });
     $("shot-trace-import")?.addEventListener("change", importShotTrace); $("clear-shot-trace")?.addEventListener("click", clearImportedTrace); $("actual-shot-clock")?.addEventListener("change", useImportedClock); $("actual-shot-time")?.addEventListener("input", invalidateAssistant); $("compare-all-lab")?.addEventListener("click", compareAllCalculators);
+    $("all-comparison-inputs")?.addEventListener("change", compareAllCalculators);
+    $("comparison-source")?.addEventListener("change", compareAllCalculators);
     $("manual-stop-confirmed")?.addEventListener("change", invalidateAssistant);
     ["taste-temperature", "taste-minutes", "assist-overall"].forEach(id => $(id)?.addEventListener("input", invalidateAssistant));
     if ($("profile-picker")) fetch("../data/decent-profiles.json").then(response => { if (!response.ok) throw new Error("Profile references unavailable"); return response.json(); }).then(catalog => uiTools.profilePicker($("profile-picker"), catalog)).catch(error => text($("profile-picker"), error.message));
@@ -474,13 +597,14 @@
     return value != null && String(value).trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
   }
   function clearSimpleShots() {
-    simpleShots = []; simpleProposal = null;
+    simpleShots = []; simpleProposal = null; simpleEditingShot = false; simpleComparisonStale = false;
     $("simple-history")?.replaceChildren();
     if ($("simple-advice")) text($("simple-advice"), "Brew a coffee and enter its time and taste first.");
     if ($("simple-continue")) $("simple-continue").disabled = true;
     if ($("simple-time")) $("simple-time").value = "";
     if ($("simple-taste")) $("simple-taste").value = "";
     if ($("simple-clock-confirmed")) $("simple-clock-confirmed").checked = false;
+    compareAllCalculators();
   }
   function clearSimpleSetup() {
     simplePractice = false;
@@ -499,7 +623,7 @@
     text($("simple-brew-summary"), (simplePractice ? "Fictional practice · " : "") + c.bean + ": " + c.dose + " g coffee, " + c.yield + " g in your cup" + (dial == null ? ". Read your grinder setting before brewing." : ", grinder at " + dial + " " + unit + "."));
   }
   function invalidateSimpleAdvice() {
-    simpleProposal = null;
+    simpleProposal = null; simpleComparisonStale = simpleEditingShot; compareAllCalculators();
     if ($("simple-continue")) $("simple-continue").disabled = true;
     if ($("simple-advice")) text($("simple-advice"), "Your inputs changed. Enter this shot again to get a fresh next step.");
   }
@@ -514,6 +638,7 @@
     if ((temperature != null && (temperature < 0 || temperature > 150)) || (minutes != null && (minutes < 0 || minutes > 10080))) return fail("Check the optional temperature and tasting time.");
     const profile = {"DF54": "df54", "DF64": "df64_gen1", "DF64 Gen 1": "df64_gen1", "DF64 Gen 2": "df64_gen2", "E64 WS": "e64ws"}[c.grinder];
     const step = simpleNumber("simple-step"), sign = Number($("simple-finer").value), confirmed = $("simple-confirm-dial").checked && step > 0 && [-1, 1].includes(sign);
+    let manualInput = null;
     let action = "Keep the grinder at " + current + " " + simpleUnit() + ".", why, result = null;
     if (!$("simple-clock-confirmed").checked) why = "Repeat this recipe, timing from pump start and stopping at the target cup weight. We need the same timing method before comparing shots.";
     else if (!$("simple-pressure-confirmed").checked) why = "Check the recipe on your machine first. A programmed flow target can change the meaning of shot time, so time alone cannot tell us to move the dial.";
@@ -522,7 +647,8 @@
     else if (!profile) why = "This grinder does not have a supported small-step rule here yet. Keep this measured shot as your starting point; use the grinder’s own adjustment guide.";
     else {
       try {
-        result = algorithms.recommendManual({profile, currentDial: current, actualTimeSec: actual, targetTimeSec: c.target, toleranceSec: c.tolerance, flavor: taste, ...(profile === "e64ws" ? {settingUnit: "micrometres"} : {}), ...(confirmed ? {...(profile === "e64ws" ? {stepNative: step} : {stepMarks: step}), numericFinerDelta: sign} : {})});
+        manualInput = {profile, currentDial: current, actualTimeSec: actual, targetTimeSec: c.target, toleranceSec: c.tolerance, flavor: taste, ...(profile === "e64ws" ? {settingUnit: "micrometres"} : {}), ...(confirmed ? {...(profile === "e64ws" ? {stepNative: step} : {stepMarks: step}), numericFinerDelta: sign} : {})};
+        result = algorithms.recommendManual(manualInput);
       } catch (error) { return fail("Check your grinder setting: " + error.message); }
       if (taste === "balanced") why = "You like this coffee. Repeat the same recipe and setting; you do not need to chase the timer.";
       else if (result.direction === "none") why = "The time and taste do not point to the same change. Repeat the same recipe and taste again once it has cooled.";
@@ -540,8 +666,14 @@
     if (result) { const details = document.createElement("details"), summary = document.createElement("summary"), explanation = document.createElement("p"); text(summary, "Why this suggestion?"); text(explanation, (result.reasons || []).join(". ") + ". This is a cautious taste experiment using the small step you confirmed, not a measured extraction diagnosis or a prediction of your grinder’s response."); details.append(summary, explanation); holder.append(details); }
     if (simplePractice) { const note = document.createElement("p"); note.className = "hint"; text(note, "Practice only: these are fictional shot times and a fictional checked dial. They do not predict your grinder’s response."); holder.append(note); }
     if (result?.proposedDial != null) { const note = document.createElement("p"); note.className = "hint"; text(note, "Move the dial yourself, following your grinder’s adjustment instructions. This page cannot move it."); holder.append(note); }
-    const shot = {setting: current, time: actual, taste, temperature, minutes, practice: simplePractice}; simpleShots.push(shot);
-    const entry = document.createElement("li"); text(entry, (simplePractice ? "Practice " : "Shot ") + simpleShots.length + " · " + current + " " + simpleUnit() + " · " + actual + " s · " + ($("simple-taste").selectedOptions?.[0]?.textContent || taste || "not tasted")); $("simple-history").append(entry);
+    let coordinate = null;
+    try { const normalized = algorithms.normalizeGrinderSetting({model: c.grinder, value: current, burrIdentity: c.burrs, calibrationEpoch: c.calibration, grinderId: c.grinderId, calibration: dialCalibration}); if (normalized.status === "normalized") coordinate = normalized.algorithm.ddDum; } catch (_) { /* The manual next step remains available without a research calibration. */ }
+    const shot = {setting: current, time: actual, taste, temperature, minutes, practice: simplePractice, target: c.target, tolerance: c.tolerance, clockConfirmed: $("simple-clock-confirmed").checked, pressureConfirmed: $("simple-pressure-confirmed").checked, coordinate, manualInput, action, why};
+    if (simpleEditingShot) simpleShots[simpleShots.length - 1] = shot; else simpleShots.push(shot);
+    simpleEditingShot = true; simpleComparisonStale = false;
+    $("simple-history").replaceChildren();
+    simpleShots.forEach((saved, index) => { const entry = document.createElement("li"); text(entry, (saved.practice ? "Practice " : "Shot ") + (index + 1) + " · " + saved.setting + " " + simpleUnit() + " · " + saved.time + " s · " + (saved.taste || "not tasted")); $("simple-history").append(entry); });
+    compareAllCalculators();
     $("simple-continue").disabled = false; text($("simple-brew-status"), ""); setNotice("Shot recorded. Your next step is below."); navigateSimple(4);
   }
   function initializeSimple() {
@@ -550,7 +682,7 @@
     ["simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes"].forEach(id => $(id).addEventListener("change", () => { invalidateSimpleAdvice(); renderSimpleRecipe(); }));
     $("simple-continue").addEventListener("click", () => {
       if (simpleProposal == null) return;
-      $("simple-current-dial").value = String(simpleProposal); simpleProposal = null;
+      $("simple-current-dial").value = String(simpleProposal); simpleProposal = null; simpleEditingShot = false;
       $("simple-time").value = ""; $("simple-taste").value = ""; $("simple-clock-confirmed").checked = false;
       $("simple-temperature").value = ""; $("simple-minutes").value = "";
       $("simple-continue").disabled = true; setNotice("Use the new setting, then brew and taste again."); renderSimpleRecipe(); navigateSimple(3);

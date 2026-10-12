@@ -156,8 +156,15 @@ test('D-Flow profile uses actual controller gating instead of generic time advic
 
 test('all supporting calculators use enabled explicit measurements', async ({page}) => {
   await seed(page);await step(page,4);
+  await page.getByText('Add independent calculator measurements',{exact:true}).click();
   const inputs={effectiveDd:{grindDdDum:630,grindDurationMs:3000,effectiveBaseline:63,residue:0},grindTime:{recipeDdUm:63,targetDdDum:650,recipeTimeMs:3000},inverseRegression:{x1:50,y1:20,x2:60,y2:30,targetSec:25},proposedDd:{dose:18},manual:{targetTimeSec:28,actualTimeSec:24,currentDial:20,stepMarks:1}};
-  for(const [name, values] of Object.entries(inputs)){const details=page.locator('#all-comparison-inputs details').filter({has:page.locator(`#lab-${name}-enabled`)});await details.locator('summary').click();await page.locator(`#lab-${name}-enabled`).check();for(const [key,value] of Object.entries(values))await page.locator(`#lab-${name}-${key}`).fill(String(value));}
+  for(const [name, values] of Object.entries(inputs)) {
+    const details=page.locator('#all-comparison-inputs details').filter({has:page.locator(`#lab-${name}-enabled`)});
+    await details.locator('summary').press('Enter');
+    await expect(details).toHaveJSProperty('open',true);
+    await page.locator(`#lab-${name}-enabled`).check();
+    for(const [key,value] of Object.entries(values))await page.locator(`#lab-${name}-${key}`).fill(String(value));
+  }
   await page.locator('#lab-grindTime-mode').selectOption('3');await page.locator('#lab-manual-numericFinerDelta').selectOption('-1');await page.locator('#lab-manual-flavor').selectOption('too sour');
   await page.locator('#compare-all-lab').click();await expect(page.locator('#all-comparison-results article')).toHaveCount(10);
   await expect(page.locator('#all-comparison-results h3')).toHaveText(['GbS1 · computed','GbS2 · computed','GbS3 · computed','GbS4 · computed','DdEff · computed','effectiveDd · computed','grindTime · computed','inverseRegression · computed','proposedDd · computed','manual · computed']);
@@ -185,6 +192,7 @@ test('grinder reference failure is visible in Simple mode and retry preserves th
 });
 
 test('decision gallery opens every diagram and fits mobile without broken images', async ({page}) => {
+  test.setTimeout(120000); // Opening every diagram and loading every SVG is a gallery-wide check.
   const diagramCount = (await fs.readdir('docs/decision-trees')).filter(name=>name.endsWith('.mmd')).length;
   await page.goto('/docs/decision-trees/');await expect(page.locator('.card')).toHaveCount(diagramCount);
   await page.setViewportSize({width:320,height:900});
@@ -194,4 +202,44 @@ test('decision gallery opens every diagram and fits mobile without broken images
     await expect.poll(()=>image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   }
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('imported comparisons refresh, enforce pump clock and withhold mismatched native conversion', async ({page, request}) => {
+  const state=await request.get('/__test/state').then(r=>r.json()); await page.goto(lab); await step(page,3);
+  await page.locator('#shot-trace-import').setInputFiles(file('shot.json',state.shots[0])); await step(page,4);
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','computed');
+  await expect(card).toContainText('Native conversion is withheld'); await expect(card).not.toContainText('marks');
+  await step(page,3); await page.locator('#actual-shot-clock').selectOption('pouring'); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('pump-start time');
+  await step(page,3); await page.locator('#shot-trace-import').setInputFiles(file('flow.json',state.shots[1])); await step(page,4); await expect(card).toContainText('flow control');
+  await step(page,3); await page.locator('#clear-shot-trace').click(); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable');
+});
+test('imported aborted shots and unconfirmed manual stops cannot provide timing advice', async ({page,request}) => {
+  const state=await request.get('/__test/state').then(r=>r.json()); const shot=state.shots[0]; await page.goto(lab); await step(page,3);
+  shot.finalStopReason='error'; await page.locator('#shot-trace-import').setInputFiles(file('error.json',shot)); await step(page,4);
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('error or disconnect');
+  await step(page,3); shot.finalStopReason='appStop'; await page.locator('#shot-trace-import').setInputFiles(file('manual.json',shot)); await step(page,4); await expect(card).toContainText('manually stopped');
+  await step(page,3); await page.locator('#manual-stop-confirmed').check(); await step(page,4); await expect(card).toHaveAttribute('data-status','computed');
+});
+
+test('saved pouring feedback and object stop reasons invalidate imported pump comparisons', async ({page,request}) => {
+  const state=await request.get('/__test/state').then(r=>r.json()); await page.goto(lab); await step(page,3);
+  await page.locator('#shot-trace-import').setInputFiles(file('feedback.json',{shot:state.shots[0],feedback:{brewTimeSec:25,brewTimeClock:'pouring'}})); await step(page,4);
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('pump-start time');
+  await step(page,3); state.shots[0].finalStopReason={name:'error'}; await page.locator('#shot-trace-import').setInputFiles(file('object-stop.json',state.shots[0])); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(card).toContainText('error or disconnect');
+});
+test('scenario import clears old recorded coffee and owner-calibrated DF64 uses actual marks', async ({page}) => {
+  await seed(page); await step(page,4); const scenario=await downloadJSON(page,()=>page.locator('#export').click());
+  scenario.setup.dialCalibration={model:'DF64 Gen 2',burrIdentity:scenario.setup.burrs,calibrationEpoch:scenario.setup.calibration,grinderId:scenario.setup.grinderId,dialMin:0,dialMax:90,dialA:0,ddDumA:300,dialB:90,ddDumB:1200};
+  await page.locator('#import').setInputFiles(file('calibrated.json',scenario));
+  await expect(page.locator('#notice')).toContainText('Scenario imported and replayed safely');
+  await page.locator('#view-mode').selectOption('simple'); await step(page,1);
+  await page.locator('#simple-current-dial').fill('20'); await page.locator('#simple-dial-setup summary').click(); await page.locator('#simple-step').fill('0.5'); await page.locator('#simple-finer').selectOption('-1'); await page.locator('#simple-confirm-dial').check();
+  await step(page,3); await page.locator('#simple-time').fill('22'); await page.locator('#simple-taste').selectOption('too sour'); await page.locator('#simple-clock-confirmed').check(); await page.locator('#simple-pressure-confirmed').check(); await page.locator('#simple-record').click();
+  const card=page.locator('#all-comparison-results article[data-algorithm="GbS2"]'); await expect(card).toHaveAttribute('data-status','computed'); await expect(card).toContainText('marks'); expect(JSON.parse(await card.locator('pre').textContent()).case.input.setpointDdDum).toBe(500);
+  await page.locator('#view-mode').selectOption('expert');
+  const updatedScenario=await downloadJSON(page,()=>page.locator('#export').click());
+  await page.locator('#import').setInputFiles(file('new-coffee.json',{...updatedScenario,setup:{...updatedScenario.setup,bean:'Different coffee'}}));
+  await expect(page.locator('#bean')).toHaveValue('Different coffee');
+  await expect(page.locator('#simple-history li')).toHaveCount(0);
+  await page.locator('#view-mode').selectOption('simple'); await step(page,4); await expect(card).toHaveAttribute('data-status','unavailable'); await expect(page.locator('#simple-history li')).toHaveCount(0); await expect(page.locator('#all-comparison-context')).not.toContainText('Recorded shot 1');
 });

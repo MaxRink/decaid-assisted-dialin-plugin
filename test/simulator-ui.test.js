@@ -46,7 +46,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   const ids = [
     "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
     "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
-    "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
+    "view-mode", "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "all-comparison-context", "comparison-source", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
   ];
   const elements = new Map(ids.map((id) => [id, new Element("div", id)]));
   ["algorithm", "grinder", "species", "roast", "assist-profile", "assist-taste", "helper", "theme"].forEach((id) => { elements.get(id).tagName = "SELECT"; });
@@ -420,7 +420,7 @@ test("profile browser exposes all stock and supplemental references without repl
 });
 
 test("structured supplemental inputs compute all ten isolated algorithms", () => {
-  const ui = uiFixture(); ui.elements.get("next").click();
+  const ui = uiFixture(); ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change"); ui.elements.get("next").click();
   const values = {
     effectiveDd: {grindDdDum: 500, grindDurationMs: 3000, effectiveBaseline: 50, residue: 50},
     grindTime: {mode: 3, recipeDdUm: 50, targetDdDum: 500, recipeTimeMs: 3000},
@@ -434,7 +434,7 @@ test("structured supplemental inputs compute all ten isolated algorithms", () =>
   }
   ui.elements.get("compare-all-lab").click();
   const rows = ui.elements.get("all-comparison-results").children;
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 10, ui.elements.get("all-comparison-results").textContent);
   for (const row of rows) assert.match(row.children[0].textContent, /computed$/, row.textContent);
 });
 
@@ -447,6 +447,7 @@ test("reset fences an in-flight simulator suggestion", async () => {
 
 test("manual comparison accepts the selectable adjustment intents and retains nonactionable results", () => {
   const ui = uiFixture(), field = key => ui.context.document.getElementById("lab-manual-" + key);
+  ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
   field("enabled").checked = true; field("enabled").dispatch("change");
   for (const [key, value] of Object.entries({profile: "df64_gen2", targetTimeSec: 28, actualTimeSec: 28, currentDial: 20, stepMarks: 1, numericFinerDelta: "-1"})) field(key).value = String(value);
   const options = field("flavor").children.map(node => node.value);
@@ -455,7 +456,7 @@ test("manual comparison accepts the selectable adjustment intents and retains no
     ui.elements.get("compare-all-lab").click();
     const row = ui.elements.get("all-comparison-results").children.find(node => node.children[0].textContent.startsWith("manual ·"));
     assert.match(row.children[0].textContent, /computed$/);
-    const result = JSON.parse(row.children[2].children[1].textContent).result;
+    const result = JSON.parse(row.children.find(node => node.tagName === "DETAILS").children[1].textContent).result;
     assert.equal(result.direction, direction, flavor); assert.equal(result.proposedDial, proposedDial, flavor);
     if (["weak", "channeling"].includes(flavor)) assert.match(result.reasons.join(" "), /not.*used|not state a recognized/);
   }
@@ -573,4 +574,88 @@ test("unavailable coffee and grinder references show retry and recover without l
   assert.equal(ui.elements.get("grinder").value, "DF64 Gen 1", "retry retains the current grinder choice");
   assert.equal(ui.elements.get("grinder").children.length, 16);
   assert.equal(ui.elements.get("shots").children.length, 1);
+});
+
+function comparisonCard(ui, name) {
+  return ui.elements.get("all-comparison-results").children.find(node => node.attributes["data-algorithm"] === name);
+}
+function comparisonValue(ui, name) {
+  return JSON.parse(comparisonCard(ui, name).children.find(node => node.tagName === "DETAILS").children[1].textContent);
+}
+function openComparisonShot(ui, shot) {
+  const value = JSON.stringify(shot);
+  ui.elements.get("shot-trace-import").dispatch("change", {target: {files: [{size: value.length, text: value}]}});
+}
+function comparisonShot() {
+  const timestamp = "2026-10-11T08:00:00Z";
+  return {id: "comparison", timestamp, workflow: {profile: {steps: [{pump: "pressure", pressure: 9}]}, context: {grinderSetting: "600", extras: {grinderSettingUnit: "deci-micrometre"}}}, measurements: require("./shot-fixtures").timedMeasurements(timestamp, 22)};
+}
+
+test("research timing models retain untasted shots while manual advice waits for taste", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60"; field("pressure-confirmed").checked = true;
+  for (const taste of ["", "weak", "channeling"]) {
+    field("time").value = "22"; field("clock-confirmed").checked = true; field("taste").value = taste; field("record").click();
+    for (const name of ["GbS1", "GbS2", "GbS3", "GbS4"]) assert.equal(comparisonCard(ui, name).attributes["data-status"], "computed");
+    assert.equal(comparisonCard(ui, "manual").attributes["data-status"], "unavailable");
+    assert.equal(comparisonValue(ui, "GbS2").case.state.history.length, ["", "weak", "channeling"].indexOf(taste));
+    field("continue").click();
+  }
+});
+
+test("measurement sequence advances without clock, pressure or taste but still requires a coordinate", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60";
+  for (let index = 0; index < 7; index++) {
+    field("time").value = "22"; field("record").click();
+    assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "unavailable");
+    assert.equal(comparisonValue(ui, "DdEff").result.returnedDdDum, index < 6 ? 600 : 400);
+    field("continue").click();
+  }
+  ui.elements.get("grinder").value = "DF64 Gen 2"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "20"; field("time").value = "22"; field("record").click();
+  assert.equal(comparisonCard(ui, "DdEff").attributes["data-status"], "unavailable");
+});
+
+test("unknown imported extraction mode blocks timing models but not the coordinate measurement plan", () => {
+  const ui = uiFixture(); ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
+  const shot = comparisonShot(); delete shot.workflow.profile;
+  openComparisonShot(ui, shot);
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "unavailable");
+  assert.match(comparisonCard(ui, "GbS2").textContent, /Unknown control mode/);
+  assert.equal(comparisonValue(ui, "DdEff").result.returnedDdDum, 600);
+  shot.workflow.profile = {steps: [{pump: "pressure", pressure: 9}]}; openComparisonShot(ui, shot);
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "computed");
+  ui.elements.get("actual-shot-clock").value = "recording"; ui.elements.get("actual-shot-clock").dispatch("change");
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "unavailable");
+  assert.equal(comparisonValue(ui, "DdEff").result.returnedDdDum, 600);
+});
+
+test("imported native mapping requires exact individual grinder, model, burr and epoch matches", () => {
+  const ui = uiFixture(); ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
+  ui.elements.get("export").click(); const setup = JSON.parse(ui.downloads.at(-1).parts.join("")).setup;
+  const shot = comparisonShot(); Object.assign(shot.workflow.context, {grinderId: setup.grinderId, grinderModel: setup.grinder, grinderBurrs: setup.burrs});
+  Object.assign(shot.workflow.context.extras, {grinderInstanceId: setup.grinderId, calibrationEpoch: setup.calibration});
+  openComparisonShot(ui, shot);
+  assert.match(comparisonCard(ui, "GbS2").textContent, /Timing model returns: .* micrometres/);
+  assert.doesNotMatch(comparisonCard(ui, "GbS2").textContent, /Native conversion is withheld/);
+  for (const [container, key] of [[shot.workflow.context,"grinderId"], [shot.workflow.context,"grinderModel"], [shot.workflow.context,"grinderBurrs"], [shot.workflow.context.extras,"grinderInstanceId"], [shot.workflow.context.extras,"calibrationEpoch"]]) {
+    const original = container[key];
+    for (const value of ["", "different"]) { container[key] = value; openComparisonShot(ui, shot); assert.match(comparisonCard(ui, "GbS2").textContent, /Native conversion is withheld/, key); }
+    container[key] = original;
+  }
+});
+
+test("Simple mode never borrows an imported expert scenario as recorded coffee", () => {
+  const ui = uiFixture(); ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
+  ui.elements.get("next").click(); ui.elements.get("export").click();
+  const scenario = ui.downloads.at(-1).parts.join("");
+  ui.elements.get("import").dispatch("change", {target: {files: [{size: scenario.length, text: scenario}]}});
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "computed");
+  ui.elements.get("view-mode").value = "simple"; ui.elements.get("view-mode").dispatch("change");
+  for (const name of ["GbS1", "GbS2", "GbS3", "GbS4", "DdEff", "manual"]) assert.equal(comparisonCard(ui, name).attributes["data-status"], "unavailable");
+  assert.equal(ui.elements.get("simple-history").children.length, 0);
 });
