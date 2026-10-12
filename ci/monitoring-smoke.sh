@@ -10,6 +10,12 @@ monitor_prom="$monitor_id-prometheus"
 monitor_grafana="$monitor_id-grafana"
 monitor_password=$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))')
 cleanup() {
+  monitor_exit=$?
+  if [ "$monitor_exit" -ne 0 ]; then
+    docker logs --tail 40 "$monitor_grafana" 2>&1 || true
+    docker logs --tail 20 "$monitor_prom" 2>&1 || true
+    docker logs --tail 20 "$monitor_collector" 2>&1 || true
+  fi
   docker rm -f -v "$monitor_grafana" "$monitor_prom" "$monitor_collector" >/dev/null 2>&1 || true
   docker network rm "$monitor_network" >/dev/null 2>&1 || true
   docker image rm "$monitor_image" >/dev/null 2>&1 || true

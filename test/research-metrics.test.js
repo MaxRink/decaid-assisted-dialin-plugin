@@ -141,3 +141,29 @@ test('series budget withholds the whole research snapshot instead of growing mem
   assert.equal(sum(restored, 'decaid_research_metrics_available'), 1);
   assert.equal(sum(restored, 'decaid_research_measurement_count', {quantity:'machine_flow_ml_per_second'}), 1);
 });
+
+test('private metrics rejects foreign, ambiguous and wrong-port Hosts without relying on Origin', async t => {
+  const net = require('node:net');
+  const f = await fixture(t); const port = f.server.metricsServer.address().port;
+  const request = host => new Promise((resolve, reject) => {
+    const socket = net.createConnection({host:'127.0.0.1',port});
+    let response = ''; socket.setEncoding('utf8'); socket.setTimeout(5000, () => socket.destroy(new Error('Metrics Host probe timed out')));
+    socket.on('connect', () => {
+      const values = host === undefined ? [] : Array.isArray(host) ? host : [host];
+      socket.write('GET /metrics HTTP/1.1\r\n' + values.map(value => 'Host: ' + value + '\r\n').join('') + 'Connection: close\r\n\r\n');
+    });
+    socket.on('data', part => {response += part;}); socket.on('error', reject);
+    socket.on('end', () => resolve({status:Number(/^HTTP\/1\.[01] (\d+)/.exec(response)?.[1]),body:response.split('\r\n\r\n').slice(1).join('\r\n\r\n')}));
+  });
+  for (const name of ['localhost','LOCALHOST','127.0.0.1','[::1]','collector']) {
+    const response = await request(name + ':' + port);
+    assert.equal(response.status, 200, name); assert.match(response.body, /decaid_research_metrics_available 1/);
+  }
+  for (const host of ['foreign.example:' + port, 'localhost.evil:' + port, '127.0.0.1.evil:' + port,
+    'collector.evil:' + port, 'localhost.:' + port, 'localhost:' + (port === 65535 ? 65534 : port + 1),
+    'collector', 'foreign.example@localhost:' + port, ['localhost:' + port, 'foreign.example:' + port], undefined]) {
+    const response = await request(host);
+    assert.ok([400,403].includes(response.status), String(host));
+    assert.equal(response.body.includes('decaid_research_'), false);
+  }
+});

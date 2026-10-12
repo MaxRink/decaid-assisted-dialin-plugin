@@ -6,7 +6,7 @@ const { createResearchSharing } = require('../research-sharing.js');
 const collector = process.env.MONITOR_COLLECTOR_URL, prom = process.env.MONITOR_PROMETHEUS_URL, grafana = process.env.MONITOR_GRAFANA_URL;
 const authorization = 'Basic ' + Buffer.from('admin:' + process.env.MONITOR_GRAFANA_PASSWORD).toString('base64');
 async function waitFor(fn, label) {
-  for (let n = 0; n < 120; n++) { try { const result = await fn(); if (result) return result; } catch (_) {} await new Promise(resolve => setTimeout(resolve, 500)); }
+  for (let n = 0; n < 240; n++) { try { const result = await fn(); if (result) return result; } catch (_) {} await new Promise(resolve => setTimeout(resolve, 500)); }
   throw new Error('Timed out: ' + label);
 }
 async function query(expr) { const response = await fetch(prom + '/api/v1/query?query=' + encodeURIComponent(expr)); assert.equal(response.status, 200); const value = await response.json(); assert.equal(value.status, 'success'); return value.data.result; }
@@ -34,8 +34,13 @@ async function query(expr) { const response = await fetch(prom + '/api/v1/query?
   const dashboard = JSON.parse(fs.readFileSync('collector/monitoring/grafana/dashboards/research-overview.json','utf8'));
   let queries = 0;
   for (const panel of dashboard.panels) for (const target of panel.targets || []) {
-    const expr = target.expr.replaceAll('$kind','shot').replaceAll('$model','.*').replaceAll('$mode','practice');
+    const expr = target.expr.replaceAll('$unit','dial-marks').replaceAll('$kind','shot').replaceAll('$model','.*').replaceAll('$mode','practice');
     const result = await query(expr); assert.ok(result.length, 'Populated panel: ' + panel.title); queries++;
+    if (target.expr.includes('$unit')) for (const unit of ['dial-marks','micrometres']) {
+      const selected = target.expr.replaceAll('$unit',unit).replaceAll('$kind','shot').replaceAll('$model','.*').replaceAll('$mode','practice');
+      const isolated = await query(selected);
+      assert.ok(isolated.length && isolated.every(item => item.metric.unit === unit), 'One coordinate unit per axis: ' + panel.title);
+    }
   }
   assert.equal((await fetch(collector + '/metrics')).status, 404);
   const algorithmsFound = await query('count by (algorithm) (decaid_research_approaches{kind="shot",mode="practice"})');

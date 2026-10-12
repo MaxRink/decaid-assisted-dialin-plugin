@@ -74,6 +74,18 @@
           "text": "All",
           "value": "$__all"
         }
+      },
+      {
+        "name": "unit",
+        "label": "Coordinate unit (native panels)",
+        "type": "custom",
+        "query": "dial-marks,micrometres,deci-micrometre,clicks,total-clicks,numbered-settings,micro-ticks,printed-decimal,dial-positions,\u00b5m,\u00b5m (DDD readout only),dial marks,numbered settings,dial micro-ticks,clicks from zero,dial positions",
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "text": "dial-marks",
+          "value": "dial-marks"
+        }
       }
     ]
   },
@@ -955,7 +967,7 @@
     },
     {
       "id": 14,
-      "title": "Proposed native delta \u2014 model, unit and provenance stay separate",
+      "title": "Proposed native delta \u2014 $unit",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
@@ -1000,7 +1012,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "decaid_research_recommendation_delta_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\"} / decaid_research_recommendation_delta_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\"}",
+          "expr": "decaid_research_recommendation_delta_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",unit=\"$unit\"} / decaid_research_recommendation_delta_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",unit=\"$unit\"}",
           "legendFormat": "{{algorithm}} \u00b7 {{model}} \u00b7 {{unit}} \u00b7 {{coordinate_status}}",
           "range": true,
           "instant": false,
@@ -1013,7 +1025,7 @@
     },
     {
       "id": 15,
-      "title": "Grinder settings \u2014 labeled coordinates",
+      "title": "Grinder settings \u2014 $unit",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -1058,7 +1070,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "decaid_research_grinder_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"setting\"} / decaid_research_grinder_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",quantity=\"setting\"}",
+          "expr": "decaid_research_grinder_sum{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",unit=\"$unit\",quantity=\"setting\"} / decaid_research_grinder_count{kind=\"$kind\",mode=~\"$mode\",model=~\"$model\",unit=\"$unit\",quantity=\"setting\"}",
           "legendFormat": "{{model}} \u00b7 {{unit}} \u00b7 {{mode}}",
           "range": true,
           "instant": false,

@@ -154,6 +154,15 @@ async function createCollector(options = {}) {
     // Separate listener: no metrics route is attached to public ingestion.
     const metricsServer = http.createServer({ maxHeaderSize: 8192, connectionsCheckingInterval: 1000 }, async (req, res) => {
       const headers = { "Content-Type": "text/plain; version=0.0.4; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+      // Origin alone is insufficient: a rebinding page can make a same-origin
+      // request without it. Accept only exact local/private scraper authorities.
+      const host = typeof req.headers.host === "string" ? req.headers.host.toLowerCase() : "";
+      const hostHeaders = req.rawHeaders.filter((_, index) => index % 2 === 0 && req.rawHeaders[index].toLowerCase() === "host").length;
+      const port = req.socket.localPort;
+      const names = ["localhost", "127.0.0.1", "[::1]", "collector"];
+      const allowedHosts = names.map(name => name + ":" + port);
+      if (port === 80) allowedHosts.push(...names);
+      if (hostHeaders !== 1 || !allowedHosts.includes(host)) { res.writeHead(403, headers); return res.end("Metrics host is not allowed\n"); }
       if (req.headers.origin) { res.writeHead(403, headers); return res.end("Browser access is disabled\n"); }
       if (req.method !== "GET" || req.url !== "/metrics") { res.writeHead(404, headers); return res.end("Not found\n"); }
       try {
