@@ -5,11 +5,14 @@ const destinations = [
   ['My grinder is missing', assisted, 'new-grinder.yml'],
   ['Report a problem', assisted, 'bug-report.yml'],
   ['Suggest an improvement', assisted, 'feature-request.yml'],
+  ['Report a security issue privately', assisted, null, '/security/advisories/new'],
+  ['Dial-in integration or mock-device report', assisted, 'protocol-mock-device.yml'],
   ['Correct a grinder fact or research source', assisted, 'source-correction.yml'],
   ['Correct a coffee catalogue or recipe entry', assisted, 'coffee-catalog-correction.yml'],
   ['Skale connection or scale readings', 'MaxRink/decaid-skale-plugin', 'bug-report.yml'],
   ['E64 WS connection or grinder controls', 'MaxRink/decaid-e64ws-plugin', 'bug-report.yml'],
-  ['E64 protocol or research findings', 'MaxRink/mahlkoenig-e64ws-local-research', 'protocol-mock-device.yml'],
+  ['E64 protocol or mock-device findings', 'MaxRink/mahlkoenig-e64ws-local-research', 'protocol-mock-device.yml'],
+  ['Correct E64 firmware research or source evidence', 'MaxRink/mahlkoenig-e64ws-local-research', 'source-correction.yml'],
   ['Decaid host or saved-shot problems', 'decentespresso/decaid', null],
   ['Streamline navigation or display problems', 'decentespresso/streamline-js', null],
 ];
@@ -21,11 +24,11 @@ test('help routes reach the right issue drafts without sending entered coffee de
   const help = page.getByRole('region', {name:'Help and contribute'});
   await expect(help.getByRole('navigation').getByRole('link')).toHaveCount(3);
   await page.locator('#help-more summary').click();
-  for (const [name, repo, template] of destinations) {
+  for (const [name, repo, template, path] of destinations) {
     const link = help.getByRole('link', {name, exact:true});
     const destination = new URL(await link.getAttribute('href'));
     expect(destination.origin).toBe('https://github.com');
-    expect(destination.pathname).toBe('/' + repo + '/issues/new' + (template ? '' : '/choose'));
+    expect(destination.pathname).toBe('/' + repo + (path || '/issues/new' + (template ? '' : '/choose')));
     expect([...destination.searchParams.entries()]).toEqual(template ? [['template', template]] : []);
     await expect(link).toHaveAttribute('target','_blank');
     await expect(link).toHaveAttribute('rel','noopener noreferrer');
@@ -39,6 +42,12 @@ test('help routes reach the right issue drafts without sending entered coffee de
   await expect(draft.getByRole('heading')).toHaveText('New grinder issue draft');
   await expect(page.locator('#bean')).toHaveValue('Private coffee & name?secret=1');
   await draft.close();
+  const privateOpened = page.waitForEvent('popup');
+  await help.getByRole('link', {name:'Report a security issue privately',exact:true}).click();
+  const privateDraft = await privateOpened;
+  await expect(privateDraft).toHaveURL('https://github.com/' + assisted + '/security/advisories/new');
+  await expect(page.locator('#bean')).toHaveValue('Private coffee & name?secret=1');
+  await privateDraft.close();
 });
 
 test('help stays readable at a narrow mobile width in both modes', async ({page}, info) => {
