@@ -2460,6 +2460,8 @@ function createPlugin(host, services) {
   let researchClient = null, researchWaiter = null, researchTimer = null;
   let researchSequence = 0, researchGeneration = 0, researchRetry = 30000;
   let researchError = null, researchBusy = false;
+  // Private comparison keys stay in plugin storage, never the exported records.
+  let researchSeries = { current: null, shots: [] };
   const researchCaptures = new Map();
   function researchStorage(type, state) {
     return new Promise((resolve, reject) => {
@@ -2473,7 +2475,7 @@ function createPlugin(host, services) {
         resolve(value) { clearTimeout(timeout); researchWaiter = null; resolve(value); },
         reject(error) { clearTimeout(timeout); researchWaiter = null; reject(error); } };
       try { host.storage({ type, key: RESEARCH_KEY,
-        ...(type === "write" ? { data: { key: RESEARCH_KEY, token, state } } : {}) }); }
+        ...(type === "write" ? { data: { key: RESEARCH_KEY, token, state, series: JSON.parse(JSON.stringify(researchSeries)) } } : {}) }); }
       catch (_) { researchWaiter.reject(new Error("research storage unavailable")); }
     });
   }
@@ -2488,6 +2490,14 @@ function createPlugin(host, services) {
         const stored = await researchStorage("read");
         if (stored == null) return null;
         if (stored.key !== RESEARCH_KEY || !stored.state) throw new Error("invalid research storage");
+        if (stored.series != null) {
+          const valid = item => item && typeof item.context === "string" && item.context.length <= 10000 && /^[a-f0-9]{32}$/.test(item.id);
+          if (!Array.isArray(stored.series.shots) || stored.series.shots.length > 200 ||
+              (stored.series.current != null && !valid(stored.series.current)) ||
+              stored.series.shots.some(item => !valid(item) || typeof item.key !== "string" || !item.key || item.key.length > 256))
+            throw new Error("invalid local research series");
+          researchSeries = stored.series;
+        }
         return stored.state;
       },
       save: state => {
@@ -2530,6 +2540,24 @@ function createPlugin(host, services) {
     } finally { if (epoch === sessionEpoch) researchBusy = false; }
     if (active && epoch === sessionEpoch) await scheduleResearch();
   }
+  function researchSeriesFor(shotId, context) {
+    // Link only shots with recorded bean, grinder and recipe identities. A dial
+    // change belongs in the same series; a different bean/recipe does not.
+    if (!context.beanBatchId || !context.grinderId || !context.profile || !(context.dose > 0) || !(context.yield > 0)) return undefined;
+    const comparison = JSON.stringify([context.beanBatchId, context.grinderId, context.grinderModel,
+      context.burrIdentity, context.calibrationEpoch, context.settingUnit, context.grinderRpm,
+      context.dose, context.yield, context.basket, context.profile, context.machineId, context.machineFlowCalibration]);
+    if (comparison.length > 10000) return undefined;
+    const prior = researchSeries.shots.find(item => item.key === shotId);
+    if (prior?.context === comparison) return prior.id;
+    if (researchSeries.current?.context !== comparison) {
+      const factory = services.researchSharing || createResearchSharing;
+      researchSeries.current = { context: comparison, id: factory().randomId() };
+    }
+    const item = { ...researchSeries.current, key: shotId };
+    researchSeries.shots = researchSeries.shots.filter(entry => entry.key !== shotId).concat([item]).slice(-200);
+    return item.id;
+  }
   async function captureResearchShot(shotId) {
     if (!active || typeof shotId !== "string" || !shotId || shotId.length > 256) return;
     if (!researchCaptures.has(shotId) && researchCaptures.size >= 100) { researchError = "Research capture is busy; this event was not archived."; return; }
@@ -2544,9 +2572,10 @@ function createPlugin(host, services) {
       const full = await fullShot(shotId), f = JSON.parse(JSON.stringify(feedback[shotId] || {}));
       const m = createBrewMetrics().analyze(full, f), c = historicalContext(full, f);
       if (!active || epoch !== sessionEpoch || generation !== researchGeneration || researchCaptures.get(shotId) !== capture) return;
-      const unit = { marks: "dial-marks", "dial-mark": "dial-marks", "dial-marks": "dial-marks", micrometres: "micrometres", "µm": "micrometres", "deci-micrometre": "deci-micrometre" }[c.settingUnit] || "unknown";
+      const unit = { marks: "dial-marks", "dial-mark": "dial-marks", "µm": "micrometres" }[c.settingUnit] || c.settingUnit || "unknown";
       const numericSetting = c.grinderSetting != null && String(c.grinderSetting).trim() !== "" ? Number(c.grinderSetting) : undefined;
       await client.capture({ source: "plugin", mode: "measured", kind: "shot",
+        researchSeries: researchSeriesFor(shotId, c),
         grinder: { model: c.grinderModel, settingUnit: unit, setting: numericSetting, rpm: c.grinderRpm },
         recipe: { controlMode: m.trace?.controlMode, targetDoseG: c.dose, targetYieldG: c.yield },
         measurements: { pumpTimeSec: m.timing?.pump?.durationSec, pouringTimeSec: m.timing?.pouring?.durationSec,
@@ -2555,6 +2584,7 @@ function createPlugin(host, services) {
           manualStopConfirmed: f.manualStopConfirmed, doseG: f.measuredBeanDose?.weightG ?? m.annotations?.actualDoseG,
           yieldG: m.scale?.finalMeasuredWeightG, meanPressureBar: m.machine?.pressure?.mean,
           meanMachineFlowMlPerSec: m.trace?.machineFlow?.mean, meanBeverageFlowGPerSec: m.trace?.beverageFlow?.mean,
+          meanMixTemperatureC: m.machine?.mixTemperature?.mean, meanGroupTemperatureC: m.machine?.groupTemperature?.mean,
           flowCoverageSec: m.trace?.machineFlow?.coverageSec },
         coffee: { species: c.beanType?.toLowerCase(), roast: c.roastLevel?.toLowerCase() },
         taste: { good: f.good, intent: { balanced: "balanced", sour: "too_sour", bitter: "too_bitter", astringent: "too_astringent", weak: "weak", channeling: "uneven_flow" }[f.taste],
@@ -2572,6 +2602,7 @@ function createPlugin(host, services) {
     if (request.method === "GET") return researchStatus();
     if (request.method === "DELETE") {
       researchGeneration++; stopResearchTimer();
+      researchSeries = { current: null, shots: [] };
       await client.clear(); researchError = null;
       return researchStatus();
     }
@@ -4240,7 +4271,7 @@ function createPlugin(host, services) {
 <style>[hidden]{display:none!important}fieldset{min-width:0}svg{width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}.native-grid{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}*,*:before,*:after{box-sizing:border-box}html{overflow-x:hidden}body{font:16px/1.5 system-ui;max-width:46rem;margin:2rem auto;padding:2rem 1rem;min-width:0;overflow-wrap:anywhere}button,input,select,textarea{font:inherit;padding:.5rem;max-width:100%;min-width:0}button,input,select{width:100%}button{width:auto}label{display:block;margin:.5rem 0;min-width:0}textarea{width:100%;min-height:9rem;overflow:auto}output{display:block;margin-top:1rem;white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%}form,details,#grinderManager,section{min-width:0;max-width:100%}img{max-width:100%;height:auto}a{overflow-wrap:anywhere}.setup-steps{display:flex;flex-wrap:wrap;gap:.45rem;margin:1rem 0}.setup-steps a{border:1px solid #999;border-radius:99px;padding:.3rem .6rem;text-decoration:none}.catalog-item,.comparison-item{border:1px solid #aaa;border-radius:.6rem;padding:.65rem;margin:.5rem 0}.catalog-item button{margin-top:.4rem}@media(min-width:38rem){label{display:grid;grid-template-columns:minmax(10rem,1fr) minmax(0,2fr);gap:.6rem;align-items:center}}</style>
 <h1>Assisted dial-in</h1>
 <details id="researchSharing"><summary>Research data choices</summary>
-<p>A local research archive is on by default; you can turn it off below. It keeps selected numeric brew measurements and fixed categories for future analysis. Remote sharing starts only after you enable it and confirm your own HTTPS collector. It excludes shot IDs, bean names, notes, device identities, raw traces and timestamps. Network requests still expose your address to the collector.</p>
+<p>A local research archive is on by default; you can turn it off below. It keeps selected numeric brew measurements and fixed categories for future analysis. Remote sharing starts only after you enable it and confirm your own HTTPS collector. Exports exclude shot IDs, bean names, notes, device identities, raw traces and timestamps. Random research keys link corrections and shots from the same bean, grinder and recipe; private context comparisons stay on this device. Network requests still expose your address to the collector.</p>
 <label><input id="researchLocal" type="checkbox"> Keep the local research archive</label>
 <label>Your research collector HTTPS endpoint<input id="researchEndpoint" type="url" placeholder="https://your-collector.example/v1/records" autocomplete="off"></label>
 <label><input id="researchHostLimits" type="checkbox"> I trust this collector and understand this host cannot prevent redirects or cancel an upload already sent.</label>
@@ -4474,6 +4505,7 @@ if(researchPanel){
       startStorage();
       if (services.researchSharing || typeof createResearchSharing === "function") {
         researchClient = null; researchError = null; researchRetry = 30000; researchBusy = false;
+        researchSeries = { current: null, shots: [] };
         void startResearch().ready.then(() => scheduleResearch()).catch(() => {});
       }
     },

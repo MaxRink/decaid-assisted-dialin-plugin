@@ -27,7 +27,7 @@ function fixture(t, {stored = new Map(), send = async (_, init) => reply({accept
       if (delayWrite && command.key === KEY) pendingWrites.push(acknowledge); else queueMicrotask(acknowledge);
     }
   }}, {fetch: async (url, init) => {
-    if (url.startsWith('http://127.0.0.1:8080/api/v1/shots/')) return readShot();
+    if (url.startsWith('http://127.0.0.1:8080/api/v1/shots/')) return readShot(url);
     if (url.startsWith('https://')) { posts.push({url,init:clone(init)}); return send(url,init); }
     throw new Error('unexpected fetch ' + url);
   }});
@@ -70,6 +70,7 @@ test('duplicate events coalesce and corrected feedback replaces the pending reco
   await f.request('POST',{operation:'retry'});
   assert.equal(f.posts.length,1);
   const batch=JSON.parse(f.posts[0].init.body);assert.equal(batch.records.length,1);assert.equal(batch.records[0].taste.intent,'balanced');
+  assert.equal(batch.records[0].taste.good,true);
   assert.deepEqual(Object.keys(f.posts[0].init.headers),['Content-Type']);assert.doesNotMatch(f.posts[0].init.body,/PRIVATE-|timestamp/);
 });
 test('offline queue survives reload; opting out clears queue but keeps local records',async t=>{
@@ -125,4 +126,54 @@ test('a late older shot fetch cannot replace a newer correction',async t=>{
   firstResolve(reply(clone(shot)));for(let i=0;i<10;i++)await tick();
   const exported=(await f.request('GET',null,'sharing-export')).body;
   assert.equal(exported.records[0].grinder.setting,55);
+});
+
+test('random series resets for changed bean, grinder or recipe; corrections and reload retain it without exporting private names',async t=>{
+  const stored=new Map(), shots=new Map();
+  const readShot=url=>reply(clone(shots.get(decodeURIComponent(url.split('/').pop()))));
+  const f=fixture(t,{stored,readShot});await enable(f);
+  const variants=[{}, {grinderSetting:'55'}, {beanBatchId:'PRIVATE-OTHER-BEAN'},
+    {beanBatchId:'PRIVATE-OTHER-BEAN',grinderId:'PRIVATE-OTHER-GRINDER'},
+    {beanBatchId:'PRIVATE-OTHER-BEAN',grinderId:'PRIVATE-OTHER-GRINDER',targetYield:40}];
+  for(let i=0;i<variants.length;i++){
+    const next=clone(shot);next.id='PRIVATE-SHOT-'+i;Object.assign(next.workflow.context,variants[i]);shots.set(next.id,next);
+    f.plugin.onEvent({name:'shotStored',payload:{id:next.id}});await captured(f,i+1);
+  }
+  const records=(await f.request('GET',null,'sharing-export')).body.records;
+  assert.match(records[0].researchSeries,/^[a-f0-9]{32}$/);
+  assert.equal(records[0].researchSeries,records[1].researchSeries);
+  for(let i=2;i<records.length;i++)assert.notEqual(records[i-1].researchSeries,records[i].researchSeries);
+  assert.doesNotMatch(JSON.stringify(records),/PRIVATE-|2026-10-12|beanBatchId|grinderId|shotOrdinal/);
+  await f.request('POST',{operation:'retry'});f.plugin.onUnload();
+  const next=fixture(t,{stored,readShot});await next.request();
+  next.plugin.onEvent({name:'shotUpdated',payload:{id:'PRIVATE-SHOT-0'}});
+  for(let i=0;i<10;i++)await tick();
+  assert.equal((await next.request()).body.queuedCount,0);
+  await next.request('POST',{shotId:'PRIVATE-SHOT-0',good:false,taste:'sour'},'feedback');
+  for(let i=0;i<30;i++){await tick();if((await next.request()).body.queuedCount===1)break;}
+  await next.request('POST',{operation:'retry'});
+  const amended=JSON.parse(next.posts[0].init.body).records[0];
+  assert.equal(amended.researchSeries,records[0].researchSeries);
+  assert.equal(amended.observationId,records[0].observationId);assert.equal(amended.revision,2);
+  assert.doesNotMatch(next.posts[0].init.body,/PRIVATE-/);
+  await next.request('DELETE');assert.deepEqual(stored.get(KEY).series,{current:null,shots:[]});
+});
+
+test('archive preserves supported grinder coordinates and available dose, flow and thermal measurements',async t=>{
+  let current;
+  const f=fixture(t,{readShot:()=>reply(clone(current))});
+  const units=['clicks','total-clicks','printed-decimal','numbered-settings','micro-ticks'];
+  for(let i=0;i<units.length;i++){
+    current=clone(shot);current.id='PRIVATE-UNIT-'+i;current.workflow.context.extras.grinderSettingUnit=units[i];
+    current.measurements.forEach(sample=>{sample.machine.mixTemperature=93;sample.machine.groupTemperature=91;});
+    f.plugin.onEvent({name:'shotStored',payload:{id:current.id}});await captured(f,i+1);
+  }
+  const records=(await f.request('GET',null,'sharing-export')).body.records;
+  assert.deepEqual(records.map(record=>record.grinder.settingUnit),units);
+  for(const record of records){
+    assert.equal(record.grinder.setting,50);assert.equal(record.measurements.doseG,18);
+    assert.equal(record.measurements.preinfusionSec,1);
+    assert.equal(record.measurements.meanPressureBar,9);assert.equal(record.measurements.meanMachineFlowMlPerSec,2);
+    assert.equal(record.measurements.meanMixTemperatureC,93);assert.equal(record.measurements.meanGroupTemperatureC,91);
+  }
 });
