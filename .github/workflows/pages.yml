@@ -30,7 +30,7 @@ jobs:
         env:
           VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$VALIDATED_SHA"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - run: python scripts/build-simulator.py
