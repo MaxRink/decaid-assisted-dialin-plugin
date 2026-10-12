@@ -69,6 +69,7 @@ async function load({
   currentProfile = profile,
 } = {}) {
   const events = [];
+  const storageByKey = new Map([["feedback.v1", stored]]);
   const fullById = new Map(shots.map((entry) => [entry.id, entry.full]));
   let plugin;
   let releaseFull;
@@ -85,14 +86,17 @@ async function load({
           () =>
             plugin.onEvent({
               name: "storageRead",
-              payload: { key: command.key, value: stored },
+              payload: { key: command.key, value: storageByKey.get(command.key) ?? null },
             }),
           0,
         );
       if (command.type === "write") {
-        events.push({ stored: command.data });
+        events.push({ key: command.key, stored: command.data });
         setTimeout(
-          () => plugin.onEvent({ name: "storageWrite", payload: command.data }),
+          () => {
+            storageByKey.set(command.key, command.data);
+            plugin.onEvent({ name: "storageWrite", payload: command.data });
+          },
           0,
         );
       }
@@ -297,7 +301,7 @@ test("good false feedback persists while ordinary good-shot lookup excludes it",
     body: { shotId: entries[0].id, good: false, taste: "sour" },
   });
   assert.equal(result.status, 200);
-  const stored = events.find((entry) => entry && entry.stored).stored;
+  const stored = events.find((entry) => entry?.key === "feedback.v1").stored;
   assert.equal(stored[entries[0].id].good, false);
   assert.equal(stored[entries[0].id].taste, "sour");
   const { body } = await suggest(plugin);
@@ -473,7 +477,7 @@ test("operator-confirmed timing survives reload alongside full-shot metrics", as
   for (const [index, entry] of entries.entries())
     await mark(first.plugin, entry.id, "sour", undefined, 20 + index * 2);
   const stored = first.events
-    .filter((entry) => entry && entry.stored)
+    .filter((entry) => entry?.key === "feedback.v1")
     .at(-1).stored;
   const second = await load({
     shots: entries,
@@ -531,7 +535,7 @@ test("missing native boundaries require an operator time on the matching clock",
   result = await suggest(plugin);
   assert.equal(result.body.status, "suggestion");
   assert.equal(result.body.evidence[0].timingProvenance, "operator-confirmed pump time");
-  const stored = events.filter(event => event.stored).at(-1).stored;
+  const stored = events.filter(event => event.key === "feedback.v1").at(-1).stored;
   assert.equal(stored.partial.brewTimeClock, "pump");
   const reloaded = await load({ shots: [entry], stored });
   assert.equal((await suggest(reloaded.plugin)).body.status, "suggestion");
@@ -569,7 +573,7 @@ test("manual stops require recipe completion confirmation without an invented yi
     const saved = await plugin.handleHttpRequest({ endpoint: "feedback", method: "POST",
       body: { shotId: entry.id, good: false, taste: "sour", manualStopConfirmed: true } });
     assert.equal(saved.status, 200);
-    const stored = events.filter(event => event.stored).at(-1).stored;
+    const stored = events.filter(event => event.key === "feedback.v1").at(-1).stored;
     assert.equal(stored[entry.id].manualStopConfirmed, true);
     const reloaded = await load({ shots: [entry], stored });
     const accepted = await suggest(reloaded.plugin);
