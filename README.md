@@ -27,8 +27,9 @@ workflow, profile or grinder command is sent.
 
 ## Install and use
 
-Install a ZIP artifact from a green GitHub Actions run, or enter this repository URL
-in Decaid's plugin installer. Enable the plugin, review its current-setup settings,
+Enter this repository URL in Decaid's plugin installer to install the latest
+[GitHub release](https://github.com/MaxRink/decaid-assisted-dialin-plugin/releases).
+For development, a ZIP artifact from a green Actions run is also available. Enable the plugin, review its current-setup settings,
 and open `http://127.0.0.1:8080/api/v1/plugins/assisted-dialin.reaplugin/ui`.
 Use **Load recent shots** to choose a saved brew. The HTML form records a good
 mark, taste feedback and optional notes. Enter submits
@@ -285,3 +286,21 @@ Golden vectors can be regenerated independently with `PYTHONPATH=/path/to/mahlko
 ### Grinder display units and calibration
 
 The [grinder dial guide](docs/GRINDER_DIALS.md) separates native micron displays, printed collar marks and multi-turn click counts from the research algorithms’ internal dD coordinate. The lab displays native values only after a documented unit conversion or explicitly scoped owner calibration. Matching control references include original offline illustrations and linked manufacturer photographs. The [photo rights audit](docs/GRINDER_PHOTOS.md) records all 16 models; photos only appear in the app when a reusable licence and attribution have been verified. Changing grinder, burr identity or calibration epoch invalidates a local dial mapping.
+
+## Releasing
+
+Keep `manifest.json`, `package.json` and the lockfile package version in sync.
+After reviewing a green main revision, push its matching `vX.Y.Z` tag. The release
+workflow verifies the tag, reruns the complete CI (including Playwright and the
+pinned host parser/runtime), and publishes exactly one ZIP. No release is
+published if any required job fails.
+
+`npm run package` builds a deterministic flat archive containing `manifest.json`,
+`plugin.js`, README and licence notices. Runtime reference data and the native UI
+are embedded in `plugin.js`; research documents, plots, simulator files and CI
+fixtures stay on GitHub/Pages. Package names follow the manifest version rather
+than a hardcoded version. Bump the version for every subsequent release so
+Decaid can offer an update.
+
+[Validation readiness and physical trial checklist](docs/VALIDATION_READINESS.md)
+tracks upstream dependencies and the evidence needed before physical claims.
