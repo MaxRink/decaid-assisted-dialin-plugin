@@ -17,7 +17,7 @@ async function setup(page, target = '28') {
   await page.locator('#simple-bound-min').fill('20');
   await page.locator('#simple-bound-max').fill('25');
   await page.locator('#simple-confirm-dial').check();
-  await step(page,2); await page.locator('#target').fill(target);
+  await step(page,2); await page.locator('#target').fill(target); await page.locator('#target').blur();
 }
 async function shot(page, setting, time, taste = 'too bitter') {
   await step(page,1); await expect(page.locator('#simple-current-dial')).toBeVisible(); await page.locator('#simple-current-dial').fill(String(setting));
