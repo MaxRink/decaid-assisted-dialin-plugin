@@ -156,7 +156,7 @@ test('D-Flow profile uses actual controller gating instead of generic time advic
 
 test('all supporting calculators use enabled explicit measurements', async ({page}) => {
   await seed(page);await step(page,4);
-  await page.getByText('Add independent calculator measurements',{exact:true}).click();
+  await page.getByText('Add independent research measurements (optional)',{exact:true}).click();
   const inputs={effectiveDd:{grindDdDum:630,grindDurationMs:3000,effectiveBaseline:63,residue:0},grindTime:{recipeDdUm:63,targetDdDum:650,recipeTimeMs:3000},inverseRegression:{x1:50,y1:20,x2:60,y2:30,targetSec:25},proposedDd:{dose:18},manual:{targetTimeSec:28,actualTimeSec:24,currentDial:20,stepMarks:1}};
   for(const [name, values] of Object.entries(inputs)) {
     const details=page.locator('#all-comparison-inputs details').filter({has:page.locator(`#lab-${name}-enabled`)});

@@ -51,7 +51,7 @@ test('first shot asks for confirmed dial movement instead of guessing numbers', 
 test('E64 WS gives owner-confirmed steps in native micrometres', async ({page}) => {
   await setup(page, 'E64 WS');await step(page,1);
   await page.locator('#simple-current-dial').fill('63');
-  await page.locator('#simple-step').fill('1');await step(page,3);
+  await page.locator('#simple-step').fill('1');await page.locator('#simple-confirm-dial').check();await step(page,3);
   await shot(page,22,'too sour');
   await expect(page.locator('#simple-advice')).toContainText('from 63 to 62');
   await expect(page.locator('#simple-advice')).toContainText('micrometres');
@@ -85,7 +85,7 @@ const names = ['GbS1','GbS2','GbS3','GbS4','DdEff','effectiveDd','grindTime','in
 test('Simple lists every approach before a brew and explains missing evidence', async ({page}) => {
   await page.goto('/simulator/'); await step(page,4);
   await expect(page.locator('#all-comparison-results article')).toHaveCount(10);
-  for (const name of names) { await expect(row(page,name)).toBeVisible(); await expect(row(page,name)).toContainText('Why:'); }
+  for (const name of names) { await expect(row(page,name)).toBeVisible(); await expect(row(page,name)).toContainText('Why this tool is unavailable:'); }
   await expect(row(page,'GbS1')).toHaveAttribute('data-status','unavailable');
   await expect(row(page,'GbS1')).toContainText('recorded shot with its measured grinder coordinate');
   await expect(row(page,'proposedDd')).toContainText('unit cannot be used as a dial');
@@ -95,7 +95,7 @@ test('uncalibrated DF54 shows manual dial advice and explicit research limits', 
   await expect(page.locator('#all-comparison-results article')).toHaveCount(10);
   await expect(row(page,'manual')).toHaveAttribute('data-status','computed');
   await expect(row(page,'manual')).toContainText('from 20 to 19.5 marks');
-  for (const name of names.slice(0,5)) { await expect(row(page,name)).toHaveAttribute('data-status','unavailable'); await expect(row(page,name)).toContainText('two owner calibration points'); }
+  for (const name of names.slice(0,5)) { await expect(row(page,name)).toHaveAttribute('data-status','unavailable'); await expect(row(page,name)).toContainText('independently measured conversion'); }
 });
 test('E64 replays actual settings in all independent research models and preserves them in Expert', async ({page}) => {
   await setup(page,'E64 WS'); await step(page,1); await page.locator('#simple-current-dial').fill('63'); await page.locator('#simple-step').fill('1'); await step(page,3);
@@ -104,7 +104,7 @@ test('E64 replays actual settings in all independent research models and preserv
   await expect(row(page,'DdEff')).toContainText('not next-coffee advice');
   await expect(row(page,'GbS2')).toContainText('Latest measured time: 22 seconds; target: 28 seconds (6 seconds faster)');
   const first = JSON.parse(await row(page,'GbS1').locator('pre').textContent()); expect(first.case.state.lastResultDum).toBe(630); expect(first.case.input.setpointDdDum).toBe(630);
-  await page.locator('#simple-continue').click(); await shot(page,26,'too sour');
+  await page.locator('#simple-continue').click(); await step(page,1); await page.locator('#simple-current-dial').fill('62'); await step(page,3); await shot(page,26,'too sour');
   const second = JSON.parse(await row(page,'GbS2').locator('pre').textContent()); expect(second.case.input.setpointDdDum).toBe(620); expect(second.case.state.history).toHaveLength(1); expect(second.case.state.history[0].x).toBe(63);
   const before = await row(page,'GbS2').textContent(); await page.locator('#view-mode').selectOption('expert');
   await expect(row(page,'GbS2')).toHaveText(before); await expect(page.locator('#all-comparison-context')).toContainText('Recorded shot 2');

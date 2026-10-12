@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-10-11",
+  "reviewedAt": "2026-10-12",
   "models": [
     {
       "id": "e64ws",
@@ -33,18 +33,36 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": 1,
+        "basis": "reviewer_observed_increment",
+        "note": "Based on an adjustment observed in a firsthand review, not a guaranteed change in shot time. Conservative first trial, not a guarantee of 1 second per µm. Confirm firmware permits this increment. Calibration of zero and empirical brew response are separate.",
+        "sources": [
+          {
+            "title": "Mahlkönig: E64 WS original instructions",
+            "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Original_instructions_EN.pdf"
+          },
+          {
+            "title": "Kaffeemacher: E64 WS test",
+            "url": "https://www.kaffeemachers.shop/blogs/kaffeewissen/mahlkoenig-e64-ws"
+          }
+        ],
+        "numericFinerDelta": -1,
+        "espressoSupported": true
+      }
     },
     {
       "id": "e65sgbw",
       "model": "E65S GbW",
       "unit": "µm (DDD readout only)",
-      "control": "screen",
+      "control": "manual adjustment with DDD readout",
       "markings": "Use verified DDD distance, not an unmeasured adjustment-lever position",
       "zero": "Manufacturer DDD calibration",
       "notes": [
         "Mechanical gap and particle size are different measurements.",
-        "A unit conversion does not validate recovered GBS formulas for this grinder."
+        "A unit conversion does not validate recovered GBS formulas for this grinder.",
+        "The DDD screen reads distance; it does not establish motorized adjustment or a universal numeric step."
       ],
       "sources": [
         {
@@ -66,18 +84,32 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": null,
+        "basis": "unknown_require_owner_increment",
+        "note": "Starting guidance, not a calibrated grinder response. Manual slider/lever adjustment with DDD readout; not motorized E64WS/E80W GbS. Confirm whether input is mm, µm or dial scale; do not treat the catalog unit label as verified display precision. Choose one repeatably achievable owner-supplied small DDD change.",
+        "sources": [
+          {
+            "title": "Mahlkönig: E65S GbW quick start",
+            "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E65S_Gbw_Espresso_Grinder_Quick_start_manual_DE_EN.pdf"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "e80sgbw",
       "model": "E80S GbW",
       "unit": "µm (DDD readout only)",
-      "control": "screen",
+      "control": "manual adjustment with DDD readout",
       "markings": "Use verified DDD distance, not an unmeasured adjustment-lever position",
       "zero": "Manufacturer DDD calibration",
       "notes": [
         "Mechanical gap and particle size are different measurements.",
-        "A unit conversion does not validate recovered GBS formulas for this grinder."
+        "A unit conversion does not validate recovered GBS formulas for this grinder.",
+        "The DDD screen reads distance; it does not establish motorized adjustment or a universal numeric step."
       ],
       "sources": [
         {
@@ -99,7 +131,20 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": null,
+        "basis": "unknown_require_owner_increment",
+        "note": "Starting guidance, not a calibrated grinder response. Manual slider/lever adjustment with DDD readout; not motorized E64WS/E80W GbS. Confirm whether input is mm, µm or dial scale; do not treat the catalog unit label as verified display precision. Choose one repeatably achievable owner-supplied small DDD change.",
+        "sources": [
+          {
+            "title": "Mahlkönig: E80S GbW product and manual links",
+            "url": "https://www.mahlkoenig.com/products/e80s-gbw-grinder"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "df64gen1",
@@ -132,7 +177,24 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": 0.5,
+        "basis": "cautious_product_heuristic",
+        "note": "Cautious starting trial chosen by this app; no model-specific numerical correction was verified. Half mark is proposed, not a numeric Gen1 recommendation found in these sources. Do not transfer Gen2 response. Confirm how one minor mark maps to the displayed numeric scale before computing a destination; relative half-mark trial remains usable.",
+        "sources": [
+          {
+            "title": "Clive Coffee: DF64 user manual",
+            "url": "https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual"
+          },
+          {
+            "title": "DF Grinders: DF54 and DF64 grind guide",
+            "url": "https://dfgrinders.com/pages/df54-grind-size-guide"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "df64gen2",
@@ -165,7 +227,24 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": 0.5,
+        "basis": "reviewer_observed_increment",
+        "note": "Based on an adjustment observed in a firsthand review, not a guaranteed change in shot time. Reviewer observation is local, not seconds-per-mark calibration. Stock vs SSP and zero/indicator epoch must be recorded. Confirm how one minor mark maps to the displayed numeric scale before computing a destination; relative half-mark trial remains usable.",
+        "sources": [
+          {
+            "title": "Kaffeemacher: DF64 Gen2 firsthand test",
+            "url": "https://kaffeemacher.ch/blogs/kaffeewissen/g-iota-df64-gen2"
+          },
+          {
+            "title": "Clive Coffee: DF64 user manual",
+            "url": "https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "df54",
@@ -198,7 +277,28 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": 0.5,
+        "basis": "cautious_product_heuristic",
+        "note": "Cautious starting trial chosen by this app; no model-specific numerical correction was verified. Half mark is proposed, not a measured DF54 correction. Vendor revision labels differ; record seller and revision. Stock espresso vs brew burrs matters. Confirm how one minor mark maps to the displayed numeric scale before computing a destination; relative half-mark trial remains usable.",
+        "sources": [
+          {
+            "title": "MiiCoffee: DF54 specifications and revisions",
+            "url": "https://miicoffee.shop/products/miicoffee-df54-single-dose-coffee-grinder"
+          },
+          {
+            "title": "Kaffeemacher: DF54 firsthand test",
+            "url": "https://kaffeemacher.ch/blogs/kaffeewissen/df54-test"
+          },
+          {
+            "title": "DF Grinders: DF54 and DF64 grind guide",
+            "url": "https://dfgrinders.com/pages/df54-grind-size-guide"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "nichezero",
@@ -231,7 +331,24 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": 1,
+        "basis": "practice_guidance_starting_step",
+        "note": "Starting guidance, not a calibrated grinder response. Kaffeemacher names one-to-two marks; start at its smaller end. Stepless, not physical clicks.",
+        "sources": [
+          {
+            "title": "Niche: dialling in the Niche Zero",
+            "url": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-dial-in-your-niche-zero"
+          },
+          {
+            "title": "Kaffeemacher: espresso grind adjustment",
+            "url": "https://kaffeemacher.ch/blogs/kaffeewissen/mein-mahlgrad"
+          }
+        ],
+        "numericFinerDelta": -1,
+        "espressoSupported": true
+      }
     },
     {
       "id": "encoreesp",
@@ -264,7 +381,20 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": 1,
+        "basis": "minimum_native_increment",
+        "note": "One physical click is the native adjustment increment; its effect on this coffee must be learned from your shots. Original Encore ESP only; exclude Encore and ESP Pro. Fine range 1–20; crossing into 21 changes step resolution.",
+        "sources": [
+          {
+            "title": "Baratza: Encore ESP manual, January 2023",
+            "url": "https://assets.breville.com/ZCG495/manual-encoreesp-v1-0-en-010923.pdf"
+          }
+        ],
+        "numericFinerDelta": -1,
+        "espressoSupported": true
+      }
     },
     {
       "id": "sculptor064s",
@@ -297,7 +427,24 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": 0.1,
+        "basis": "cautious_product_heuristic",
+        "note": "Cautious starting trial chosen by this app; no model-specific numerical correction was verified. 0.1 is a proposed small visual movement, not manufacturer specification; owner must be able to reproduce it. No clicks. Record exact S model, burrs, RPM and zero adjustment.",
+        "sources": [
+          {
+            "title": "Timemore: Sculptor FAQ",
+            "url": "https://www.timemore.com/pages/sculptor-related-faq"
+          },
+          {
+            "title": "Kaffeemacher: Sculptor 064S and 078S test",
+            "url": "https://kaffeemacher.ch/blogs/kaffeewissen/timemore-sculptor-78s-und-64s-im-test"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "sculptor078s",
@@ -330,7 +477,24 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": 0.1,
+        "basis": "cautious_product_heuristic",
+        "note": "Cautious starting trial chosen by this app; no model-specific numerical correction was verified. 0.1 is a proposed small visual movement, not manufacturer specification; owner must be able to reproduce it. No clicks. Record exact S model, burrs, RPM and zero adjustment.",
+        "sources": [
+          {
+            "title": "Timemore: Sculptor FAQ",
+            "url": "https://www.timemore.com/pages/sculptor-related-faq"
+          },
+          {
+            "title": "Kaffeemacher: Sculptor 064S and 078S test",
+            "url": "https://kaffeemacher.ch/blogs/kaffeewissen/timemore-sculptor-78s-und-64s-im-test"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "lagom01",
@@ -363,7 +527,24 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": null,
+        "basis": "cautious_product_heuristic",
+        "note": "Identify the change in your printed dial numbers for one minor tick before entering a numeric step. The documented axial movement per tick does not establish tick-to-number mapping or espresso response; current and pre-late-2024 variants differ.",
+        "sources": [
+          {
+            "title": "Option-O: LAGOM 01 competition resource",
+            "url": "https://www.option-o.com/wbrc-resource"
+          },
+          {
+            "title": "Option-O: LAGOM 01 quick guide",
+            "url": "https://static1.squarespace.com/static/5b125642ec4eb782ce4f9947/t/65014e5f10d31854a1996f30/1694584416447/LAGOM%2B01%2Bquick%2Bguide.pdf"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "lagomp64",
@@ -396,7 +577,20 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": null,
+        "basis": "cautious_product_heuristic",
+        "note": "Identify a minor tick and its change in the numbers you enter before choosing a numeric step. Cautious starting trial chosen by this app; no model-specific numerical correction was verified. Owner must identify what one minor tick means on the actual dial. Do not import LAGOM01 pitch or automatically add 1 to printed number. Record manufacture period and burr SKU.",
+        "sources": [
+          {
+            "title": "Option-O: LAGOM P64 resource and manuals",
+            "url": "https://www.option-o.com/lagomp64userguide"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": true
+      }
     },
     {
       "id": "xpro",
@@ -429,7 +623,20 @@
         "verifiedAt": "2026-10-11",
         "renderAllowed": false
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": 1,
+        "basis": "minimum_native_increment",
+        "note": "Enter total clicks from your zero, including complete turns; do not enter only the number printed on the ring. One physical click is the native adjustment increment; its effect on this coffee must be learned from your shots. Store complete rotations plus clicks or normalized total clicks. Movement is not particle size or absolute conical burr gap. No guaranteed shot response.",
+        "sources": [
+          {
+            "title": "1Zpresso: X-Pro manual",
+            "url": "https://1zpresso.coffee/manual-xpro-en/"
+          }
+        ],
+        "numericFinerDelta": -1,
+        "espressoSupported": true
+      }
     },
     {
       "id": "jmax",
@@ -462,7 +669,20 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": 1,
+        "basis": "minimum_native_increment",
+        "note": "Enter total clicks from your zero, including complete turns; do not enter only the number printed on the ring. One physical click is the native adjustment increment; its effect on this coffee must be learned from your shots. Store complete rotations plus clicks or normalized total clicks. Movement is not particle size or absolute conical burr gap. No guaranteed shot response.",
+        "sources": [
+          {
+            "title": "1Zpresso: J-Max manual",
+            "url": "https://1zpresso.coffee/manual-jmax-en/"
+          }
+        ],
+        "numericFinerDelta": -1,
+        "espressoSupported": true
+      }
     },
     {
       "id": "kseries",
@@ -496,7 +716,20 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure."
+      "direction": "Smaller displayed distance / count is finer; verify the applicable zero procedure.",
+      "espressoAdjustment": {
+        "stepNative": 1,
+        "basis": "minimum_native_increment",
+        "note": "Enter total clicks from your zero, including complete turns; do not enter only the number printed on the ring. One physical click is the native adjustment increment; its effect on this coffee must be learned from your shots. Store complete rotations plus clicks or normalized total clicks. Movement is not particle size or absolute conical burr gap. No guaranteed shot response. Only K-Pro/K-Max/K-Plus; require subtype; K-Ultra needs its own entry.",
+        "sources": [
+          {
+            "title": "1Zpresso: K series specifications",
+            "url": "https://1zpresso.coffee/k/"
+          }
+        ],
+        "numericFinerDelta": -1,
+        "espressoSupported": true
+      }
     },
     {
       "id": "odegen2",
@@ -530,7 +763,20 @@
         "source": "official-product-page",
         "verifiedAt": "2026-10-11"
       },
-      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate."
+      "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
+      "espressoAdjustment": {
+        "stepNative": null,
+        "basis": "unsupported_for_espresso",
+        "note": "Starting guidance, not a calibrated grinder response. Keep available as equipment metadata, exclude espresso adjustment presets even with alternative burrs unless supported separately.",
+        "sources": [
+          {
+            "title": "Fellow: Ode Gen2 espresso suitability",
+            "url": "https://support.fellowproducts.com.au/en_us/is-ode-gen-2-suitable-for-grinding-espresso-HJt8Rm8qZe"
+          }
+        ],
+        "numericFinerDelta": null,
+        "espressoSupported": false
+      }
     }
   ]
 }
