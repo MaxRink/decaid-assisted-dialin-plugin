@@ -2253,6 +2253,144 @@ function createPlugin(host, services) {
     body: value,
   });
 
+  const RESEARCH_KEY = "researchSharing.v1";
+  const RESEARCH_HOST_LIMITS = {
+    redirectControl: false, requestCancellation: false,
+    notice: "This Decaid host cannot enforce no redirects or cancel an upload already sent. Use only your trusted HTTPS collector; opt-out stops future uploads, but cannot recall received data. The collector receives your network address. No shot IDs, names, notes, raw traces or timestamps are included.",
+  };
+  let researchClient = null, researchWaiter = null, researchTimer = null;
+  let researchSequence = 0, researchGeneration = 0, researchRetry = 30000;
+  let researchError = null, researchBusy = false;
+  const researchCaptures = new Map();
+  function researchStorage(type, state) {
+    return new Promise((resolve, reject) => {
+      if (!active) return reject(new Error("plugin unloaded"));
+      const token = `${sessionEpoch}:${++researchSequence}`;
+      const timeout = setTimeout(() => {
+        if (researchWaiter?.token === token) researchWaiter = null;
+        reject(new Error("research storage acknowledgment timed out"));
+      }, 5000);
+      researchWaiter = { type, token,
+        resolve(value) { clearTimeout(timeout); researchWaiter = null; resolve(value); },
+        reject(error) { clearTimeout(timeout); researchWaiter = null; reject(error); } };
+      try { host.storage({ type, key: RESEARCH_KEY,
+        ...(type === "write" ? { data: { key: RESEARCH_KEY, token, state } } : {}) }); }
+      catch (_) { researchWaiter.reject(new Error("research storage unavailable")); }
+    });
+  }
+  function startResearch() {
+    if (researchClient) return researchClient;
+    const factory = services.researchSharing || (typeof createResearchSharing === "function" ? createResearchSharing : null);
+    if (!factory) throw new Error("research sharing module unavailable");
+    const epoch = sessionEpoch;
+    researchClient = factory().createClient({
+      load: async () => {
+        if (!active || epoch !== sessionEpoch) throw new Error("plugin unloaded");
+        const stored = await researchStorage("read");
+        if (stored == null) return null;
+        if (stored.key !== RESEARCH_KEY || !stored.state) throw new Error("invalid research storage");
+        return stored.state;
+      },
+      save: state => {
+        if (!active || epoch !== sessionEpoch) return Promise.reject(new Error("plugin unloaded"));
+        return researchStorage("write", state);
+      },
+      send: (url, init) => {
+        if (!active || epoch !== sessionEpoch) throw new Error("plugin unloaded");
+        factory().validateEndpoint(url);
+        return apiRequest(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: init.body });
+      },
+    });
+    return researchClient;
+  }
+  function stopResearchTimer() {
+    clearTimeout(researchTimer); researchTimer = null;
+  }
+  async function researchStatus() {
+    const status = await startResearch().status();
+    return { ...status, error: status.error || researchError, hostCapabilities: RESEARCH_HOST_LIMITS };
+  }
+  async function scheduleResearch(delay = researchRetry) {
+    if (!active || researchTimer || researchBusy) return;
+    const epoch = sessionEpoch, status = await startResearch().status();
+    if (!active || epoch !== sessionEpoch || !status.sharing || !status.queuedCount || researchTimer || researchBusy) return;
+    researchTimer = setTimeout(() => { researchTimer = null; void flushResearch(); }, delay);
+  }
+  async function flushResearch() {
+    if (researchBusy || !active) return;
+    researchBusy = true;
+    const epoch = sessionEpoch, generation = researchGeneration;
+    try {
+      await startResearch().flush();
+      if (epoch === sessionEpoch && generation === researchGeneration) { researchError = null; researchRetry = 30000; }
+    } catch (_) {
+      if (epoch === sessionEpoch && generation === researchGeneration) {
+        researchError = "Research upload failed; queued records remain local. Retry or opt out to clear the queue.";
+        researchRetry = Math.min(researchRetry * 2, 900000);
+      }
+    } finally { if (epoch === sessionEpoch) researchBusy = false; }
+    if (active && epoch === sessionEpoch) await scheduleResearch();
+  }
+  async function captureResearchShot(shotId) {
+    if (!active || typeof shotId !== "string" || !shotId || shotId.length > 256) return;
+    if (!researchCaptures.has(shotId) && researchCaptures.size >= 100) { researchError = "Research capture is busy; this event was not archived."; return; }
+    const capture = {}; researchCaptures.set(shotId, capture);
+    const generation = researchGeneration, epoch = sessionEpoch;
+    try {
+      const client = startResearch();
+      const before = await client.status();
+      if (before.error || (!before.localEnabled && !before.sharing)) return;
+      await loadStorage();
+      await feedbackQueue;
+      const full = await fullShot(shotId), f = JSON.parse(JSON.stringify(feedback[shotId] || {}));
+      const m = createBrewMetrics().analyze(full, f), c = historicalContext(full, f);
+      if (!active || epoch !== sessionEpoch || generation !== researchGeneration || researchCaptures.get(shotId) !== capture) return;
+      const unit = { marks: "dial-marks", "dial-mark": "dial-marks", "dial-marks": "dial-marks", micrometres: "micrometres", "µm": "micrometres", "deci-micrometre": "deci-micrometre" }[c.settingUnit] || "unknown";
+      const numericSetting = c.grinderSetting != null && String(c.grinderSetting).trim() !== "" ? Number(c.grinderSetting) : undefined;
+      await client.capture({ source: "plugin", mode: "measured", kind: "shot",
+        grinder: { model: c.grinderModel, settingUnit: unit, setting: numericSetting, rpm: c.grinderRpm },
+        recipe: { controlMode: m.trace?.controlMode, targetDoseG: c.dose, targetYieldG: c.yield },
+        measurements: { pumpTimeSec: m.timing?.pump?.durationSec, pouringTimeSec: m.timing?.pouring?.durationSec,
+          recordingTimeSec: m.timing?.recording?.durationSec, preinfusionSec: m.timing?.preinfusion?.durationSec,
+          pumpComplete: m.timing?.pump?.complete, pouringComplete: m.timing?.pouring?.complete,
+          manualStopConfirmed: f.manualStopConfirmed, doseG: f.measuredBeanDose?.weightG ?? m.annotations?.actualDoseG,
+          yieldG: m.scale?.finalMeasuredWeightG, meanPressureBar: m.machine?.pressure?.mean,
+          meanMachineFlowMlPerSec: m.trace?.machineFlow?.mean, meanBeverageFlowGPerSec: m.trace?.beverageFlow?.mean,
+          flowCoverageSec: m.trace?.machineFlow?.coverageSec },
+        coffee: { species: c.beanType?.toLowerCase(), roast: c.roastLevel?.toLowerCase() },
+        taste: { good: f.good, intent: { balanced: "balanced", sour: "too_sour", bitter: "too_bitter", astringent: "too_astringent", weak: "weak", channeling: "uneven_flow" }[f.taste],
+          overall: f.flavour?.overall, acidity: f.flavour?.acidity, bitterness: f.flavour?.bitterness,
+          sweetness: f.flavour?.sweetness, body: f.flavour?.body, astringency: f.flavour?.astringency,
+          tastingTemperatureC: f.flavour?.tastingTemperatureC, minutesAfterBrew: f.flavour?.sinceBrewMin },
+      }, shotId);
+      researchError = null;
+      await scheduleResearch(1000);
+    } catch (_) { if (active && epoch === sessionEpoch && generation === researchGeneration) researchError = "Research capture unavailable; brewing and saved feedback are unaffected."; }
+    finally { if (researchCaptures.get(shotId) === capture) researchCaptures.delete(shotId); }
+  }
+  async function researchEndpoint(request) {
+    const client = startResearch();
+    if (request.method === "GET") return researchStatus();
+    if (request.method === "DELETE") {
+      researchGeneration++; stopResearchTimer();
+      await client.clear(); researchError = null;
+      return researchStatus();
+    }
+    const input = bodyOf(request);
+    if (input.operation === "local") {
+      await client.setLocalCollection(input.enabled);
+      return researchStatus();
+    }
+    if (input.operation === "retry") { stopResearchTimer(); await flushResearch(); return researchStatus(); }
+    if (typeof input.sharing !== "boolean") throw new Error("Choose whether to share research data");
+    if (input.sharing && (typeof input.endpoint !== "string" || !input.endpoint.trim())) throw new Error("Configure your HTTPS collector before enabling remote sharing");
+    if (input.sharing && input.acknowledgeHostLimits !== true) throw new Error("Acknowledge the host upload limits before sharing");
+    researchGeneration++; stopResearchTimer();
+    await client.setSharing(input.sharing, input.endpoint ?? null);
+    researchError = null;
+    return researchStatus();
+  }
+
   function log(message) {
     try {
       host.log(`[dialin] ${message}`);
@@ -3902,6 +4040,20 @@ function createPlugin(host, services) {
 <title>Assisted dial-in</title>
 <style>[hidden]{display:none!important}fieldset{min-width:0}svg{width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}.native-grid{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}*,*:before,*:after{box-sizing:border-box}html{overflow-x:hidden}body{font:16px/1.5 system-ui;max-width:46rem;margin:2rem auto;padding:2rem 1rem;min-width:0;overflow-wrap:anywhere}button,input,select,textarea{font:inherit;padding:.5rem;max-width:100%;min-width:0}button,input,select{width:100%}button{width:auto}label{display:block;margin:.5rem 0;min-width:0}textarea{width:100%;min-height:9rem;overflow:auto}output{display:block;margin-top:1rem;white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%}form,details,#grinderManager,section{min-width:0;max-width:100%}img{max-width:100%;height:auto}a{overflow-wrap:anywhere}.setup-steps{display:flex;flex-wrap:wrap;gap:.45rem;margin:1rem 0}.setup-steps a{border:1px solid #999;border-radius:99px;padding:.3rem .6rem;text-decoration:none}.catalog-item,.comparison-item{border:1px solid #aaa;border-radius:.6rem;padding:.65rem;margin:.5rem 0}.catalog-item button{margin-top:.4rem}@media(min-width:38rem){label{display:grid;grid-template-columns:minmax(10rem,1fr) minmax(0,2fr);gap:.6rem;align-items:center}}</style>
 <h1>Assisted dial-in</h1>
+<details id="researchSharing"><summary>Research data choices</summary>
+<p>A local research archive is on by default; you can turn it off below. It keeps selected numeric brew measurements and fixed categories for future analysis. Remote sharing starts only after you enable it and confirm your own HTTPS collector. It excludes shot IDs, bean names, notes, device identities, raw traces and timestamps. Network requests still expose your address to the collector.</p>
+<label><input id="researchLocal" type="checkbox"> Keep the local research archive</label>
+<label>Your research collector HTTPS endpoint<input id="researchEndpoint" type="url" placeholder="https://your-collector.example/v1/records" autocomplete="off"></label>
+<label><input id="researchHostLimits" type="checkbox"> I trust this collector and understand this host cannot prevent redirects or cancel an upload already sent.</label>
+<button id="researchEnable" type="button">Enable remote sharing</button>
+<button id="researchDisable" type="button">Opt out and clear pending uploads</button>
+<button id="researchRetry" type="button">Retry pending uploads</button>
+<button id="researchExport" type="button">Show local research export</button>
+<button id="researchDelete" type="button">Delete all local research data</button>
+<p>Opt-out keeps the local archive and stops future uploads. Previously received data cannot be recalled without collector support. Only new brew events and feedback changes are queued after enabling; older local records are not uploaded automatically.</p>
+<output id="researchStatus" aria-live="polite">Open this panel to load your saved choices and upload status.</output>
+<pre id="researchExportData" hidden></pre></details>
+
 <p>This assistant recommends recorded settings and manual guidance. It never changes a machine.</p>
 <p><button id="modeToggle" type="button" aria-pressed="false">Show expert controls</button> <span id="modeHelp">Simple view keeps recommendations, bean context and brew analysis together.</span></p>
 <nav class="setup-steps" aria-label="Dial-in steps"><button type="button" data-native-step="1" aria-current="step">1. Coffee &amp; equipment</button><button type="button" data-native-step="2">2. Recipe &amp; profile</button><button type="button" data-native-step="3">3. Brew trace &amp; taste</button><button type="button" data-native-step="4">4. Next setting</button></nav><p id="nativeWizardStatus" aria-live="polite">Step 1 of 4 · Coffee and equipment</p><p><button id="nativeWizardBack" type="button" disabled>Back</button> <button id="nativeWizardNext" type="button">Next</button></p>
@@ -4086,6 +4238,26 @@ const clearAnalysisState=()=>{requestState.generation++;adviceGeneration++;lates
 document.querySelector('#analysis')?.addEventListener('submit',clearAnalysisState,true);document.querySelector('#shotSelect')?.addEventListener('change',clearAnalysisState,true);
 
 try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.click();modeToggle?.addEventListener('click',()=>{try{localStorage.setItem('decaid-ui-mode',modeToggle.getAttribute('aria-pressed')==='true'?'expert':'simple');}catch(_){}});}catch(_){/* private browsing can disable storage */}
+const researchPanel=document.querySelector('#researchSharing');
+if(researchPanel){
+  const researchStatus=document.querySelector('#researchStatus');
+  const researchRequest=async(method='GET',body)=>{
+    const response=await fetch(endpoint('sharing'),{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||'Research settings unavailable');
+    document.querySelector('#researchLocal').checked=result.localEnabled===true;
+    document.querySelector('#researchEndpoint').value=result.endpoint||'';
+    researchStatus.textContent=(result.sharing?'Remote sharing enabled. ':'Remote sharing off. ')+result.localCount+' local records; '+result.queuedCount+' pending uploads.'+(result.error?' '+result.error:'');return result;
+  };
+  const researchAction=async(method,body)=>{try{await researchRequest(method,body);}catch(error){researchStatus.textContent=error.message;}};
+  researchPanel.addEventListener('toggle',()=>{if(researchPanel.open)void researchAction('GET');});
+  document.querySelector('#researchLocal').addEventListener('change',event=>researchAction('POST',{operation:'local',enabled:event.target.checked}));
+  document.querySelector('#researchEnable').addEventListener('click',()=>researchAction('POST',{sharing:true,endpoint:document.querySelector('#researchEndpoint').value.trim(),acknowledgeHostLimits:document.querySelector('#researchHostLimits').checked}));
+  document.querySelector('#researchDisable').addEventListener('click',()=>researchAction('POST',{sharing:false}));
+  document.querySelector('#researchRetry').addEventListener('click',()=>researchAction('POST',{operation:'retry'}));
+  document.querySelector('#researchDelete').addEventListener('click',()=>researchAction('DELETE'));
+  document.querySelector('#researchExport').addEventListener('click',async()=>{try{const response=await fetch(endpoint('sharing-export'));if(!response.ok)throw new Error('Research export unavailable');const output=document.querySelector('#researchExportData');output.textContent=JSON.stringify(await response.json(),null,2);output.hidden=false;}catch(error){researchStatus.textContent=error.message;}});
+}
+
 </script>`;
 
   return {
@@ -4101,8 +4273,16 @@ try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.
       grinderWriteBroken = false;
       grinderStorageReadStarted = false;
       startStorage();
+      if (services.researchSharing || typeof createResearchSharing === "function") {
+        researchClient = null; researchError = null; researchRetry = 30000; researchBusy = false;
+        void startResearch().ready.then(() => scheduleResearch()).catch(() => {});
+      }
     },
     onUnload() {
+      researchGeneration++;
+      researchCaptures.clear();
+      stopResearchTimer();
+      researchWaiter?.reject(new Error("plugin unloaded"));
       sessionEpoch += 1;
       active = false;
       cacheGeneration += 1;
@@ -4124,6 +4304,14 @@ try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.
     },
     onEvent(event) {
       if (!active) return;
+      if (event.name === "storageRead" && event.payload?.key === RESEARCH_KEY) {
+        if (researchWaiter?.type === "read") researchWaiter.resolve(event.payload.value);
+        return;
+      }
+      if (event.name === "storageWrite" && event.payload?.key === RESEARCH_KEY) {
+        if (researchWaiter?.type === "write" && researchWaiter.token === event.payload.token) researchWaiter.resolve();
+        return;
+      }
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
         if (storageUnavailable || storageReady) return;
         const restored = feedbackFromStorage(event.payload.value);
@@ -4170,6 +4358,7 @@ try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.
       ) {
         cacheGeneration += 1;
         cachedShots = null;
+        if (event.name !== "workflowUpdated") void captureResearchShot(event.payload?.id || event.payload?.shot?.id);
       }
     },
     handleHttpRequest: async (request) => {
@@ -4179,6 +4368,12 @@ try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.
         if (!active) throw new Error("plugin unloaded");
         if (endpoint === "ui" && request.method === "GET")
           return html(200, page);
+        if (endpoint === "sharing" && ["GET", "POST", "DELETE"].includes(request.method)) {
+          try { return json(200, await researchEndpoint(request)); }
+          catch (error) { return json(400, { error: error.message, hostCapabilities: RESEARCH_HOST_LIMITS }); }
+        }
+        if (endpoint === "sharing-export" && request.method === "GET")
+          return json(200, { ...(await startResearch().exportLocal()), hostCapabilities: RESEARCH_HOST_LIMITS });
         if (endpoint === "settings" && request.method === "GET") {
           await loadGrinderProfiles();
           return json(200, settings);
@@ -4328,6 +4523,7 @@ try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.
           await feedbackQueue;
           if (!active || requestSession !== sessionEpoch)
             throw new Error("plugin unloaded");
+          void captureResearchShot(shotId);
           return json(200, { saved: true, shotId });
         }
         return json(404, { error: "unknown endpoint or method" });

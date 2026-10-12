@@ -197,6 +197,16 @@
       "id": "profiles",
       "type": "http",
       "data": {}
+    },
+    {
+      "id": "sharing",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "sharing-export",
+      "type": "http",
+      "data": {}
     }
   ]
 }
