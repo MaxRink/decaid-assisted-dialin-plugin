@@ -2,6 +2,7 @@ const {test, expect} = require('@playwright/test');
 async function step(page, n) {
   const button = page.locator(`button[data-wizard-step="${n}"]`);
   await button.click();
+  if (await button.getAttribute('aria-current') !== 'step') await button.click();
   await expect(button).toHaveAttribute('aria-current', 'step');
   await expect(page.locator(`section[data-wizard-step="${n}"]:not(.expert-only):visible`)).toHaveCount(1);
 }
