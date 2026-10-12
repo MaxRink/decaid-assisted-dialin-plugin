@@ -452,10 +452,10 @@
     instance.onLoad({TargetTimeSec: String(c.target), TargetTimeClock: $("actual-shot-clock")?.value || "pump", TimeToleranceSec: String(c.tolerance)});
     try { const saved = await instance.handleHttpRequest({endpoint: "feedback", method: "POST", body: feedback}); if (saved.status !== 200) throw new Error(JSON.parse(saved.body).error || "Feedback rejected"); const result = await instance.handleHttpRequest({endpoint: "suggestion", method: "GET"}); const body = JSON.parse(result.body); if (generation !== assistantGeneration) return; importedFeedback = feedback; const holder = $("assist-result"); holder.replaceChildren(); const summary = document.createElement("p"); text(summary, "Saved shot " + shot.id + " · " + body.status + " · " + (body.direction || "retain / gather evidence") + ". " + (body.reason || "")); holder.append(summary); const why = document.createElement("p"); text(why, "This assessment used the imported timestamps, controller steps and recorded context. Missing bean catalogue or calibration stays unavailable. " + (body.warnings || []).join(" ")); holder.append(why); const detail = document.createElement("details"), caption = document.createElement("summary"), pre = document.createElement("pre"); text(caption, "Why / complete evidence"); text(pre, JSON.stringify(body, null, 2)); detail.append(caption, pre); holder.append(detail); } finally { instance.onUnload(); }
   }
-  function replayCases(shots, failures) {
+  function replayCases(shots, failures, names = algorithmNames) {
     const cases = {}, first = shots[0]?.setpointDdDum;
     if (first == null) return cases;
-    algorithmNames.forEach(name => {
+    names.forEach(name => {
       const options = name === "DdEff" ? {initialDdDum: first} : name === "GbS1"
         ? {lastResultDum: first, continuousUm: first * .1, previousQuantizedUm: first * .1}
         : {lastResultDum: first, lastAdjustmentDum: first, lastTargetDum: first};
@@ -490,45 +490,56 @@
     try {
       const cases = supplemental?.cases() || {}, reasons = {}, failures = {};
       const latest = simpleShots.at(-1);
-      let source = "No completed shot yet. Every approach is listed below.", timing;
+      let source = "No completed shot yet. Every approach is listed below.", timing, measurement, importedMappingMatches = false;
       const useRecorded = viewMode === "simple" || simpleShots.length > 0 && $("comparison-source")?.value !== "experiment";
       if (useRecorded) {
         delete cases.manual;
         source = latest && !simpleComparisonStale ? (latest.practice ? "Fictional practice " : "Recorded shot ") + simpleShots.length + " · " + latest.time + " seconds against " + latest.target + " seconds. Research models do not use taste, bean type or roast; manual guidance uses your taste preference." : "Record this shot to refresh the comparisons. No missing measurement is guessed.";
-        if (simpleComparisonStale) timing = "Inputs changed. Record this shot again to refresh its results; it replaces the previous entry until you continue to a new shot.";
-        else if (!latest) timing = "Needs a completed shot with its measured dial setting and confirmed timing method.";
-        else if (!latest.clockConfirmed) timing = "Confirm timing from pump start and stopping at the target cup weight. Different clocks cannot be compared.";
-        else if (!latest.pressureConfirmed) timing = "A programmed flow target can control shot time. These timing-only models cannot recommend a grind change from that time.";
-        else if (!latest.taste || ["weak", "channeling"].includes(latest.taste)) timing = "Taste this coffee and check dose, cup weight and even preparation before interpreting a timing-only grind change.";
-        else if (latest.coordinate == null) timing = "This grinder needs two owner calibration points before research results can be converted to its dial marks. Manual guidance still uses your own small step. Add calibration in Expert mode.";
-        if (!timing) {
-          // A non-comparable shot breaks replay continuity; never skip it and join two histories.
+        if (simpleComparisonStale) measurement = "Inputs changed. Record this shot again to refresh its results; it replaces the previous entry until you continue to a new shot.";
+        else if (!latest) measurement = "Needs a recorded shot with its measured grinder coordinate.";
+        else if (latest.coordinate == null) measurement = "This grinder needs two owner calibration points before research results can be converted to its dial marks. Manual guidance still uses your own small step. Add calibration in Expert mode.";
+        timing = measurement;
+        if (!timing && !latest.clockConfirmed) timing = "Confirm timing from pump start and stopping at the target cup weight. Different clocks cannot be compared.";
+        else if (!timing && !latest.pressureConfirmed) timing = "A programmed flow target can control shot time. These timing-only models cannot recommend a grind change from that time.";
+        for (const names of [algorithmNames.slice(0, 4), ["DdEff"]]) {
+          const sequence = names[0] === "DdEff";
+          if (sequence ? measurement : timing) continue;
+          // Missing coordinates break every replay; clock/profile gaps only break timing models.
           let start = simpleShots.length - 1;
           while (start > 0) {
             const previous = simpleShots[start - 1];
-            if (!previous.clockConfirmed || !previous.pressureConfirmed || !previous.taste || ["weak", "channeling"].includes(previous.taste) || previous.coordinate == null) break;
+            if (previous.coordinate == null || !sequence && (!previous.clockConfirmed || !previous.pressureConfirmed)) break;
             start--;
           }
           const shots = simpleShots.slice(start).map(shot => ({actualBrewTimeMs: Math.round(shot.time * 1000), targetBrewTimeMs: Math.round(shot.target * 1000), toleranceMs: Math.round(shot.tolerance * 1000), estimatedDdDum: shot.coordinate, setpointDdDum: shot.coordinate}));
-          Object.assign(cases, replayCases(shots, failures));
-          source += " Each research model independently replays " + shots.length + " comparable shot(s), using the settings you actually brewed.";
+          Object.assign(cases, replayCases(shots, failures, names));
+          source += sequence ? " Measurement sequence uses " + shots.length + " recorded coordinate(s)." : " Each timing model independently replays " + shots.length + " comparable shot(s), using the settings you actually brewed.";
         }
         if (latest?.manualInput && !simpleComparisonStale) cases.manual = {input: latest.manualInput};
         else reasons.manual = simpleComparisonStale ? timing : latest?.why || "Brew, time and taste your coffee first. Confirm your own small dial movement for a numbered adjustment.";
       } else if (importedShot) {
         const context = importedShot.workflow?.context || {}, raw = context.grinderSetting, actual = $("actual-shot-time")?.value, unit = context.extras?.grinderSettingUnit;
         source = "Imported saved shot · independent research comparison. Actual controller steps remain authoritative.";
-        if (importedMetrics?.trace?.recommendation?.status === "abstain") timing = "This saved profile uses flow control or a flow limiter. Time alone cannot support a grind change.";
-        else if (/error|disconnected|stopping.?backstop/i.test(importedMetrics?.stopReason || "")) timing = "This shot ended with an error or disconnect. Repeat the recipe before interpreting a timing-only grind change.";
-        else if (/api.?stop|app.?stop/i.test(importedMetrics?.stopReason || "") && !$("manual-stop-confirmed")?.checked) timing = "Confirm that this manually stopped shot reached its intended recipe before comparing it.";
-        else if ($("actual-shot-clock")?.value !== "pump" || !importedMetrics?.timing?.pump?.complete || Math.abs(Number(actual) - importedMetrics.timing.pump.durationSec) > .001) timing = "The recipe target is pump-start time. Select the complete observed pump clock; a pouring, recording or unverified override time cannot be compared with that target.";
-        else if (raw != null && String(raw).trim() && Number.isInteger(Number(raw)) && unit === "deci-micrometre" && actual && Number(actual) > 0) Object.assign(cases, replayCases([{actualBrewTimeMs: Math.round(Number(actual) * 1000), targetBrewTimeMs: Math.round(config().target * 1000), toleranceMs: Math.round(config().tolerance * 1000), estimatedDdDum: Number(raw), setpointDdDum: Number(raw)}], failures));
-        else timing = "Needs the saved grinder coordinate in verified units and a complete, matching observed clock.";
+        const c = config(), extras = context.extras || {};
+        importedMappingMatches = [[context.grinderId, c.grinderId], [extras.grinderInstanceId, c.grinderId], [context.grinderModel, c.grinder], [context.grinderBurrs || extras.burrIdentity, c.burrs], [extras.calibrationEpoch, c.calibration]].every(([saved, current]) => typeof saved === "string" && saved.trim() !== "" && saved === current);
+        if (raw == null || !String(raw).trim() || !Number.isInteger(Number(raw)) || unit !== "deci-micrometre") measurement = "Needs the saved grinder coordinate in verified research units.";
+        timing = measurement;
+        if (!timing && importedMetrics?.trace?.recommendation?.status === "abstain") timing = "This saved profile uses flow control or a flow limiter. Time alone cannot support a grind change.";
+        else if (!timing && !["pressure", "mixed_preinfusion_flow"].includes(importedMetrics?.trace?.controlMode)) timing = "The saved profile does not establish pressure-controlled extraction. Unknown control mode cannot support timing-only advice.";
+        else if (!timing && /error|disconnected|stopping.?backstop/i.test(importedMetrics?.stopReason || "")) timing = "This shot ended with an error or disconnect. Repeat the recipe before interpreting a timing-only grind change.";
+        else if (!timing && /api.?stop|app.?stop/i.test(importedMetrics?.stopReason || "") && !$("manual-stop-confirmed")?.checked) timing = "Confirm that this manually stopped shot reached its intended recipe before comparing it.";
+        else if (!timing && ($("actual-shot-clock")?.value !== "pump" || !importedMetrics?.timing?.pump?.complete || !actual || !(Number(actual) > 0) || Math.abs(Number(actual) - importedMetrics.timing.pump.durationSec) > .001)) timing = "The recipe target is pump-start time. Select the complete observed pump clock; a pouring, recording or unverified override time cannot be compared with that target.";
+        if (!measurement) {
+          // DdEff ignores timing; use valid neutral fields when the imported clock is unavailable.
+          const input = {actualBrewTimeMs: 0, targetBrewTimeMs: 1, toleranceMs: 0, estimatedDdDum: Number(raw), setpointDdDum: Number(raw)};
+          Object.assign(cases, replayCases([input], failures, ["DdEff"]));
+          if (!timing) Object.assign(cases, replayCases([{...input, actualBrewTimeMs: Math.round(Number(actual) * 1000), targetBrewTimeMs: Math.round(c.target * 1000), toleranceMs: Math.round(c.tolerance * 1000)}], failures, algorithmNames.slice(0, 4)));
+        }
       } else {
         const completed = rows.filter(row => row.actual !== "" && Number(row.actual) > 0);
         if (completed.length) { Object.assign(cases, replayCases(engineScenario(completed).shots, failures)); source = "Expert experiment · independent replay of the same entered or fictional shot inputs. These research models ignore taste."; }
       }
-      algorithmNames.forEach(name => { if (timing) { delete cases[name]; reasons[name] = timing; } });
+      algorithmNames.forEach(name => { const reason = name === "DdEff" ? measurement : timing; if (reason) { delete cases[name]; reasons[name] = reason; } });
       text($("all-comparison-context"), source);
       holder.replaceChildren();
       algorithms.compareAll({cases}).results.forEach(row => {
@@ -541,8 +552,8 @@
         let explanation = comparisonHelp[row.algorithm][1];
         if (row.status === "computed") {
           if (value.returnedDdDum != null) {
-            const mapped = importedShot && !useRecorded ? {status: "unavailable"} : dialConversion(value.returnedDdDum);
-            recommendation = mapped.status === "normalized" ? (row.algorithm === "DdEff" ? "Measurement plan coordinate: " : "Timing model returns: ") + Number(mapped.visible.value.toFixed(6)) + " " + mapped.visible.unit + "." + (mapped.achievable === false ? " This lies between physical steps; verify an achievable mark." : "") : importedShot && !useRecorded ? "Research model returns " + value.returnedDdDum + " dD. Native conversion is withheld: the imported grinder may differ from the current setup." : "Research result available; a verified calibration is needed to show it on your dial.";
+            const mapped = importedShot && !useRecorded && !importedMappingMatches ? {status: "unavailable"} : dialConversion(value.returnedDdDum);
+            recommendation = mapped.status === "normalized" ? (row.algorithm === "DdEff" ? "Measurement plan coordinate: " : "Timing model returns: ") + Number(mapped.visible.value.toFixed(6)) + " " + mapped.visible.unit + "." + (mapped.achievable === false ? " This lies between physical steps; verify an achievable mark." : "") : importedShot && !useRecorded ? "Research model returns " + value.returnedDdDum + " dD. Native conversion is withheld: the saved individual grinder, model, burrs and calibration epoch must exactly match the current setup, with a usable scoped conversion." : "Research result available; a verified calibration is needed to show it on your dial.";
             explanation += " Current phase: " + value.phase + ". " + (row.algorithm === "DdEff" ? "The returned coordinate follows the test sequence, not a timing correction." : value.locked ? "The model is locked and returns its previous setting." : value.committed === false ? "It holds the returned setting even if its internal candidate differs." : "It returns the model's calculated setting.");
             if (row.algorithm !== "DdEff") {
               const input = cases[row.algorithm].input, actual = input.actualBrewTimeMs / 1000, target = input.targetBrewTimeMs / 1000, gap = Number(Math.abs(actual - target).toFixed(3));

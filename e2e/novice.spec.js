@@ -117,9 +117,11 @@ test('editing a recorded brew invalidates cards and replaces that shot', async (
 });
 test('flow and unconfirmed clocks withhold timing models without hiding any cards', async ({page}) => {
   await setup(page,'E64 WS'); await shot(page,22,'too sour',false);
-  for (const name of names.slice(0,5)) { await expect(row(page,name)).toHaveAttribute('data-status','unavailable'); await expect(row(page,name)).toContainText('programmed flow target'); }
+  for (const name of names.slice(0,4)) { await expect(row(page,name)).toHaveAttribute('data-status','unavailable'); await expect(row(page,name)).toContainText('programmed flow target'); }
+  await expect(row(page,'DdEff')).toHaveAttribute('data-status','computed');
   await step(page,3); await page.locator('#simple-pressure-confirmed').check(); await page.locator('#simple-clock-confirmed').uncheck(); await page.locator('#simple-record').click();
   await expect(row(page,'GbS1')).toContainText('Different clocks cannot be compared');
+  await expect(row(page,'DdEff')).toHaveAttribute('data-status','computed');
   await expect(page.locator('#all-comparison-results article')).toHaveCount(10);
 });
 test('one singular algorithm cannot erase the other nine cards or their explanations', async ({page}) => {

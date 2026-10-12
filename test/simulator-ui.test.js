@@ -575,3 +575,87 @@ test("unavailable coffee and grinder references show retry and recover without l
   assert.equal(ui.elements.get("grinder").children.length, 16);
   assert.equal(ui.elements.get("shots").children.length, 1);
 });
+
+function comparisonCard(ui, name) {
+  return ui.elements.get("all-comparison-results").children.find(node => node.attributes["data-algorithm"] === name);
+}
+function comparisonValue(ui, name) {
+  return JSON.parse(comparisonCard(ui, name).children.find(node => node.tagName === "DETAILS").children[1].textContent);
+}
+function openComparisonShot(ui, shot) {
+  const value = JSON.stringify(shot);
+  ui.elements.get("shot-trace-import").dispatch("change", {target: {files: [{size: value.length, text: value}]}});
+}
+function comparisonShot() {
+  const timestamp = "2026-10-11T08:00:00Z";
+  return {id: "comparison", timestamp, workflow: {profile: {steps: [{pump: "pressure", pressure: 9}]}, context: {grinderSetting: "600", extras: {grinderSettingUnit: "deci-micrometre"}}}, measurements: require("./shot-fixtures").timedMeasurements(timestamp, 22)};
+}
+
+test("research timing models retain untasted shots while manual advice waits for taste", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60"; field("pressure-confirmed").checked = true;
+  for (const taste of ["", "weak", "channeling"]) {
+    field("time").value = "22"; field("clock-confirmed").checked = true; field("taste").value = taste; field("record").click();
+    for (const name of ["GbS1", "GbS2", "GbS3", "GbS4"]) assert.equal(comparisonCard(ui, name).attributes["data-status"], "computed");
+    assert.equal(comparisonCard(ui, "manual").attributes["data-status"], "unavailable");
+    assert.equal(comparisonValue(ui, "GbS2").case.state.history.length, ["", "weak", "channeling"].indexOf(taste));
+    field("continue").click();
+  }
+});
+
+test("measurement sequence advances without clock, pressure or taste but still requires a coordinate", () => {
+  const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+  ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "60";
+  for (let index = 0; index < 7; index++) {
+    field("time").value = "22"; field("record").click();
+    assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "unavailable");
+    assert.equal(comparisonValue(ui, "DdEff").result.returnedDdDum, index < 6 ? 600 : 400);
+    field("continue").click();
+  }
+  ui.elements.get("grinder").value = "DF64 Gen 2"; ui.elements.get("grinder").dispatch("change");
+  field("current-dial").value = "20"; field("time").value = "22"; field("record").click();
+  assert.equal(comparisonCard(ui, "DdEff").attributes["data-status"], "unavailable");
+});
+
+test("unknown imported extraction mode blocks timing models but not the coordinate measurement plan", () => {
+  const ui = uiFixture(); ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
+  const shot = comparisonShot(); delete shot.workflow.profile;
+  openComparisonShot(ui, shot);
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "unavailable");
+  assert.match(comparisonCard(ui, "GbS2").textContent, /Unknown control mode/);
+  assert.equal(comparisonValue(ui, "DdEff").result.returnedDdDum, 600);
+  shot.workflow.profile = {steps: [{pump: "pressure", pressure: 9}]}; openComparisonShot(ui, shot);
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "computed");
+  ui.elements.get("actual-shot-clock").value = "recording"; ui.elements.get("actual-shot-clock").dispatch("change");
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "unavailable");
+  assert.equal(comparisonValue(ui, "DdEff").result.returnedDdDum, 600);
+});
+
+test("imported native mapping requires exact individual grinder, model, burr and epoch matches", () => {
+  const ui = uiFixture(); ui.elements.get("grinder").value = "E64 WS"; ui.elements.get("grinder").dispatch("change");
+  ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
+  ui.elements.get("export").click(); const setup = JSON.parse(ui.downloads.at(-1).parts.join("")).setup;
+  const shot = comparisonShot(); Object.assign(shot.workflow.context, {grinderId: setup.grinderId, grinderModel: setup.grinder, grinderBurrs: setup.burrs});
+  Object.assign(shot.workflow.context.extras, {grinderInstanceId: setup.grinderId, calibrationEpoch: setup.calibration});
+  openComparisonShot(ui, shot);
+  assert.match(comparisonCard(ui, "GbS2").textContent, /Timing model returns: .* micrometres/);
+  assert.doesNotMatch(comparisonCard(ui, "GbS2").textContent, /Native conversion is withheld/);
+  for (const [container, key] of [[shot.workflow.context,"grinderId"], [shot.workflow.context,"grinderModel"], [shot.workflow.context,"grinderBurrs"], [shot.workflow.context.extras,"grinderInstanceId"], [shot.workflow.context.extras,"calibrationEpoch"]]) {
+    const original = container[key];
+    for (const value of ["", "different"]) { container[key] = value; openComparisonShot(ui, shot); assert.match(comparisonCard(ui, "GbS2").textContent, /Native conversion is withheld/, key); }
+    container[key] = original;
+  }
+});
+
+test("Simple mode never borrows an imported expert scenario as recorded coffee", () => {
+  const ui = uiFixture(); ui.elements.get("view-mode").value = "expert"; ui.elements.get("view-mode").dispatch("change");
+  ui.elements.get("next").click(); ui.elements.get("export").click();
+  const scenario = ui.downloads.at(-1).parts.join("");
+  ui.elements.get("import").dispatch("change", {target: {files: [{size: scenario.length, text: scenario}]}});
+  assert.equal(comparisonCard(ui, "GbS2").attributes["data-status"], "computed");
+  ui.elements.get("view-mode").value = "simple"; ui.elements.get("view-mode").dispatch("change");
+  for (const name of ["GbS1", "GbS2", "GbS3", "GbS4", "DdEff", "manual"]) assert.equal(comparisonCard(ui, name).attributes["data-status"], "unavailable");
+  assert.equal(ui.elements.get("simple-history").children.length, 0);
+});
