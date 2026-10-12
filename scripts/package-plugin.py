@@ -12,8 +12,8 @@ FILES = ("manifest.json", "plugin.js", "README.md", "NOTICE", "LICENSE")
 
 def build(root, tag=None):
     version = json.loads((root / "manifest.json").read_text())["version"]
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version):
-        raise ValueError("manifest version must be a semantic version")
+    if not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version):
+        raise ValueError("manifest version must be a stable semantic version")
     if json.loads((root / "package.json").read_text())["version"] != version:
         raise ValueError("package and manifest versions must match")
     if tag is not None and tag.removeprefix("v") != version:
@@ -31,6 +31,9 @@ def build(root, tag=None):
     with zipfile.ZipFile(archive) as package:
         if set(package.namelist()) != set(FILES) or package.testzip() is not None:
             raise ValueError("invalid plugin archive")
+    for stale in output.glob("decaid-assisted-dialin-plugin-*.zip"):
+        if stale != archive:
+            stale.unlink()
     return archive
 
 

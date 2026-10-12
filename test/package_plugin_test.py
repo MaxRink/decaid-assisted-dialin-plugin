@@ -43,6 +43,24 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "package and manifest"):
             packager.build(self.root)
 
+    def test_prerelease_and_leading_zero_versions_are_rejected(self):
+        for version in ("0.4.0-rc.1", "00.4.0"):
+            with self.subTest(version=version):
+                (self.root / "manifest.json").write_text(json.dumps({"version": version}))
+                with self.assertRaisesRegex(ValueError, "stable semantic version"):
+                    packager.build(self.root)
+
+    def test_version_change_removes_only_older_plugin_archives(self):
+        previous = packager.build(self.root)
+        unrelated = self.root / "dist/unrelated.zip"
+        unrelated.write_bytes(b"keep")
+        for name in ("manifest.json", "package.json"):
+            (self.root / name).write_text(json.dumps({"version": "0.4.0"}))
+        current = packager.build(self.root)
+        self.assertFalse(previous.exists())
+        self.assertTrue(current.exists())
+        self.assertEqual(unrelated.read_bytes(), b"keep")
+
     def test_missing_runtime_file_does_not_leave_an_archive(self):
         (self.root / "plugin.js").unlink()
         with self.assertRaises(FileNotFoundError):
