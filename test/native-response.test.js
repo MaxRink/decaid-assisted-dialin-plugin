@@ -212,3 +212,93 @@ test("missing and non-finite setup or oversized histories never yield a movement
   checkFinite(raw);
   noMovement(JSON.parse(JSON.stringify(raw)));
 });
+
+test("physical clicks hold a half-click fitted move while a continuous dial retains it", () => {
+  const input = request([[10, 34], [11, 30], [12, 26]], { targetTimeSec: 24, stepNative: 1 });
+  const continuous = recommend(input);
+  assert.equal(continuous.proposedSetting, 12.5);
+  const discrete = recommend({ ...input, nativeResolution: 1 });
+  assert.equal(discrete.status, "hold");
+  assert.equal(discrete.reasonCode, "native_resolution");
+  assert.equal(discrete.fit.rawTargetSetting, 12.5);
+  assert.equal(discrete.fit.resolutionLimited, true);
+  noMovement(discrete);
+});
+
+test("discrete proposals round toward current in either numeric direction without exceeding target or step", () => {
+  for (const sign of [1, -1]) {
+    const convert = x => 30 + sign * x;
+    const input = request([[10, 38], [11, 34], [12, 30]].map(([x, t]) => [convert(x), t]),
+      { targetTimeSec: 24, stepNative: 2.5, numericFinerDelta: -sign, nativeResolution: 1 });
+    const result = recommend(input);
+    assert.equal(result.status, "suggestion");
+    assert.equal(result.fit.rawTargetSetting, convert(13.5));
+    assert.equal(result.proposedSetting, convert(13));
+    assert.equal(result.fit.resolutionLimited, true);
+    assert.ok(Math.abs(result.proposedSetting - input.currentSetting) <= input.stepNative);
+    const capped = recommend({ ...input, targetTimeSec: 10, stepNative: 1.5 });
+    assert.equal(capped.proposedSetting, convert(13));
+  }
+});
+
+test("discrete bounds clip to an achievable increment and never round across a boundary", () => {
+  const input = request([[10, 38], [11, 34], [12, 30]],
+    { targetTimeSec: 18, stepNative: 2, nativeResolution: 1, bounds: { min: 0, max: 13.5 } });
+  assert.equal(recommend(input).proposedSetting, 13);
+  const blocked = recommend({ ...input, bounds: { min: 0, max: 12.9 } });
+  assert.equal(blocked.reasonCode, "native_resolution");
+  noMovement(blocked);
+  const reverse = request([[14, 38], [13, 34], [12, 30]],
+    { targetTimeSec: 18, stepNative: 2, numericFinerDelta: 1, nativeResolution: 1, bounds: { min: 10.5, max: 90 } });
+  assert.equal(recommend(reverse).proposedSetting, 11);
+});
+
+test("first and provisional discrete trials use achievable steps including range limits", () => {
+  for (const pairs of [[[12, 30]], [[11, 34], [12, 30]]]) {
+    const input = request(pairs, { stepNative: 1.5, nativeResolution: 1, bounds: { min: 0, max: 13.8 } });
+    const result = recommend(input);
+    assert.equal(result.status, "collecting");
+    assert.equal(result.suggestedTrial.setting, 13);
+    assert.equal(result.suggestedTrial.delta, 1);
+    const blocked = recommend({ ...input, stepNative: .5 });
+    assert.equal(blocked.reasonCode, "native_resolution");
+    noMovement(blocked);
+    const bounded = recommend({ ...input, bounds: { min: 0, max: 12.8 } });
+    assert.equal(bounded.reasonCode, "native_resolution");
+    noMovement(bounded);
+  }
+});
+
+test("invalid discrete metadata and off-lattice current settings abstain", () => {
+  for (const nativeResolution of [0, -1, null, "1", NaN, Infinity]) {
+    const result = recommend(request(undefined, { nativeResolution }));
+    assert.equal(result.reasonCode, "invalid_native_resolution");
+    noMovement(result);
+  }
+  for (const extra of [{ nativeOrigin: 0 }, { nativeResolution: 1, nativeOrigin: NaN }]) {
+    assert.equal(recommend(request(undefined, extra)).reasonCode, "invalid_native_resolution");
+  }
+  const result = recommend(request([[12.5, 30]], { nativeResolution: 1 }));
+  assert.equal(result.reasonCode, "invalid_native_setting");
+  noMovement(result);
+});
+
+test("off-lattice history breaks continuity rather than silently joining old measurements", () => {
+  const result = recommend(request([[10, 38], [10.5, 36], [11, 34], [12, 30]],
+    { stepNative: 1, nativeResolution: 1 }));
+  assert.equal(result.reasonCode, "two_settings_provisional");
+  assert.deepEqual(result.sourceShotIds, ["shot-2", "shot-3"]);
+  assert.equal(result.excluded[0].reason, "unachievable_setting");
+  assert.equal(result.proposedSetting, null);
+});
+
+test("decimal resolution and explicit numeric origin preserve an achievable lattice", () => {
+  const result = recommend(request([[.15, 38], [.25, 34], [.35, 30]],
+    { targetTimeSec: 24, stepNative: .2, nativeResolution: .1, nativeOrigin: .05 }));
+  assert.equal(result.status, "suggestion");
+  assert.ok(Math.abs(result.proposedSetting - .45) < 1e-14);
+  assert.equal(result.nativeOrigin, .05);
+  assert.equal(result.nativeResolution, .1);
+  assert.ok(result.proposedSetting <= result.fit.rawTargetSetting);
+  assert.ok(result.proposedSetting - .35 <= .2);
+});
