@@ -11,12 +11,15 @@ physical grinder’s calibration or prove that a recommendation improves a drink
 | Streamline navigation and history actions | Native extension URL is available | Upstream [PR #100](https://github.com/decentespresso/streamline-js/pull/100) review and merge |
 | Old shots with incomplete context | Explicit per-shot confirmation or abstention | Owner confirmation of the actual historical facts; never copy today’s setup backwards |
 | Grinder-specific response | Owner-confirmed native units and bounded suggestions | Individual grinder/burr/zero calibration and controlled physical shots |
+| Optional mechanical estimates | Manufacturer dial references and clearly marked sensitivity assumptions; explicit owner step and bounds | Individual physical mapping validation; never convert an estimate into owner calibration |
+| Research collection | Minimized local archive, opt-in HTTPS sending, private retained records and corrections | Deploy a collector you control; validate its DNS/TLS and retention operationally |
 | Manufacturer photographs | Links to original sources; original packaged schematics | Exact reusable licence for each image, attribution and model verification |
 
 ## A hardware-free release check
 
 Run the required CI matrix: Node 22/24/26, package regression tests, deterministic
-algorithm replay and graphs, all browser journeys, and the pinned Decaid package
+algorithm replay and graphs, all browser journeys, the collector deployment-image
+smoke test, and the pinned Decaid package
 parser plus QuickJS/API/storage tests. Missing taste, native clocks, calibration,
 bean context or matched settings must produce a visible abstention. Changing a
 current setting cannot change the meaning of a saved shot. The simulation uses

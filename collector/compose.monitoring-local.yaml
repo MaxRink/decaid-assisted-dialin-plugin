@@ -1,0 +1,5 @@
+# Explicit opt-in for local administration. Use SSH forwarding on a remote host.
+services:
+  grafana:
+    ports:
+      - "127.0.0.1:3000:3000"

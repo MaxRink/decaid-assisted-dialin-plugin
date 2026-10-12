@@ -10,7 +10,10 @@ function load() {
   const host = {
     log() {},
     storage(command) {
-      if (command.type === "read") calls.reads += 1;
+      if (command.type === "read") {
+        calls.reads += 1;
+        queueMicrotask(() => plugin.onEvent({name: "storageRead", payload: {key: command.key, value: null}}));
+      }
       if (command.type === "write") calls.writes += 1;
     },
   };
@@ -239,8 +242,11 @@ test("non-finite state cannot be normalized away by JSON serialization", async (
   assert.equal(result.body.code, "invalid_research_input");
 });
 
-test("research operations are read-only and do not use network or storage writes", async () => {
+test("research operations are read-only and do not use network or storage writes", async t => {
   const h = load();
+  t.after(() => h.plugin.onUnload());
+  await new Promise(setImmediate); // Settle independent onLoad storage reads.
+  const before = {...h.calls};
   const cases = [
     valid(),
     {
@@ -276,7 +282,7 @@ test("research operations are read-only and do not use network or storage writes
   ];
   for (const body of cases)
     assert.equal((await request(h.plugin, body)).response.status, 200);
-  assert.equal(h.calls.fetch, 0);
-  assert.equal(h.calls.writes, 0);
-  assert.equal(h.calls.reads, 1);
+  assert.equal(before.fetch, 0);
+  assert.equal(before.writes, 0);
+  assert.deepEqual(h.calls, before);
 });

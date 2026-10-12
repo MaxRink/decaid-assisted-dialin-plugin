@@ -549,7 +549,7 @@
     {
       "id": "lagomp64",
       "model": "LAGOM P64",
-      "unit": "dial micro-ticks",
+      "unit": "decimal dial numbers",
       "control": "wheel",
       "markings": "Do not substitute LAGOM 01 pitch; local conversion required",
       "zero": "Recalibrate after burr replacement; generation matters",
@@ -579,13 +579,13 @@
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
       "espressoAdjustment": {
-        "stepNative": null,
-        "basis": "cautious_product_heuristic",
-        "note": "Identify a minor tick and its change in the numbers you enter before choosing a numeric step. Cautious starting trial chosen by this app; no model-specific numerical correction was verified. Owner must identify what one minor tick means on the actual dial. Do not import LAGOM01 pitch or automatically add 1 to printed number. Record manufacture period and burr SKU.",
+        "stepNative": 0.1,
+        "basis": "manufacturer_reference_increment",
+        "note": "Chosen small starting trial of one printed 0.1 line. OPTION-O states 10 µm vertical movement per 0.1 line; this is carrier travel, not particle size or a guaranteed shot-time change. Check the dial and firmware/variant on your own grinder.",
         "sources": [
           {
-            "title": "Option-O: LAGOM P64 resource and manuals",
-            "url": "https://www.option-o.com/lagomp64userguide"
+            "title": "OPTION-O LAGOM P64 technical specifications",
+            "url": "https://www.option-o.com/lagom-p64"
           }
         ],
         "numericFinerDelta": null,

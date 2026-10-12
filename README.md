@@ -41,9 +41,26 @@ auxiliary bean-scale capture. Until that Streamline change is merged, open the
 plugin through the existing Extensions settings or its `ui` URL.
 
 Streamline can pass a selected `shotId`, `action=analyze|feedback`, and a
-same-host, same-protocol `return` URL. The UI also accepts `returnTo` for the
-generic launcher proposal in Streamline #99. It fetches and analyses the saved
-shot; current catalog data never silently fills historical context.
+same-hostname, same-protocol `returnTo` URL. Legacy `return` is also accepted;
+`returnTo` takes precedence. Credential-bearing and other-host links are hidden.
+It fetches and analyses the saved shot; current catalog data never silently fills
+historical context.
+
+The optional bean-scale launch parameters only prefill the feedback form:
+
+| Parameter | Meaning |
+| --- | --- |
+| `beanScaleId` | Opaque scale device ID |
+| `beanScaleRole` | `auxiliary`; defaults to this role |
+| `beanWeight` | Positive bean mass in grams |
+| `beanCapturedAt` | ISO timestamp with a timezone for the user's capture |
+| `beanSampleTimestamp` | Optional ISO timestamp with a timezone for the device sample |
+
+These URL hints are untrusted, client-reported context. They do not confirm freshness,
+prove which shot was weighed, or replace dose targets. The plugin requires its own
+“Confirm these beans were weighed for this shot” acknowledgement before saving a
+`measuredBeanDose` observation. Streamline checks the sample's role, connection and
+age again at capture; capture time and sample time describe different events.
 
 An optional `measuredBeanDose` feedback record contains an explicitly confirmed
 auxiliary scale observation: device ID, role, purpose, grams and timestamps.
@@ -329,3 +346,36 @@ settings can support a bounded numerical suggestion. Plateaus, noisy repeats,
 changed conditions and conflicting taste ask for a repeat. See the
 [grinder setup guide](docs/GRINDER_SETUP.md) for preset evidence, ELI5 explanations,
 the complete decision flow and the native-response contract.
+
+## Rough mechanical estimates
+
+The simulator can optionally use a sourced or explicitly assumed mechanical
+movement estimate to explore research suggestions in native dial units after
+one shot. It labels assumptions, asks for the reference and finer direction,
+shows sensitivity scenarios, and caps every candidate to the owner's confirmed
+step and allowed window. Estimated coordinates never become owner calibration.
+Measured native trends and hold advice take priority. See the
+[mechanics evidence and limitations](docs/GRINDER_MECHANICS.md).
+
+## Research archive and sharing
+
+The website and plugin keep a separate, bounded local research archive by
+default; you can disable it, export it or delete it. Remote sharing is off by
+default and requires an explicit choice and a configured HTTPS collector. The
+website sends only when you press Send; the opted-in plugin automatically sends
+future observations and retries while running. Random observation keys allow corrections and retry deduplication;
+personal text, host shot IDs and permanent visitor identifiers are excluded.
+The collector is self-hosted; no live collector is operated by this repository.
+See [data fields, controls and deployment](docs/RESEARCH_SHARING.md). Optional
+[private Prometheus metrics and Grafana dashboards](docs/RESEARCH_METRICS.md) show
+retained brew measurements, taste and algorithm comparisons. Corrections and
+expiry update the snapshot; missing data remains missing.
+
+Dependabot checks GitHub Actions, npm, graph-tool Python dependencies and the
+collector's Docker/Compose images weekly. Updates go through the complete CI.
+
+## Help and contribute
+
+Use the [issue chooser](https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new/choose) for bugs, feature requests, source or coffee corrections, and protocol/mock test cases. To request a model, open the [new grinder form](https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=new-grinder.yml); unknown measurements are welcome. The addon and [website](https://maxrink.github.io/decaid-assisted-dialin-plugin/simulator/) include the same Help links.
+
+[Contributing and reporting routes](CONTRIBUTING.md) explain which device or upstream project owns a problem. For vulnerabilities, follow the [security policy](SECURITY.md) and use a private report.

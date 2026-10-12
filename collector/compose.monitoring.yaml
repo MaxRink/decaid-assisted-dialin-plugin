@@ -1,0 +1,44 @@
+# Optional private monitoring overlay. No monitoring ports are published.
+services:
+  collector:
+    environment:
+      RESEARCH_METRICS_PORT: 8788
+      RESEARCH_METRICS_BIND_HOST: 0.0.0.0
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=512MB
+      - --web.enable-admin-api=false
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks: [ingestion, monitoring]
+    logging:
+      driver: "none"
+  grafana:
+    image: grafana/grafana:12.4.12
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${RESEARCH_GRAFANA_PASSWORD:?Set a strong Grafana administrator password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [monitoring]
+    logging:
+      driver: "none"
+networks:
+  monitoring:
+    internal: true
+volumes:
+  prometheus_data: {}
+  grafana_data: {}

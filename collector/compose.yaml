@@ -1,0 +1,50 @@
+services:
+  collector:
+    build:
+      context: ..
+      dockerfile: collector/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      RESEARCH_ALLOWED_ORIGINS: ${RESEARCH_ALLOWED_ORIGINS:?Set exact HTTPS browser origins}
+      RESEARCH_RETENTION_DAYS: ${RESEARCH_RETENTION_DAYS:-30}
+      RESEARCH_MAX_RECORDS: ${RESEARCH_MAX_RECORDS:-100000}
+      RESEARCH_MAX_STORAGE_BYTES: ${RESEARCH_MAX_STORAGE_BYTES:-268435456}
+      RESEARCH_REQUESTS_PER_MINUTE: ${RESEARCH_REQUESTS_PER_MINUTE:-60}
+    volumes:
+      - research_data:/var/lib/research
+    networks: [ingestion]
+    logging:
+      driver: "none"
+  tls:
+    build:
+      context: ./caddy
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    environment:
+      RESEARCH_DOMAIN: ${RESEARCH_DOMAIN:?Set your collector DNS hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [ingestion, public]
+    depends_on: [collector]
+    logging:
+      driver: "none"
+networks:
+  ingestion:
+    internal: true
+  public: {}
+volumes:
+  research_data: {}
+  caddy_data: {}
+  caddy_config: {}

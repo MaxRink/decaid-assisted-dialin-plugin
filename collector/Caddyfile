@@ -1,0 +1,15 @@
+{$RESEARCH_DOMAIN} {
+    # No access-log directive. Docker logging is disabled in compose.yaml.
+    @ingest path /v1/events /healthz
+    handle @ingest {
+        reverse_proxy collector:8787 {
+            header_up -Cookie
+            header_up -Authorization
+            header_up -X-Forwarded-For
+            header_up -X-Real-IP
+        }
+    }
+    handle {
+        respond "Not found" 404
+    }
+}

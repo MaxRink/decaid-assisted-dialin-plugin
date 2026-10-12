@@ -149,3 +149,16 @@ test('starting a new coffee clears every result immediately', async ({page}) => 
   for (const name of names) await expect(row(page,name)).toHaveAttribute('data-status','unavailable');
   await expect(page.locator('#all-comparison-context')).not.toContainText('Recorded shot 1');
 });
+
+// A slow optional reference download must not undo setup completed by the owner.
+test('late grinder metadata preserves a newly confirmed first-shot setup', async ({page}) => {
+  let releaseMetadata;
+  const released = new Promise(resolve => { releaseMetadata = resolve; });
+  await page.route('**/data/grinder-dials.json', async route => { await released; await route.continue(); });
+  await setup(page, 'DF54');
+  releaseMetadata();
+  await expect(page.locator('#grinder option')).toHaveCount(16);
+  await expect(page.locator('#simple-confirm-dial')).toBeChecked();
+  await shot(page,22,'too sour');
+  await expect(page.locator('#simple-advice')).toContainText('from 20 to 19.5 marks');
+});

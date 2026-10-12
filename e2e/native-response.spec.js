@@ -2,7 +2,6 @@ const {test, expect} = require('@playwright/test');
 async function step(page, n) {
   const button = page.locator(`button[data-wizard-step="${n}"]`);
   await button.click();
-  if (await button.getAttribute('aria-current') !== 'step') await button.click();
   await expect(button).toHaveAttribute('aria-current', 'step');
   await expect(page.locator(`section[data-wizard-step="${n}"]:not(.expert-only):visible`)).toHaveCount(1);
 }
@@ -57,10 +56,34 @@ test('stable native data gives one bounded test, then a liked coffee holds', asy
   await shot(page,22.5,28,'balanced');
   await expect(page.locator('#simple-advice')).toContainText('Keep the grinder at 22.5 marks');
 });
+test('editing a recipe keeps wizard navigation stable during focus loss', async ({page}) => {
+  await setup(page, '25');
+  await shot(page, 22, 34);
+  await step(page, 2);
+  const before = await page.evaluate(() => {
+    const rect = document.querySelector('nav.setup-steps').getBoundingClientRect();
+    return rect.top + window.scrollY;
+  });
+  await page.evaluate(() => {
+    const target = document.querySelector('#target');
+    const steps = document.querySelector('nav.setup-steps');
+    window.__navTopAfterTargetBlur = null;
+    target.addEventListener('blur', () => requestAnimationFrame(() => {
+      const rect = steps.getBoundingClientRect();
+      window.__navTopAfterTargetBlur = rect.top + window.scrollY;
+    }), {once: true});
+  });
+  await page.locator('#target').fill('26');
+  await page.locator('button[data-wizard-step="1"]').click();
+  await expect(page.locator('button[data-wizard-step="1"]')).toHaveAttribute('aria-current', 'step');
+  await expect.poll(() => page.evaluate(() => window.__navTopAfterTargetBlur)).not.toBeNull();
+  const topAfterBlur = await page.evaluate(() => window.__navTopAfterTargetBlur);
+  expect(Math.abs(topAfterBlur - before)).toBeLessThan(0.5);
+});
 test('guided bounds entry preserves shots and owner step survives a reload without confirmation', async ({page}) => {
   await setup(page);
   await shot(page,22,34);
-  await step(page,1); await page.locator('#simple-bound-min').fill('');
+  await step(page,1); await expect(page.locator('#simple-current-dial')).toBeVisible(); await page.locator('#simple-bound-min').fill('');
   await page.locator('#simple-confirm-dial').check();
   await step(page,3); await page.locator('#simple-record').click();
   await page.getByRole('button',{name:'Check step, direction and allowed trial window'}).click();
@@ -73,6 +96,6 @@ test('guided bounds entry preserves shots and owner step survives a reload witho
   await page.locator('#simple-dial-setup summary').click();
   await expect(page.locator('#simple-step')).toHaveValue('0.25');
   await expect(page.locator('#simple-confirm-dial')).not.toBeChecked();
-  await page.locator('#grinder').selectOption('LAGOM P64');
+  await page.locator('#grinder').selectOption('E65S GbW');
   await expect(page.locator('#simple-step')).toHaveValue('');
 });

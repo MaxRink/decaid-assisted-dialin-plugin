@@ -44,6 +44,8 @@ class Element {
 function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorage = null, unavailable = {}) {
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
+    "mechanical-setup", "mechanical-zero-assumed", "mechanical-enabled", "mechanical-scenario", "mechanical-slope", "mechanical-reference", "mechanical-offset", "mechanical-absolute-enabled", "mechanical-source-note", "mechanical-scenario-note", "mechanical-status", "mechanical-use-current",
+    "research-local-enabled", "research-sharing-consent", "research-sharing-status", "research-sharing-destination", "research-sharing-export", "research-sharing-send", "research-sharing-disable", "research-sharing-delete", "research-sharing-endpoint", "research-sharing-apply",
     "simple-bound-min", "simple-bound-max", "simple-step-preset", "simple-bounds-help", "simple-reset-defaults", "simple-zero-changed", "simple-profile-name", "native-response", "research-calibration", "research-inputs", "simple-dial-setup", "simple-grinder-context", "simple-brew",
     "wizard-status", "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
     "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
@@ -113,6 +115,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
     URL,
     URLSearchParams,
     location: { href: "https://example.test/simulator/" },
+    DECAID_RESEARCH_CONFIG: unavailable.researchConfig,
     document,
     window: null,
     globalThis: null,
@@ -127,7 +130,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   context.window = context;
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(`${pluginSource}\nthis.createResearchAlgorithms = createResearchAlgorithms;`, context);
+  vm.runInContext(`${pluginSource}\nthis.createResearchAlgorithms = createResearchAlgorithms; this.createResearchSharing = typeof createResearchSharing === "function" ? createResearchSharing : undefined; this.createGrinderMechanics = typeof createGrinderMechanics === "function" ? createGrinderMechanics : undefined; this.createGrinderMechanicsCatalog = typeof createGrinderMechanicsCatalog === "function" ? createGrinderMechanicsCatalog : undefined;`, context);
   vm.runInContext(engineSource, context);
   vm.runInContext(appSource, context);
   return { context, elements, downloads, windowEvents };
@@ -735,7 +738,7 @@ test("presets remain unconfirmed, respect edits, and remember each owner's step 
   assert.equal(ui.elements.get("simple-step").value, "0.25");
   const reloaded = uiFixture(undefined, ui.context.localStorage); await new Promise(setImmediate);
   assert.equal(reloaded.elements.get("simple-step").value, "0.25");
-  reloaded.elements.get("grinder").value = "LAGOM P64"; reloaded.elements.get("grinder").dispatch("change");
+  reloaded.elements.get("grinder").value = "E65S GbW"; reloaded.elements.get("grinder").dispatch("change");
   assert.equal(reloaded.elements.get("simple-step").value, "", "unknown preset stays blank");
 });
 
@@ -817,6 +820,98 @@ test("changed target and tolerance refresh the last recorded shot instead of inv
   assert.equal(comparisonValue(ui,"GbS2").case.input.toleranceMs, 2000);
 });
 
+const settleResearch = () => new Promise(resolve => setImmediate(resolve));
+function recordResearchFixture(ui, time = 22) {
+  const field = id => ui.elements.get("simple-" + id);
+  field("current-dial").value = "20"; field("step").value = "0.5"; field("finer").value = "-1"; field("confirm-dial").checked = true;
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true;
+  field("time").value = String(time); field("taste").value = "too sour"; field("record").click();
+}
+
+test("research archive defaults local-only and exports amended shots without personal details", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const calls = []; ui.context.fetch = async (...args) => { calls.push(args); throw new Error("Unexpected remote request"); };
+  ui.elements.get("bean").value = "PERSONAL COFFEE NAME"; ui.elements.get("roaster").value = "PERSONAL ROASTER";
+  recordResearchFixture(ui); await settleResearch();
+  assert.equal(ui.elements.get("research-local-enabled").checked, true);
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  assert.equal(ui.elements.get("research-sharing-consent").disabled, true);
+  assert.match(ui.elements.get("research-sharing-status").textContent, /1 record\(s\).*0 queued/);
+  recordResearchFixture(ui, 24); await settleResearch();
+  await ui.elements.get("research-sharing-export").click();
+  const exported = JSON.parse(ui.downloads.at(-1).parts.join(""));
+  assert.equal(exported.records.length, 1, "amendment replaces the record");
+  assert.equal(exported.records[0].measurements.pumpTimeSec, 24);
+  assert.equal(exported.records[0].grinder.settingUnit, "dial-marks");
+  assert.equal(exported.records[0].taste.intent, "too_sour");
+  assert.equal(exported.records[0].advice.proposedSetting, 19.5);
+  assert.doesNotMatch(JSON.stringify(exported), /PERSONAL|grinderId|beanId|native-shot|timestamp|burrIdentity|calibrationEpoch|token|serial/i);
+  assert.equal(calls.length, 0);
+});
+
+test("remote research requires consent and explicit send; opt-out and local-off persist", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const calls = []; ui.context.fetch = async (url, init) => { calls.push({url, init}); return {ok: true, json: async () => ({accepted: JSON.parse(init.body).records.length})}; };
+  const endpoint = ui.elements.get("research-sharing-endpoint"); endpoint.value = "https://collector.example/records";
+  await ui.elements.get("research-sharing-apply").click();
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  ui.elements.get("research-sharing-consent").checked = true; await ui.elements.get("research-sharing-consent").dispatch("change");
+  recordResearchFixture(ui); await settleResearch(); recordResearchFixture(ui, 23); await settleResearch();
+  assert.match(ui.elements.get("research-sharing-status").textContent, /1 queued/);
+  assert.equal(calls.length, 0);
+  await ui.elements.get("research-sharing-send").click();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.credentials, "omit"); assert.equal(calls[0].init.redirect, "error");
+  const batch = JSON.parse(calls[0].init.body); assert.equal(batch.records.length, 1); assert.equal(batch.records[0].measurements.pumpTimeSec, 23);
+  recordResearchFixture(ui, 24); await settleResearch();
+  await ui.elements.get("research-sharing-disable").click();
+  ui.elements.get("research-local-enabled").checked = false; await ui.elements.get("research-local-enabled").dispatch("change");
+  const restored = uiFixture(undefined, ui.context.localStorage); await settleResearch();
+  assert.equal(restored.elements.get("research-sharing-consent").checked, false);
+  assert.equal(restored.elements.get("research-local-enabled").checked, false);
+  assert.match(restored.elements.get("research-sharing-status").textContent, /1 record\(s\).*0 queued/);
+  recordResearchFixture(restored); await settleResearch();
+  await restored.elements.get("research-sharing-export").click();
+  assert.equal(JSON.parse(restored.downloads.at(-1).parts.join("")).records.length, 1);
+  await restored.elements.get("research-sharing-delete").click();
+  await restored.elements.get("research-sharing-export").click();
+  assert.equal(JSON.parse(restored.downloads.at(-1).parts.join("")).records.length, 0);
+});
+
+test("research endpoint changes revoke consent and unsafe endpoints cannot enable sharing", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const endpoint = ui.elements.get("research-sharing-endpoint");
+  endpoint.value = "https://collector.example/records?token=private"; await ui.elements.get("research-sharing-apply").click();
+  assert.match(ui.elements.get("research-sharing-status").textContent, /HTTPS without credentials, query or fragment/);
+  assert.equal(ui.elements.get("research-sharing-consent").disabled, true);
+  endpoint.value = "https://collector.example/records"; await ui.elements.get("research-sharing-apply").click();
+  ui.elements.get("research-sharing-consent").checked = true; await ui.elements.get("research-sharing-consent").dispatch("change");
+  recordResearchFixture(ui); await settleResearch();
+  endpoint.value = "https://another.example/records"; await ui.elements.get("research-sharing-apply").click();
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  assert.match(ui.elements.get("research-sharing-status").textContent, /0 queued/);
+  assert.match(ui.elements.get("research-sharing-destination").textContent, /another.example/);
+});
+
+test("deployment research destination never grants consent and unknown measured clocks stay unknown", async () => {
+  const ui = uiFixture(undefined, null, {researchConfig: {endpoint: "https://deployment.example/records"}}); await settleResearch();
+  assert.equal(ui.elements.get("research-sharing-consent").checked, false);
+  assert.equal(ui.elements.get("research-sharing-consent").disabled, false);
+  assert.match(ui.elements.get("research-sharing-destination").textContent, /deployment.example/);
+  recordResearchFixture(ui);
+  ui.elements.get("simple-clock-confirmed").checked = false;
+  ui.elements.get("simple-pressure-confirmed").checked = false;
+  ui.elements.get("simple-record").click(); await settleResearch();
+  await ui.elements.get("research-sharing-export").click();
+  const record = JSON.parse(ui.downloads.at(-1).parts.join("")).records[0];
+  assert.equal(record.recipe.targetClock, "unknown");
+  assert.equal(record.measurements?.pumpTimeSec, undefined);
+  assert.equal(record.measurements?.recordingTimeSec, undefined);
+  assert.equal(record.measurements?.doseG, undefined);
+  assert.equal(record.recipe.targetDoseG, 18);
+  assert.equal(record.advice.direction, "none");
+});
+
 test("blank machine recipes cannot record and their recovery opens the recipe step", () => {
   const ui = uiFixture(), record = nativeSession(ui), field = id => ui.elements.get("simple-" + id);
   let focused = false; field("profile-name").focus = () => { focused = true; };
@@ -878,10 +973,13 @@ test("LAGOM 01 printed decimal dial requires an owner step instead of adding one
 
 test("boot and restored pages clear dial confirmation without erasing the owner step", async () => {
   const ui = uiFixture(), confirmation = ui.elements.get("simple-confirm-dial"), step = ui.elements.get("simple-step");
-  step.value = "0.25"; confirmation.checked = true;
-  await new Promise(setImmediate);
-  assert.equal(confirmation.checked, false, "async metadata boot clears restored approval");
-  assert.equal(step.value, "0.25");
+  ui.windowEvents.get("pageshow")({persisted: false});
+  step.value = "99"; confirmation.checked = true;
+  assert.equal(confirmation.disabled, true, "setup stays unavailable during browser restoration");
+  await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(confirmation.checked, false, "browser-restored approval is cleared before setup becomes interactive");
+  assert.equal(step.value, "0.5", "unconfirmed restored input is replaced by the model preset");
+  assert.equal(confirmation.disabled, false);
   assert.equal(confirmation.autocomplete, "off");
   const record = nativeSession(ui); record(22, 34);
   assert.equal(ui.elements.get("simple-continue").disabled, false);
@@ -892,4 +990,162 @@ test("boot and restored pages clear dial confirmation without erasing the owner 
   await new Promise(resolve => setTimeout(resolve, 5));
   assert.equal(confirmation.checked, false, "form restoration after pageshow is also cleared");
   assert.equal(step.value, "0.25");
+});
+
+function enableMechanicalFixture(ui, absolute = false) {
+  ui.elements.get("simple-bound-min").value = "15"; ui.elements.get("simple-bound-max").value = "25";
+  ui.elements.get("mechanical-reference").value = "0";
+  ui.elements.get("mechanical-enabled").checked = true;
+  ui.elements.get("mechanical-zero-assumed").checked = absolute;
+}
+function researchCard(ui, name) { return ui.elements.get("all-comparison-results").children.find(card => card.attributes["data-algorithm"] === name); }
+
+test("rough mechanical assumptions enable bounded native first-shot estimates without calibration", async () => {
+  const ui = uiFixture(); await settleResearch();
+  assert.equal(ui.elements.get("mechanical-enabled").checked, false);
+  assert.equal(ui.elements.get("mechanical-zero-assumed").checked, false);
+  assert.equal(ui.elements.get("mechanical-slope").value, "10.4");
+  assert.match(ui.elements.get("mechanical-scenario-note").textContent, /8–13.*not confidence bounds/);
+  enableMechanicalFixture(ui); recordResearchFixture(ui); await settleResearch();
+  for (const name of ["GbS1", "GbS2"]) {
+    const card = researchCard(ui, name);
+    assert.equal(card.attributes["data-status"], "computed");
+    assert.equal(card.attributes["data-coordinate-status"], "estimated_relative");
+    assert.match(card.textContent, /Estimated trial:.*marks/);
+  }
+  for (const name of ["GbS3", "GbS4", "DdEff"]) assert.equal(researchCard(ui, name).attributes["data-status"], "unavailable");
+  assert.match(ui.elements.get("simple-advice").textContent, /from 20 to 19.5 marks/, "native manual guidance stays primary");
+  const choose = researchCard(ui, "GbS1").children.find(node => node.textContent === "Try this estimated approach");
+  assert.ok(choose); choose.click(); await settleResearch();
+  assert.match(ui.elements.get("simple-advice").textContent, /Your chosen estimated trial/);
+  ui.elements.get("simple-continue").click();
+  const proposed = Number(ui.elements.get("simple-current-dial").value); assert.ok(proposed >= 19.5 && proposed < 20);
+  const profiles = JSON.parse(ui.context.localStorage.getItem("decaid.assisted-dialin.grinder-instances.v1"));
+  assert.ok(profiles.every(profile => profile.anchors == null), "assumptions never become owner anchors");
+});
+
+test("rough zero explicitly enables absolute models, while taste and measured plateau keep priority", async () => {
+  const ui = uiFixture(); await settleResearch(); enableMechanicalFixture(ui, true); recordResearchFixture(ui);
+  for (const name of ["GbS3", "GbS4"]) assert.equal(researchCard(ui, name).attributes["data-coordinate-status"], "estimated_absolute");
+  ui.elements.get("simple-taste").value = "balanced"; ui.elements.get("simple-record").click();
+  assert.match(ui.elements.get("simple-advice").textContent, /Keep the grinder at 20/);
+  for (const name of ["GbS1", "GbS2", "GbS3", "GbS4"]) assert.ok(!researchCard(ui, name).children.some(node => node.textContent === "Try this estimated approach"));
+  ui.elements.get("simple-new").click(); enableMechanicalFixture(ui);
+  for (const [index, [setting, time]] of [[22,34],[22.25,31],[22.5,31]].entries()) {
+    if (index) ui.elements.get("simple-continue").click();
+    ui.elements.get("simple-current-dial").value = String(setting); ui.elements.get("simple-step").value = "0.25"; ui.elements.get("simple-finer").value = "-1"; ui.elements.get("simple-confirm-dial").checked = true;
+    ui.elements.get("simple-time").value = String(time); ui.elements.get("simple-taste").value = "too bitter"; ui.elements.get("simple-clock-confirmed").checked = true; ui.elements.get("simple-pressure-confirmed").checked = true; ui.elements.get("simple-record").click();
+  }
+  assert.match(ui.elements.get("simple-advice").textContent, /Keep the grinder at 22.5.*repeat/);
+  assert.ok(!researchCard(ui, "GbS1").children.some(node => node.textContent === "Try this estimated approach"));
+});
+
+test("mechanical input gaps hold, and changing grinders revokes the assumption", async () => {
+  const ui = uiFixture(); await settleResearch(); enableMechanicalFixture(ui); ui.elements.get("simple-bound-max").value = ""; recordResearchFixture(ui);
+  assert.equal(researchCard(ui, "GbS1").attributes["data-status"], "unavailable");
+  assert.match(researchCard(ui, "GbS1").textContent, /both ends/);
+  ui.elements.get("simple-bound-max").value = "25"; ui.elements.get("simple-clock-confirmed").checked = false; ui.elements.get("simple-record").click();
+  assert.equal(researchCard(ui, "GbS1").attributes["data-status"], "unavailable");
+  ui.elements.get("grinder").value = "DF54"; ui.elements.get("grinder").dispatch("change");
+  assert.equal(ui.elements.get("mechanical-enabled").checked, false);
+  assert.match(ui.elements.get("mechanical-source-note").textContent, /unverified|transcript/i);
+  ui.elements.get("grinder").value = "LAGOM P64"; ui.elements.get("grinder").dispatch("change");
+  assert.equal(Number(ui.elements.get("mechanical-slope").value), 100);
+  assert.match(ui.elements.get("mechanical-scenario-note").textContent, /whole printed dial number/);
+  assert.equal(ui.elements.get("simple-step").value, "0.1");
+});
+
+test("research exports keep series ordinals, corrections, all approaches and actual native categories", async () => {
+  const ui = uiFixture(); await settleResearch(); recordResearchFixture(ui); await settleResearch();
+  recordResearchFixture(ui, 24); await settleResearch();
+  ui.elements.get("simple-continue").click(); recordResearchFixture(ui, 26); await settleResearch();
+  await ui.elements.get("research-sharing-export").click();
+  let records = JSON.parse(ui.downloads.at(-1).parts.join("")).records;
+  assert.equal(records.length, 2); assert.equal(records[0].researchSeries, records[1].researchSeries);
+  assert.match(records[0].researchSeries, /^[a-f0-9]{32}$/); assert.deepEqual(records.map(record => record.shotOrdinal), [1,2]);
+  assert.equal(records[0].measurements.doseG, undefined); assert.equal(records[0].recipe.targetDoseG, 18);
+  assert.equal(records[0].approaches.length, 11); assert.ok(records[0].approaches.some(row => row.algorithm === "native-response"));
+  const firstSeries = records[0].researchSeries;
+  ui.elements.get("bean").value = "PRIVATE SECOND COFFEE"; ui.elements.get("bean").dispatch("change"); recordResearchFixture(ui); await settleResearch();
+  ui.elements.get("grinder").value = "1Zpresso J-Max"; ui.elements.get("grinder").dispatch("change"); recordResearchFixture(ui); await settleResearch();
+  await ui.elements.get("research-sharing-export").click(); records = JSON.parse(ui.downloads.at(-1).parts.join("")).records;
+  assert.notEqual(records[2].researchSeries, firstSeries); assert.equal(records[2].shotOrdinal, 1);
+  assert.equal(records[3].grinder.model, "1Zpresso J-Max"); assert.equal(records[3].grinder.settingUnit, "clicks"); assert.equal(records[3].grinder.setting, 20);
+  assert.doesNotMatch(JSON.stringify(records), /PRIVATE SECOND COFFEE/);
+});
+
+test("owner slope works for an unknown model while sub-click mechanical trials stay withheld", async () => {
+  const ui = uiFixture(); await settleResearch();
+  ui.elements.get("grinder").value = "Other known grinder"; ui.elements.get("grinder").dispatch("change");
+  assert.equal(ui.elements.get("mechanical-slope").value, "");
+  ui.elements.get("mechanical-slope").value = "5"; ui.elements.get("mechanical-slope").dispatch("change");
+  enableMechanicalFixture(ui); recordResearchFixture(ui);
+  assert.equal(researchCard(ui, "GbS1").attributes["data-coordinate-status"], "estimated_relative");
+  ui.elements.get("grinder").value = "1Zpresso J-Max"; ui.elements.get("grinder").dispatch("change");
+  enableMechanicalFixture(ui); recordResearchFixture(ui);
+  ui.elements.get("simple-step").value = "1"; ui.elements.get("simple-record").click();
+  const card = researchCard(ui, "GbS1");
+  assert.match(card.textContent, /withheld|Estimated trial: 19 clicks/);
+  assert.doesNotMatch(card.textContent, /Estimated trial: 19\.[0-9]+ clicks/);
+});
+
+test("relative mechanical proposals withhold a result that depends on the temporary origin", async () => {
+  const ui = uiFixture(); await settleResearch(); enableMechanicalFixture(ui);
+  ui.elements.get("mechanical-reference").value = "29.5";
+  recordResearchFixture(ui);
+  const card = researchCard(ui, "GbS1");
+  assert.equal(card.attributes["data-status"], "computed");
+  assert.match(card.textContent, /temporary reference changes this result/);
+  assert.ok(!card.children.some(node => node.textContent === "Try this estimated approach"));
+});
+
+
+test("LAGOM research records retain decimal printed coordinates", async () => {
+  for (const model of ["LAGOM 01", "LAGOM P64"]) {
+  const ui = uiFixture(); await settleResearch();
+  ui.elements.get("grinder").value = model; ui.elements.get("grinder").dispatch("change");
+  recordResearchFixture(ui);
+  ui.elements.get("simple-current-dial").value = "2.1"; ui.elements.get("simple-step").value = "0.1"; ui.elements.get("simple-record").click(); await settleResearch();
+  await ui.elements.get("research-sharing-export").click();
+  const record = JSON.parse(ui.downloads.at(-1).parts.join("")).records[0];
+  assert.equal(record.grinder.model, model); assert.equal(record.grinder.settingUnit, "printed-decimal");
+  assert.equal(record.grinder.setting, 2.1); assert.equal(record.grinder.step, .1);
+  }
+});
+
+test("legacy LAGOM micro-tick steps cannot silently become decimal-number steps", async () => {
+  const ui = uiFixture(); await settleResearch();
+  ui.elements.get("grinder").value = "LAGOM 01"; ui.elements.get("grinder").dispatch("change");
+  ui.elements.get("simple-step").value = "1"; ui.elements.get("simple-finer").value = "-1";
+  ui.elements.get("simple-confirm-dial").checked = true; ui.elements.get("simple-confirm-dial").dispatch("change");
+  const key = "decaid.assisted-dialin.grinder-instances.v1";
+  const profiles = JSON.parse(ui.context.localStorage.getItem(key));
+  const lagom = profiles.find(profile => profile.model === "LAGOM 01"); delete lagom.nativeSetup.settingUnit;
+  ui.context.localStorage.setItem(key, JSON.stringify(profiles));
+  const old = uiFixture(undefined, ui.context.localStorage); await settleResearch();
+  assert.equal(old.elements.get("simple-step").value, ""); assert.equal(old.elements.get("simple-finer").value, "");
+  assert.equal(old.elements.get("simple-confirm-dial").checked, false);
+  assert.match(old.elements.get("simple-step-preset").textContent, /different or unspecified dial unit/);
+  old.elements.get("simple-step").value = "0.1"; old.elements.get("simple-finer").value = "-1";
+  old.elements.get("simple-confirm-dial").checked = true; old.elements.get("simple-confirm-dial").dispatch("change");
+  const current = uiFixture(undefined, old.context.localStorage); await settleResearch();
+  assert.equal(current.elements.get("simple-step").value, "0.1"); assert.equal(current.elements.get("simple-confirm-dial").checked, false);
+  assert.equal(JSON.parse(current.context.localStorage.getItem(key)).find(profile => profile.model === "LAGOM 01").nativeSetup.settingUnit, "decimal dial numbers");
+});
+
+test("legacy P64 micro-tick steps are cleared before decimal-number migration", async () => {
+  const ui = uiFixture(); await settleResearch();
+  ui.elements.get("grinder").value = "LAGOM P64"; ui.elements.get("grinder").dispatch("change");
+  ui.elements.get("simple-step").value = "1"; ui.elements.get("simple-finer").value = "-1";
+  ui.elements.get("simple-confirm-dial").checked = true; ui.elements.get("simple-confirm-dial").dispatch("change");
+  const key = "decaid.assisted-dialin.grinder-instances.v1";
+  const profiles = JSON.parse(ui.context.localStorage.getItem(key));
+  const p64 = profiles.find(profile => profile.model === "LAGOM P64");
+  p64.nativeSetup.settingUnit = "dial micro-ticks";
+  ui.context.localStorage.setItem(key, JSON.stringify(profiles));
+  const restored = uiFixture(undefined, ui.context.localStorage); await settleResearch();
+  assert.equal(restored.elements.get("simple-step").value, "");
+  assert.equal(restored.elements.get("simple-finer").value, "");
+  assert.equal(restored.elements.get("simple-confirm-dial").checked, false);
+  assert.match(restored.elements.get("simple-step-preset").textContent, /different or unspecified dial unit/);
 });

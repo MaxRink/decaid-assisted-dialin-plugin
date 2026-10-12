@@ -1,0 +1,36 @@
+const {test: base, expect} = require('@playwright/test');
+const test = base.extend({request: async ({context}, use) => use(context.request)});
+test('native help stays visible in Simple mode and opens an empty grinder form without leaking launch context or changing devices', async ({page, request, context}) => {
+  await request.post('/__test/reset');
+  await page.goto('/api/v1/plugins/assisted-dialin.reaplugin/ui?shotId=PRIVATE-SHOT&beanScaleId=PRIVATE-SCALE');
+  const footer = page.locator('#pluginHelp');
+  await expect(page.locator('#modeToggle')).toHaveAttribute('aria-pressed', 'false');
+  await expect(footer).toBeVisible();
+  await expect(footer.getByRole('link')).toHaveCount(11);
+  await expect(footer.getByRole('link', {name: 'report privately', exact: true})).toHaveAttribute('href', 'https://github.com/MaxRink/decaid-assisted-dialin-plugin/security/advisories/new');
+  await expect(footer.getByRole('link', {name: 'Protocol or mock-device report', exact: true})).toHaveAttribute('href', 'https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=protocol-mock-device.yml');
+  const before = (await (await request.get('/__test/state')).json()).requests;
+  const outgoing = [];
+  await context.route('https://github.com/**', async route => {
+    outgoing.push({url: route.request().url(), headers: route.request().headers()});
+    await route.fulfill({contentType: 'text/html', body: '<title>Issue form fixture</title>'});
+  });
+  const popupPromise = page.waitForEvent('popup');
+  await footer.getByRole('link', {name: 'Request a grinder', exact: true}).click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveTitle('Issue form fixture');
+  expect(outgoing).toHaveLength(1);
+  const target = new URL(outgoing[0].url);
+  expect(target.pathname).toBe('/MaxRink/decaid-assisted-dialin-plugin/issues/new');
+  expect([...target.searchParams.keys()]).toEqual(['template']);
+  expect(target.searchParams.get('template')).toMatch(/grinder/);
+  expect(outgoing[0].url).not.toContain('PRIVATE-');
+  expect(outgoing[0].headers.referer).toBeUndefined();
+  expect(await popup.evaluate(() => window.opener === null && document.referrer === '')).toBe(true);
+  await popup.close();
+  await page.locator('nav button[data-native-step="4"]').click();
+  await expect(footer).toBeVisible();
+  expect((await (await request.get('/__test/state')).json()).requests).toEqual(before);
+  await page.setViewportSize({width: 375, height: 900});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

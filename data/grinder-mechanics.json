@@ -1,0 +1,913 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-12",
+  "purpose": "Research evidence, not calibrated grinder parameters or automatic production defaults",
+  "catalogSha256": "56abad4877cbcac655d7a87493e4b77653939a4f643b19724d197f8daba2345b",
+  "quantityRules": [
+    "lead=thread pitch×number of starts; movement per revolution is not automatically thread pitch",
+    "delta axial travel=lead×input revolutions×transmission ratio",
+    "No particle-size, brew-time-response or absolute-gap calibration follows from nominal mechanical movement",
+    "null means unverified; candidate estimates must stay separate from established relativeMovement",
+    "No numeric uncertainty interval was fabricated; stated approximate values are not statistical confidence intervals"
+  ],
+  "models": [
+    {
+      "id": "e64ws",
+      "model": "E64 WS",
+      "burrGeometry": "flat",
+      "mechanism": "Motorized disc-distance adjustment with encoder/AGS diagnostics.",
+      "progression": "Displayed distance coordinate is linear in micrometres; mechanical lead/gearing unpublished.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "umPerUnit": 1,
+        "coordinateUnit": "displayed micrometre",
+        "status": "manufacturer-stated",
+        "quantity": "indicated disc distance",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Manufacturer disc-distance calibration; an indicated value is not independently measured physical gap.",
+      "sourceIds": [
+        "e64manual",
+        "e64software"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "Readout semantics established; physical positioning accuracy, backlash and transmission unknown."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified."
+    },
+    {
+      "id": "e65sgbw",
+      "model": "E65S GbW",
+      "burrGeometry": "flat",
+      "mechanism": "Manual lever/ring; DDD reports relative disc separation.",
+      "progression": "Fine thread suggests nominally linear angular travel; full-turn lead unknown.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "umPerUnit": 1,
+        "coordinateUnit": "DDD displayed micrometre",
+        "status": "manufacturer-stated",
+        "quantity": "indicated disc distance",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "DDD calibration required; distinguish lever scale from distance readout.",
+      "sourceIds": [
+        "e65brochure"
+      ],
+      "candidates": [
+        {
+          "value": 5.25,
+          "unit": "µm per indicative scale interval",
+          "status": "conditional-endpoint-arithmetic",
+          "math": "(600−180)/80",
+          "conditions": [
+            "80 equal intervals rather than80marks",
+            "brochure endpoint range matches scale endpoints"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified."
+    },
+    {
+      "id": "e80sgbw",
+      "model": "E80S GbW",
+      "burrGeometry": "flat",
+      "mechanism": "Manual adjustment lever/ring and DDD; do not substitute motorized E80W architecture.",
+      "progression": "DDD distance coordinate linear; lever travel law and pitch not verified.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "umPerUnit": 1,
+        "coordinateUnit": "DDD displayed micrometre",
+        "status": "manufacturer-stated",
+        "quantity": "indicated disc distance",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Manufacturer DDD and zero calibration after service/burr replacement.",
+      "sourceIds": [
+        "e80manual",
+        "e80brochure"
+      ],
+      "candidates": [
+        {
+          "value": 3,
+          "unit": "µm per indicative scale interval",
+          "status": "different-model-only",
+          "math": "E80S brochure:(450−150)/100",
+          "conditions": [
+            "E80S specification is NOT verified for E80S GbW",
+            "100equal intervals unverified"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified."
+    },
+    {
+      "id": "df64gen1",
+      "model": "DF64 Gen1",
+      "burrGeometry": "flat",
+      "mechanism": "Threaded top collar acting on spring-supported upper burr carrier.",
+      "progression": "Nominal constant lead implies linear unloaded axial travel; real carrier tilt/backlash and spring seating are not measured.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "umPerUnit": 10.4,
+        "coordinateUnit": "original dial notch",
+        "status": "firsthand-measured-approximate",
+        "quantity": "reported burr-spacing change",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Movable sticker/pointer and replacement burr thickness change reference; first chirp is not full parallel contact.",
+      "sourceIds": [
+        "dfmanual",
+        "dfcollar",
+        "hbmeasured"
+      ],
+      "candidates": [
+        {
+          "value": 1248,
+          "unit": "µm per revolution",
+          "status": "conditional-dial-count",
+          "math": "10.4×120",
+          "conditions": [
+            "Owner must verify120equivalent evenly spaced notches per fullturn",
+            "120notches not independently qualified here"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "One owner measurement, unknown instrument/revision/error; not a factory specification or universal Gen1 tolerance."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "exploratoryScenario": {
+        "centralUmPerUnit": 10.4,
+        "sensitivityIntervalUmPerUnit": [
+          8,
+          13
+        ],
+        "coordinateUnit": "original dial notch",
+        "status": "explicit-modeling-assumption",
+        "intervalMeaning": "Analyst-selected sensitivity envelope; not a statistical confidence interval or manufacturer tolerance. Values outside it remain possible.",
+        "rationale": "Centered on single-owner10.4µm report; deliberately broad rounded sensitivity envelope, not a measurement error estimate.",
+        "requiresExplicitAssumptionAcceptance": true,
+        "absoluteOffsetUm": null,
+        "promotesToCalibration": false,
+        "sourceIds": [
+          "dfmanual",
+          "dfcollar",
+          "hbmeasured"
+        ]
+      }
+    },
+    {
+      "id": "df64gen2",
+      "model": "DF64 Gen2",
+      "burrGeometry": "flat",
+      "mechanism": "Threaded top collar and spring-supported upper carrier.",
+      "progression": "Ideal screw travel linear; generation-specific lead unverified.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": null,
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "User/burr/revision-specific zero; pointer position is a reference.",
+      "sourceIds": [
+        "dfmanual",
+        "dfcollar"
+      ],
+      "candidates": [
+        {
+          "value": 10.4,
+          "unit": "µm per original dial notch",
+          "status": "cross-generation-assumption-only",
+          "conditions": [
+            "Assume Gen1 transmission and dial angular spacing unchanged; not verified"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "unknownReason": "No model-qualified primary dimensioned thread drawing or firsthand pitch measurement located. DF64V8.3µm must not be transferred.",
+      "exploratoryScenario": {
+        "centralUmPerUnit": 10.4,
+        "sensitivityIntervalUmPerUnit": [
+          8,
+          13
+        ],
+        "coordinateUnit": "original dial notch",
+        "status": "explicit-modeling-assumption",
+        "intervalMeaning": "Analyst-selected sensitivity envelope; not a statistical confidence interval or manufacturer tolerance. Values outside it remain possible.",
+        "rationale": "Cross-generation assumption: Gen1-like carrier travel and angular dial spacing; no direct Gen2 physical measurement.",
+        "requiresExplicitAssumptionAcceptance": true,
+        "absoluteOffsetUm": null,
+        "promotesToCalibration": false,
+        "sourceIds": [
+          "dfmanual",
+          "dfcollar"
+        ]
+      }
+    },
+    {
+      "id": "df54",
+      "model": "DF54",
+      "burrGeometry": "flat",
+      "mechanism": "Threaded top collar, wave-spring-supported upper carrier.",
+      "progression": "Expected constant-lead axial travel; numeric pitch currently candidate only.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": null,
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Burr installation/alignment and dial pointer reference affect contact zero.",
+      "sourceIds": [
+        "df54product",
+        "dfcollar",
+        "df54video",
+        "df54original"
+      ],
+      "candidates": [
+        {
+          "threadPitchMm": 1,
+          "equivalentMarksPerRevolution": 120,
+          "value": 8.333333333333334,
+          "unit": "µm per dial mark",
+          "status": "unverified-original-video-transcript",
+          "math": "1000×1/120=8.333…; half-mark≈4.17µm",
+          "conditions": [
+            "Assumes transcript accurate",
+            "Assumes single-start thread/direct1:1collar travel",
+            "Original recording measurement has not been verified"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "unknownReason": "No dimensioned manufacturer thread drawing located; smart transcript is a research lead rather than confirmed metrology.",
+      "exploratoryScenario": {
+        "centralUmPerUnit": 8.333333333333334,
+        "sensitivityIntervalUmPerUnit": [
+          6,
+          11
+        ],
+        "coordinateUnit": "original dial mark",
+        "status": "explicit-modeling-assumption",
+        "intervalMeaning": "Analyst-selected sensitivity envelope; not a statistical confidence interval or manufacturer tolerance. Values outside it remain possible.",
+        "rationale": "Centered on unverified transcript1mm/120marks claim; broadened to explore source/revision uncertainty, not a measured interval.",
+        "requiresExplicitAssumptionAcceptance": true,
+        "absoluteOffsetUm": null,
+        "promotesToCalibration": false,
+        "sourceIds": [
+          "df54product",
+          "dfcollar",
+          "df54video",
+          "df54original"
+        ]
+      }
+    },
+    {
+      "id": "nichezero",
+      "model": "Niche Zero",
+      "burrGeometry": "conical",
+      "mechanism": "Rotating adjustment ring changes burr relationship.",
+      "progression": "Likely constant-lead axial motion, but pitch and local conical separation mapping unknown.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": null,
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Follow manufacturer calibration after disassembly; ring zero is not a particle-size origin.",
+      "sourceIds": [
+        "nichecal",
+        "nichepatent"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "unknownReason": "Reviewed patent/guide do not provide model-qualified numeric lead; Niche Duo and Gevi figures excluded."
+    },
+    {
+      "id": "encoreesp",
+      "model": "Encore ESP",
+      "burrGeometry": "conical",
+      "mechanism": "Dual-range stepped adjustment.",
+      "progression": "Piecewise increments: espresso and filter regions differ. No single global micrometre-per-click slope.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "status": "manufacturer-representative-interview",
+        "quantity": "reported vertical burr movement",
+        "segments": [
+          {
+            "settings": [
+              1,
+              20
+            ],
+            "umPerClick": 20
+          },
+          {
+            "settings": [
+              21,
+              40
+            ],
+            "umPerClick": 90
+          }
+        ],
+        "boundary20To21Um": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Shim stack shifts zero/range; does not justify global response or particle-size calibration.",
+      "sourceIds": [
+        "espmanual",
+        "espinterview"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "Named model and vertical domain in firsthand interview; representative unnamed and exact transition interval unspecified. No thread lead or positional tolerance published."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified."
+    },
+    {
+      "id": "sculptor064s",
+      "model": "Timemore Sculptor064S",
+      "burrGeometry": "flat",
+      "mechanism": "Stepless dial and threaded burr adjustment.",
+      "progression": "Nominally linear axial screw motion; production/prototype variants and dial groove meanings require verification.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": null,
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Calibration pointer/pin and burr swap shift reference; chirp-to-lock is not an independent pitch measurement.",
+      "sourceIds": [
+        "timemorefaq",
+        "timemoremanuals",
+        "hbcorrected"
+      ],
+      "candidates": [
+        {
+          "value": 3,
+          "unit": "µm per side groove",
+          "status": "owner-report-without-method",
+          "sourceId": "hbcorrected",
+          "conditions": [
+            "Side groove is NOT printed minor line",
+            "Verify dial revision and groove count before mapping"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "unknownReason": "No independently qualified numeric pitch for this exact production model; early5µm-line claims corrected by later observer."
+    },
+    {
+      "id": "sculptor078s",
+      "model": "Timemore Sculptor078S",
+      "burrGeometry": "flat",
+      "mechanism": "Stepless dial and threaded burr adjustment.",
+      "progression": "Nominally linear axial screw motion; production/prototype variants and dial groove meanings require verification.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": {
+        "value": 600,
+        "status": "firsthand-reported-thread-pitch-assuming-single-start",
+        "sourceId": "hbmeasured"
+      },
+      "relativeMovement": {
+        "umPerUnit": 30,
+        "coordinateUnit": "whole printed dial number",
+        "status": "firsthand-measured-approximate",
+        "quantity": "reported burr-spacing change",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Calibration pointer/pin and burr swap shift reference; chirp-to-lock is not an independent pitch measurement.",
+      "sourceIds": [
+        "timemorefaq",
+        "timemoremanuals",
+        "hbcorrected",
+        "hbmeasured"
+      ],
+      "candidates": [
+        {
+          "value": 3,
+          "unit": "µm per side groove",
+          "status": "owner-report-without-method",
+          "sourceId": "hbcorrected",
+          "conditions": [
+            "Side groove is NOT printed minor line",
+            "Verify dial revision and groove count before mapping"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "Owner reports roughly0.6mm pitch and30µm/number; no instrument/error budget or manufacturing revision supplied."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "exploratoryScenario": {
+        "centralUmPerUnit": 30,
+        "sensitivityIntervalUmPerUnit": [
+          24,
+          36
+        ],
+        "coordinateUnit": "whole printed dial number",
+        "status": "explicit-modeling-assumption",
+        "intervalMeaning": "Analyst-selected sensitivity envelope; not a statistical confidence interval or manufacturer tolerance. Values outside it remain possible.",
+        "rationale": "Centered on firsthand approximate30µm report; illustrative20percent sensitivity choice, not a measured tolerance.",
+        "requiresExplicitAssumptionAcceptance": true,
+        "absoluteOffsetUm": null,
+        "promotesToCalibration": false,
+        "sourceIds": [
+          "timemorefaq",
+          "timemoremanuals",
+          "hbcorrected",
+          "hbmeasured"
+        ]
+      }
+    },
+    {
+      "id": "lagom01",
+      "model": "LAGOM01",
+      "burrGeometry": "flat",
+      "mechanism": "Stepless dial with published vertical travel per engraved line.",
+      "progression": "Manufacturer per-line vertical mapping is nominally linear.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "umPerUnit": 7.5,
+        "coordinateUnit": "0.1 printed dial number (one minor line)",
+        "status": "manufacturer-stated",
+        "quantity": "vertical burr movement",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Factory zero and burr-touch reference vary; service/burr replacement procedure depends on revision.",
+      "sourceIds": [
+        "lagom01",
+        "lagom01faq"
+      ],
+      "candidates": [
+        {
+          "value": 750.0,
+          "unit": "µm per revolution",
+          "status": "conditional-dial-count",
+          "math": "7.5×100",
+          "conditions": [
+            "Requires verified100minor intervals/fullturn; do not infer from visible dial arc alone"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "perWholePrintedNumberUm": 75.0
+    },
+    {
+      "id": "lagomp64",
+      "model": "LAGOM P64",
+      "burrGeometry": "flat",
+      "mechanism": "Stepless dial with published vertical travel per engraved line.",
+      "progression": "Manufacturer per-line vertical mapping is nominally linear.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": {
+        "umPerUnit": 10,
+        "coordinateUnit": "0.1 printed dial number (one minor line)",
+        "status": "manufacturer-stated",
+        "quantity": "vertical burr movement",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Factory zero and burr-touch reference vary; service/burr replacement procedure depends on revision.",
+      "sourceIds": [
+        "p64",
+        "p64guide"
+      ],
+      "candidates": [
+        {
+          "value": 1000,
+          "unit": "µm per revolution",
+          "status": "conditional-dial-count",
+          "math": "10×100",
+          "conditions": [
+            "Requires verified100minor intervals/fullturn; do not infer from visible dial arc alone"
+          ],
+          "usableAsDefault": false
+        }
+      ],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "perWholePrintedNumberUm": 100
+    },
+    {
+      "id": "xpro",
+      "model": "1Zpresso X-Pro",
+      "burrGeometry": "conical",
+      "mechanism": "External stepped adjustment ring.",
+      "progression": "Nominal equal axial movement per click; conical normal gap and particle size do not equal axial movement.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": {
+        "value": 750.0,
+        "status": "derived-from-rounded-click-specification",
+        "math": "12.5×60"
+      },
+      "relativeMovement": {
+        "umPerUnit": 12.5,
+        "coordinateUnit": "click",
+        "status": "manufacturer-stated-nominal",
+        "quantity": "manufacturer-described burr movement",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Use model-specific zero/calibration procedure; do not force burr lock.",
+      "sourceIds": [
+        "xpro"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "Published nominal movement, no metrology tolerance; thread-start count not supplied. Does not identify conical surface-normal clearance."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "clicksPerRevolution": 60
+    },
+    {
+      "id": "jmax",
+      "model": "1Zpresso J-Max",
+      "burrGeometry": "conical",
+      "mechanism": "External stepped adjustment ring.",
+      "progression": "Nominal equal axial movement per click; conical normal gap and particle size do not equal axial movement.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": {
+        "value": 800,
+        "status": "manufacturer-stated",
+        "math": "0.8mm×1000;90×8.8=792 reflects rounded perclick value"
+      },
+      "relativeMovement": {
+        "umPerUnit": 8.8,
+        "coordinateUnit": "click",
+        "status": "manufacturer-stated-nominal",
+        "quantity": "manufacturer-described burr movement",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Use model-specific zero/calibration procedure; do not force burr lock.",
+      "sourceIds": [
+        "jmax",
+        "jmaxzh"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "Published nominal movement, no metrology tolerance; thread-start count not supplied. Does not identify conical surface-normal clearance."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "clicksPerRevolution": 90
+    },
+    {
+      "id": "kseries",
+      "model": "1Zpresso K-Pro/K-Max/K-Plus",
+      "burrGeometry": "conical",
+      "mechanism": "External stepped adjustment ring.",
+      "progression": "Nominal equal axial movement per click; conical normal gap and particle size do not equal axial movement.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": {
+        "value": 1980,
+        "status": "derived-from-rounded-click-specification",
+        "math": "22×90"
+      },
+      "relativeMovement": {
+        "umPerUnit": 22,
+        "coordinateUnit": "click",
+        "status": "manufacturer-stated-nominal",
+        "quantity": "manufacturer-described burr movement",
+        "derivation": null,
+        "validatesParticleSize": false,
+        "validatesShotResponse": false
+      },
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Use model-specific zero/calibration procedure; do not force burr lock.",
+      "sourceIds": [
+        "kseries",
+        "kmanual"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "Published nominal movement, no metrology tolerance; thread-start count not supplied. Does not identify conical surface-normal clearance."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "clicksPerRevolution": 90
+    },
+    {
+      "id": "odegen2",
+      "model": "Fellow Ode Gen2",
+      "burrGeometry": "flat",
+      "mechanism": "Stepped numbered adjustment knob;31positions across11numbers.",
+      "progression": "Equal-looking numbers/clicks do not establish displacement or a full360-degree range.",
+      "threadPitchMm": null,
+      "threadStarts": null,
+      "leadUmPerRevolution": null,
+      "relativeMovement": null,
+      "absoluteGapFromPrintedZero": null,
+      "contactZero": "Manufacturer backoff differs for stockGen2 andSSP burrs.",
+      "sourceIds": [
+        "ode",
+        "odecal",
+        "odeespresso"
+      ],
+      "candidates": [],
+      "uncertainty": {
+        "numericInterval": null,
+        "reason": "No traceable tolerance/measurement-error budget supplied; do not invent a confidence interval."
+      },
+      "photoPolicy": "Link source only; no licensed reusable drawing/photo verified.",
+      "unknownReason": "No primary numeric lead/displacement specification located; espresso unsupported by manufacturer.",
+      "espressoSupported": false
+    }
+  ],
+  "sources": {
+    "e64manual": {
+      "title": "E64 WS original instructions",
+      "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Original_instructions_EN.pdf",
+      "kind": "manufacturer-manual",
+      "scope": "pp12–13 and34: displayed disc distance and calibration",
+      "reviewedAt": "2026-10-12"
+    },
+    "e64software": {
+      "title": "E64 WS software manual",
+      "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Software_Manual.pdf",
+      "kind": "manufacturer-manual",
+      "scope": "AGS motor/encoder diagnostic and recipe disc distance; no transmission lead",
+      "reviewedAt": "2026-10-12"
+    },
+    "e65brochure": {
+      "title": "E65S GbW brochure, manufacturer document on dealer host",
+      "url": "https://www.primulator.lt/media/repository/Mahlkonig/E65S_Gbw/Mahlkoenig_E65S_GbW_Brochure.pdf",
+      "kind": "manufacturer-brochure",
+      "scope": "03/2020 pp6,8: DDD,180–600µm range,80-step indicating scale",
+      "reviewedAt": "2026-10-12"
+    },
+    "e80manual": {
+      "title": "E80/F80 GbW original instructions",
+      "url": "https://downloads.mahlkoenig.de/Service/Mahlkoenig_E80_F80_GbW_Espresso_Grinder_Original_instruction_manual_EN.pdf",
+      "kind": "manufacturer-manual",
+      "scope": "Lever adjustment, lock, zero adjustment and DDD calibration",
+      "reviewedAt": "2026-10-12"
+    },
+    "e80brochure": {
+      "title": "E80S brochure",
+      "url": "https://downloads.mahlkoenig.de/Products/Mahlkoenig_E80S_Espresso_Grinder_Product_Brochure.pdf",
+      "kind": "manufacturer-brochure",
+      "scope": "E80S, NOT exact E80S GbW:150–450µm,100-step scale,0.001mm indication",
+      "reviewedAt": "2026-10-12"
+    },
+    "dfmanual": {
+      "title": "DF64 user manual",
+      "url": "https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual",
+      "kind": "vendor-manual",
+      "scope": "Threaded top collar, clockwise finer; SSP thickness changes zero",
+      "reviewedAt": "2026-10-12"
+    },
+    "dfcollar": {
+      "title": "DF replacement collar photographs",
+      "url": "https://dfgrinders.ca/products/collar",
+      "kind": "vendor-parts",
+      "scope": "Separate DF54/DF64 collars; no dimensioned thread specification",
+      "reviewedAt": "2026-10-12"
+    },
+    "df54product": {
+      "title": "MiiCoffee DF54",
+      "url": "https://miicoffee.shop/products/miicoffee-df54-single-dose-coffee-grinder",
+      "kind": "vendor-product",
+      "scope": "Upper carrier and wave spring; successive product revisions",
+      "reviewedAt": "2026-10-12"
+    },
+    "df54video": {
+      "title": "DF54 mechanical review by 资深硬核自家咖啡",
+      "url": "https://www.douyin.com/video/7348713697268862258?source=Googlebot-sdc",
+      "kind": "unverified-video-transcript",
+      "scope": "2024-03-21 smart text claims1mm pitch and120 equivalent marks/rev; original audio not verified",
+      "reviewedAt": "2026-10-12"
+    },
+    "df54original": {
+      "title": "Original DF54 review video, same author",
+      "url": "https://www.bilibili.com/video/BV1HH4y1p7vj/",
+      "kind": "original-video-link",
+      "scope": "2024-03-20; full video not accessible for independent measurement verification",
+      "reviewedAt": "2026-10-12"
+    },
+    "hbmeasured": {
+      "title": "theaaaa firsthand adjustment measurements, post12",
+      "url": "https://www.home-barista.com/grinders/user-experience-with-timemore-sculptor-grinders-078-078s-t89609-10.html",
+      "kind": "firsthand-owner-measurement",
+      "scope": "2023-09-30:078S~0.6mm thread pitch/~30µm per whole number; DF64v1~10.4µm/notch; DF64V~8.3µm/notch",
+      "reviewedAt": "2026-10-12"
+    },
+    "hbcorrected": {
+      "title": "Jonk correction to early Sculptor pitch assumptions",
+      "url": "https://www.home-barista.com/grinders/proposed-alternative-to-marker-test-for-burr-alignment-t91921-10.html",
+      "kind": "firsthand-owner-report",
+      "scope": "2024-01:production changes; side grooves3µm064/064S/078S,5µm078; method not supplied",
+      "reviewedAt": "2026-10-12"
+    },
+    "timemorefaq": {
+      "title": "Sculptor FAQ",
+      "url": "https://www.timemore.com/pages/sculptor-related-faq",
+      "kind": "manufacturer-faq",
+      "scope": "064S/078S stepless; do not transfer non-S detent counts",
+      "reviewedAt": "2026-10-12"
+    },
+    "timemoremanuals": {
+      "title": "Timemore download center",
+      "url": "https://www.timemore.com/pages/download-center",
+      "kind": "manufacturer-manual-index",
+      "scope": "Manual access examined; no verified numeric thread lead found",
+      "reviewedAt": "2026-10-12"
+    },
+    "nichecal": {
+      "title": "Niche Zero calibration",
+      "url": "https://www.nichecoffee.co.uk/blogs/exploring-coffee/how-to-calibrate-your-grinder-for-optimum-performance",
+      "kind": "manufacturer-guide",
+      "scope": "Recalibration reference after disassembly; no thread pitch",
+      "reviewedAt": "2026-10-12"
+    },
+    "nichepatent": {
+      "title": "Niche grinding-device patent GB2562504A",
+      "url": "https://patents.google.com/patent/GB2562504A/en",
+      "kind": "patent",
+      "scope": "Adjustment ring/support construction; no model-qualified numeric thread pitch found",
+      "reviewedAt": "2026-10-12"
+    },
+    "espmanual": {
+      "title": "Encore ESP instruction manual",
+      "url": "https://assets.breville.com/ZCG495/manual-encoreesp-v1-0-en-010923.pdf",
+      "kind": "manufacturer-manual",
+      "scope": "40 positions, fine1–20/coarse21–40; shim calibration",
+      "reviewedAt": "2026-10-12"
+    },
+    "espinterview": {
+      "title": "WIRED firsthand Encore ESP review and company interview",
+      "url": "https://www.wired.com/review/baratza-encore-esp-coffee-grinder/",
+      "kind": "manufacturer-representative-interview",
+      "scope": "Company representative reports20µm vertical per fine step,90µm per coarse step; unnamed representative",
+      "reviewedAt": "2026-10-12"
+    },
+    "p64": {
+      "title": "LAGOM P64 specifications",
+      "url": "https://www.option-o.com/lagom-p64",
+      "kind": "manufacturer-specification",
+      "scope": "Each0.1 line10µm vertical movement",
+      "reviewedAt": "2026-10-12"
+    },
+    "p64guide": {
+      "title": "LAGOM P64 user guide",
+      "url": "https://www.option-o.com/lagomp64userguide",
+      "kind": "manufacturer-guide",
+      "scope": "Zero procedure differs before/after August2022; replacement burr recalibration",
+      "reviewedAt": "2026-10-12"
+    },
+    "lagom01": {
+      "title": "LAGOM01 specifications",
+      "url": "https://www.option-o.com/lagom-01",
+      "kind": "manufacturer-specification",
+      "scope": "Each0.1 line7.5µm vertical movement",
+      "reviewedAt": "2026-10-12"
+    },
+    "lagom01faq": {
+      "title": "LAGOM01 WBrC FAQ",
+      "url": "https://www.option-o.com/wbrc-resource",
+      "kind": "manufacturer-faq",
+      "scope": "Minor tick~7.5µm; factory burr touch below indicated zero; safety lock and burr-gap/particle-size distinction",
+      "reviewedAt": "2026-10-12"
+    },
+    "xpro": {
+      "title": "X-Pro manual",
+      "url": "https://1zpresso.coffee/manual-xpro-en/",
+      "kind": "manufacturer-manual",
+      "scope": "60clicks/rev,12.5µm burr movement/click",
+      "reviewedAt": "2026-10-12"
+    },
+    "jmax": {
+      "title": "J-Max manual",
+      "url": "https://1zpresso.coffee/manual-jmax-en/",
+      "kind": "manufacturer-manual",
+      "scope": "90clicks/rev,8.8µm nominal/click",
+      "reviewedAt": "2026-10-12"
+    },
+    "jmaxzh": {
+      "title": "J-Max Chinese manual",
+      "url": "https://1zpresso.coffee/wp-content/uploads/2021/12/J-Max-%E8%AF%B4%E6%98%8E%E4%B9%A620211105.pdf",
+      "kind": "manufacturer-manual",
+      "scope": "Page1 explicitly0.8mm burr rise/fall per turn;90divisions; nominal0.0088mm/click",
+      "reviewedAt": "2026-10-12"
+    },
+    "kseries": {
+      "title": "K-Pro/K-Max/K-Plus comparison",
+      "url": "https://1zpresso.coffee/k/",
+      "kind": "manufacturer-specification",
+      "scope": "90clicks/rev,22µm/click; excludesK-Ultra",
+      "reviewedAt": "2026-10-12"
+    },
+    "kmanual": {
+      "title": "K-Series manual",
+      "url": "https://1zpresso.coffee/jp/manual-k-en/",
+      "kind": "manufacturer-manual",
+      "scope": "Calibratable scale and higher-number coarser direction",
+      "reviewedAt": "2026-10-12"
+    },
+    "ode": {
+      "title": "Ode Gen2 product",
+      "url": "https://fellowproducts.com/collections/grind-brew/products/ode-brew-grinder-gen-2?variant=40978992529508",
+      "kind": "manufacturer-product",
+      "scope": "31settings/11numbers; no published axial movement",
+      "reviewedAt": "2026-10-12"
+    },
+    "odecal": {
+      "title": "Ode Gen2 burr installation and calibration",
+      "url": "https://help.fellowproducts.com/hc/en-us/articles/7767147426843-how-do-i-install-and-calibrate-my-ode-gen-2-brew-burrs-and-ssp-mp-burrs",
+      "kind": "manufacturer-guide",
+      "scope": "Contact reference; Gen2 andSSP use different backoff",
+      "reviewedAt": "2026-10-12"
+    },
+    "odeespresso": {
+      "title": "Ode Gen2 espresso suitability",
+      "url": "https://support.fellowproducts.com.au/en_us/is-ode-gen-2-suitable-for-grinding-espresso-HJt8Rm8qZe",
+      "kind": "manufacturer-support",
+      "scope": "Not intended for espresso",
+      "reviewedAt": "2026-10-12"
+    }
+  }
+}

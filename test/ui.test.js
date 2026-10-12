@@ -5,6 +5,36 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync("plugin.js", "utf8");
 
+test("help links expose only fixed HTTPS issue routes and never prefill private launch context", async () => {
+  const ui = await uiFixture(async () => response({}), {location: {
+    href: "http://127.0.0.1/api/v1/plugins/assisted-dialin.reaplugin/ui?shotId=PRIVATE-SHOT&beanScaleId=PRIVATE-SCALE",
+    pathname: "/api/v1/plugins/assisted-dialin.reaplugin/ui",
+    search: "?shotId=PRIVATE-SHOT&beanScaleId=PRIVATE-SCALE",
+  }});
+  const footer = ui.html.match(/<footer id="pluginHelp">([\s\S]*?)<\/footer>/)?.[1];
+  assert.ok(footer);
+  const anchors = [...footer.matchAll(/<a\s+([^>]+)>([^<]+)<\/a>/g)];
+  assert.equal(anchors.length, 11);
+  const routes = anchors.map(([, attributes]) => {
+    const href = attributes.match(/href="([^"]+)"/)[1];
+    const url = new URL(href);
+    assert.equal(url.protocol, "https:"); assert.equal(url.hostname, "github.com");
+    assert.equal(url.username, ""); assert.equal(url.password, "");
+    assert.match(url.pathname, /^\/[^/]+\/[^/]+\/(?:issues(?:\/new)?|security\/advisories\/new)$/);
+    assert.ok([...url.searchParams.keys()].every(key => key === "template"));
+    assert.match(attributes, /target="_blank"/);
+    assert.match(attributes, /rel="noopener noreferrer"/);
+    assert.match(attributes, /referrerpolicy="no-referrer"/);
+    assert.doesNotMatch(href, /PRIVATE-/);
+    return url.pathname;
+  });
+  assert.equal(routes.filter(route => route === "/MaxRink/decaid-assisted-dialin-plugin/issues/new").length, 6);
+  assert.ok(routes.includes("/MaxRink/decaid-assisted-dialin-plugin/security/advisories/new"));
+  assert.ok(anchors.some(([, attributes]) => new URL(attributes.match(/href="([^"]+)"/)[1]).searchParams.get("template") === "protocol-mock-device.yml"));
+  assert.ok(routes.includes("/decentespresso/decaid/issues"));
+  assert.ok(routes.includes("/decentespresso/streamline-js/issues"));
+});
+
 class Element {
   constructor(name) {
     this.name = name;
@@ -131,6 +161,7 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   research.fields = {
     state: html.match(/<textarea[^>]*name="state"[^>]*>([\s\S]*?)<\/textarea>/)[1],
   };
+  const sharingElements = Object.fromEntries(["researchSharing", "researchLocal", "researchEndpoint", "researchHostLimits", "researchEnable", "researchDisable", "researchRetry", "researchExport", "researchDelete", "researchStatus", "researchExportData"].map(id => [id, new Element(id)]));
   context.document = {
     querySelector(selector) {
       return {
@@ -161,7 +192,7 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
         "#saveGrinder": saveGrinder,
         "#selectGrinder": selectGrinder,
         "#grinderManagerStatus": grinderManagerStatus,
-      }[selector];
+      }[selector] || sharingElements[selector.slice(1)];
     },
     createElement() {
       return new Element("option");
@@ -198,6 +229,7 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
     selectGrinder,
     grinderManagerStatus,
     context,
+    sharingElements,
   };
 }
 
@@ -707,4 +739,33 @@ test("native micron display uses converted values rather than the raw dD", async
   assert.match(ui.output.textContent, /Current physical dial: 50 micrometres/);
   assert.match(ui.output.textContent, /Proposed physical dial: 49 micrometres/);
   assert.doesNotMatch(ui.output.textContent, /physical dial: 500/);
+});
+
+
+test("research controls save explicit choices and show offline errors without posting from the browser to a collector", async () => {
+  const calls = [];
+  let state = {localEnabled:true,sharing:false,endpoint:null,localCount:2,queuedCount:0};
+  const ui = await uiFixture(async (url, init = {}) => {
+    calls.push({url,init});
+    assert.ok(["sharing", "sharing-export"].includes(url));
+    const input = init.body ? JSON.parse(init.body) : null;
+    if (url === "sharing-export") return response({records:[{source:"plugin",measurements:{doseG:18}}]});
+    if (init.method === "DELETE") state = {...state,sharing:false,localCount:0,queuedCount:0};
+    else if (input?.operation === "retry") state = {...state,error:"Research upload failed; queued records remain local."};
+    else if (input?.operation === "local") state = {...state,localEnabled:input.enabled};
+    else if (input?.sharing === true) {
+      if (!input.acknowledgeHostLimits) return response({error:"Acknowledge the host upload limits before sharing"},{ok:false,status:400});
+      state = {...state,sharing:true,endpoint:input.endpoint};
+    } else if (input?.sharing === false) state = {...state,sharing:false,endpoint:null,queuedCount:0};
+    return response(state);
+  });
+  const el=ui.sharingElements;
+  el.researchEndpoint.value="https://collector.example/v1/records";
+  await el.researchEnable.click();assert.match(el.researchStatus.textContent,/Acknowledge/);
+  el.researchHostLimits.checked=true;await el.researchEnable.click();assert.equal(state.sharing,true);
+  assert.equal(JSON.parse(calls.at(-1).init.body).acknowledgeHostLimits,true);
+  await el.researchRetry.click();assert.match(el.researchStatus.textContent,/upload failed/);
+  await el.researchDisable.click();assert.equal(state.sharing,false);assert.equal(state.localCount,2);
+  await el.researchExport.click();assert.match(el.researchExportData.textContent,/doseG/);assert.equal(el.researchExportData.hidden,false);
+  await el.researchDelete.click();assert.equal(state.localCount,0);
 });

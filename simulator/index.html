@@ -18,9 +18,9 @@
   </header>
   <main class="wrap" id="app">
     <div class="actions view-toolbar"><label class="mode-switch">View mode<select id="view-mode" aria-describedby="view-mode-help"><option value="simple">Simple</option><option value="expert">Expert</option></select></label><button id="theme" class="quiet" type="button">Light mode</button></div><p id="view-mode-help" class="hint">Simple: your next step and every algorithm explained. Expert: detailed measurements, calibration and experiments.</p>
-    <div id="notice" class="notice" role="status" aria-live="polite"></div>
     <nav class="setup-steps" aria-label="Dial-in steps"><button type="button" data-wizard-step="1" aria-current="step">1. Coffee &amp; equipment</button><button type="button" data-wizard-step="2">2. Recipe</button><button type="button" data-wizard-step="3">3. Brew &amp; taste</button><button type="button" data-wizard-step="4">4. Next step</button></nav>
     <p id="wizard-status" class="hint" aria-live="polite">Step 1 of 4 · Coffee and equipment</p>
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
     <section class="grid" data-wizard-step="1">
       <article id="setup" class="card">
         <div class="card-head"><div><p class="eyebrow">1 · Your setup</p><h2>Make a coffee</h2></div></div>
@@ -37,6 +37,7 @@
 
 
         </div></fieldset>
+        <p class="hint"><a id="missing-grinder" href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=new-grinder.yml" target="_blank" rel="noopener noreferrer">My grinder is missing</a> · Ask us to add your model.</p>
         <div id="grinder-load-status" role="status"></div>
         <details><summary>More about this coffee (optional)</summary><div class="fields"><label>Species / blend<input id="species" value="Arabica"></label><label>Roast level<input id="roast" value="light"></label></div><p class="hint">Use the bag’s label if you know it. Your measured shot and the taste you want guide the next small step.</p></details>
         <p class="hint expert-only">Bean and burr details identify the experiment. The shipped GBS formulas use timing and grinder coordinates; this lab keeps those context fields visible so you can see what is and is not used.</p>
@@ -50,9 +51,21 @@
           <details id="simple-grinder-context"><summary>Burrs and zero reference</summary><div class="fields"><label>Burrs fitted to this grinder<input id="burrs" value="stock burrs"></label><label class="expert-only">Calibration epoch<input id="calibration" value="epoch 1"></label></div><p class="hint">Keep these unchanged while comparing shots. If you moved the zero reference or changed burrs, start a new comparison group; old shots stay in your history.</p><button id="simple-zero-changed" type="button">I changed the burrs or zero reference</button></details>
           <details id="simple-dial-setup"><summary>Set up one small dial movement</summary>
             <p>Check the proposed small step on your own grinder. You can edit it. A suggested step is an experiment, not a promise about shot time.</p><div id="simple-step-preset" class="hint"></div>
-            <div class="fields"><label>One small step on your dial<input id="simple-step" type="number" min="0.000001" step="any" placeholder="For example, 0.5 of a mark"></label><label>When you turn finer, the numbers go<select id="simple-finer"><option value="">Choose after checking your grinder</option><option value="-1">Down</option><option value="1">Up</option></select></label></div>
-            <div class="fields"><label>Lowest setting I allow for this coffee<input id="simple-bound-min" type="number" step="any" placeholder="Your allowed trial window"></label><label>Highest setting I allow for this coffee<input id="simple-bound-max" type="number" step="any" placeholder="Your allowed trial window"></label></div><p id="simple-bounds-help" class="hint"></p>
-            <label class="check"><input id="simple-confirm-dial" type="checkbox"> I checked this small step and finer direction on my grinder. If I entered a trial window, I checked that its whole range is safe.</label><button id="simple-reset-defaults" type="button">Restore proposed step for this model</button>
+            <div class="fields"><label>One small step on your dial<input id="simple-step" autocomplete="off" disabled type="number" min="0.000001" step="any" placeholder="For example, 0.5 of a mark"></label><label>When you turn finer, the numbers go<select id="simple-finer" autocomplete="off" disabled><option value="">Choose after checking your grinder</option><option value="-1">Down</option><option value="1">Up</option></select></label></div>
+            <div class="fields"><label>Lowest setting I allow for this coffee<input id="simple-bound-min" autocomplete="off" disabled type="number" step="any" placeholder="Your allowed trial window"></label><label>Highest setting I allow for this coffee<input id="simple-bound-max" autocomplete="off" disabled type="number" step="any" placeholder="Your allowed trial window"></label></div><p id="simple-bounds-help" class="hint"></p>
+            <label class="check"><input id="simple-confirm-dial" autocomplete="off" disabled type="checkbox"> I checked this small step and finer direction on my grinder. If I entered a trial window, I checked that its whole range is safe.</label><button id="simple-reset-defaults" type="button">Restore proposed step for this model</button>
+          </details>
+          <details id="mechanical-setup"><summary>Try a rough movement estimate (optional)</summary>
+            <p>This gives the timing research tools a rough starting point before you have enough matching shots. Your taste and measured next step keep priority.</p>
+            <div id="mechanical-source-note" class="hint"></div>
+            <div class="fields"><label>Movement assumption<select id="mechanical-scenario"><option value="central">Central estimate</option><option value="lower">Lower sensitivity scenario</option><option value="upper">Upper sensitivity scenario</option><option value="owner">My own rough estimate</option></select></label><label>Estimated movement per dial unit (µm)<input id="mechanical-slope" type="number" min="0.000001" step="any" placeholder="Leave unknown values blank"></label><label>Zero or reference setting on my dial<input id="mechanical-reference" type="number" step="any" placeholder="A setting you can identify"></label></div>
+            <label class="check"><input id="mechanical-zero-assumed" type="checkbox"> Use this burr-touching dial setting as a rough zero. I understand this is an assumption, not a measured gap.</label>
+            <button id="mechanical-use-current" type="button">Use my current setting as the reference</button>
+            <p id="mechanical-scenario-note" class="hint"></p>
+            <details><summary>Optional absolute reference for additional models</summary><p>Only enter a value if you deliberately want to test an assumed absolute reference. Relative movement alone cannot tell us the gap between the burrs.</p><label>Assumed gap at the reference setting (µm)<input id="mechanical-offset" type="number" min="0" step="any" placeholder="No absolute reference assumed"></label><label class="check"><input id="mechanical-absolute-enabled" type="checkbox"> I explicitly accept this assumed absolute gap for the additional models.</label></details>
+            <label class="check"><input id="mechanical-enabled" type="checkbox"> Use a rough mechanical estimate. I accept that this guessed burr movement may not match my burr geometry or coffee response.</label>
+            <p id="mechanical-status" role="status">Rough estimates are off.</p>
+            <p class="hint">Check your small step, finer direction and allowed trial window above. A mechanical estimate never becomes a measured calibration.</p>
           </details>
           <button id="simple-start-practice" type="button">Try a fictional practice example</button>
           <p id="simple-practice-status" class="hint" role="status"></p>
@@ -135,9 +148,49 @@
       </article>
 </details></div></section>
 
+    <aside class="card research-sharing" aria-labelledby="research-sharing-title">
+      <details id="research-sharing-panel"><summary id="research-sharing-title">Local research archive · remote sharing off</summary>
+        <p>Help improve dial-in guidance with a small record of your shots. Sharing is off until you choose it.</p>
+        <p><strong>Local research archive is on by default;</strong> you can turn it off or delete it below. Records include numeric coffee weights, grinder settings and shot times, broad coffee and grinder categories, taste choices and calculation results. They exclude coffee names, personal grinder names, personal device identifiers, credentials, raw timestamps and measurement traces.</p>
+        <label class="check"><input id="research-local-enabled" type="checkbox" checked> Keep a small research archive in this browser (up to 200 records).</label>
+        <label class="check"><input id="research-sharing-consent" type="checkbox"> I choose to share these research records with the configured collector.</label>
+        <p id="research-sharing-status" role="status" aria-live="polite">Sharing is off. No collector is configured.</p>
+        <p id="research-sharing-destination" class="hint"></p>
+        <div class="actions"><button id="research-sharing-export" type="button">Save a research file locally</button><button id="research-sharing-send" type="button" disabled>Send queued records</button><button id="research-sharing-disable" type="button">Turn off and delete queued records</button><button id="research-sharing-delete" type="button">Delete all research records</button></div>
+        <p class="hint">Local export works without a collector or sharing consent. Turning sharing off deletes unsent records from this browser. Random research record and series keys identify corrections and related shots; there is no permanent visitor identifier. Your collector may receive network connection metadata.</p>
+        <details class="expert-only"><summary>Configure your research collector</summary>
+          <label>Collector HTTPS URL<input id="research-sharing-endpoint" type="url" placeholder="https://your-collector.example/records" autocomplete="off" spellcheck="false"></label>
+          <button id="research-sharing-apply" type="button">Use this collector</button>
+          <p class="hint">Use an endpoint you trust and control. There is no built-in collector. Changing the destination asks for fresh sharing consent.</p>
+        </details>
+      </details>
+    </aside>
     <div class="wizard-actions"><button id="wizard-back" type="button" disabled>Back</button><button id="wizard-next" class="primary" type="button">Next</button></div>
   </main>
-  <footer class="wrap footer"><a href="../docs/decision-trees/">How the assistant decides: illustrated decision guide</a><br>Decaid · manual guidance and fictional practice · no hardware access</footer>
+  <footer class="wrap footer">
+    <section id="help-contribute" aria-labelledby="help-title">
+      <h2 id="help-title">Help and contribute</h2>
+      <nav class="help-links" aria-label="Get help or suggest a change">
+        <a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=new-grinder.yml" target="_blank" rel="noopener noreferrer">My grinder is missing</a>
+        <a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=bug-report.yml" target="_blank" rel="noopener noreferrer">Report a problem</a>
+        <a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=feature-request.yml" target="_blank" rel="noopener noreferrer">Suggest an improvement</a>
+      </nav>
+      <p class="hint">These links open a GitHub form in a new tab. Your coffee and grinder details are not sent with the link.</p>
+      <details id="help-more"><summary>More help: references, devices and security</summary>
+        <ul>
+          <li><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/security/advisories/new" target="_blank" rel="noopener noreferrer">Report a security issue privately</a> · Keep vulnerability details out of public issues.</li>
+          <li><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=protocol-mock-device.yml" target="_blank" rel="noopener noreferrer">Protocol, integration or mock-device findings</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=source-correction.yml" target="_blank" rel="noopener noreferrer">Correct grinder facts or research evidence</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=coffee-catalog-correction.yml" target="_blank" rel="noopener noreferrer">Correct a coffee catalogue or recipe entry</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-skale-plugin/issues/new?template=bug-report.yml" target="_blank" rel="noopener noreferrer">Skale connection or scale readings</a></li>
+          <li><a href="https://github.com/MaxRink/decaid-e64ws-plugin/issues/new?template=bug-report.yml" target="_blank" rel="noopener noreferrer">E64 WS connection or grinder controls</a></li>
+          <li><a href="https://github.com/decentespresso/decaid/issues/new/choose" target="_blank" rel="noopener noreferrer">Decaid host or saved-shot problems</a></li>
+          <li><a href="https://github.com/decentespresso/streamline-js/issues/new/choose" target="_blank" rel="noopener noreferrer">Streamline navigation or display problems</a></li>
+        </ul>
+      </details>
+    </section>
+    <p><a href="../docs/decision-trees/">How the assistant decides: illustrated decision guide</a><br>Decaid · manual guidance and fictional practice · no hardware access</p>
+  </footer>
   <script src="../plugin.js"></script>
   <script src="engine.js"></script>
   <script src="app.js"></script>
