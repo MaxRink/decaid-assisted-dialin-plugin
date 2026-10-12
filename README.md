@@ -356,3 +356,9 @@ expiry update the snapshot; missing data remains missing.
 
 Dependabot checks GitHub Actions, npm, graph-tool Python dependencies and the
 collector's Docker/Compose images weekly. Updates go through the complete CI.
+
+## Help and contribute
+
+Use the [issue chooser](https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new/choose) for bugs, feature requests, source or coffee corrections, and protocol/mock test cases. To request a model, open the [new grinder form](https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=new-grinder.yml); unknown measurements are welcome. The addon and [website](https://maxrink.github.io/decaid-assisted-dialin-plugin/simulator/) include the same Help links.
+
+[Contributing and reporting routes](CONTRIBUTING.md) explain which device or upstream project owns a problem. For vulnerabilities, follow the [security policy](SECURITY.md) and use a private report.
