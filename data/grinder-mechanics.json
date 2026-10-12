@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "status": "provisional_mechanical_priors",
+  "description": "Mechanical geometry references for exploratory UI explanations. These values describe adjustment movement or a clearly marked dial fraction; they are not burr particle-size conversions, owner calibrations, or espresso response models.",
+  "models": [
+    {
+      "model": "E64 WS",
+      "nativeUnit": "micrometres",
+      "nativeRange": null,
+      "mapping": "native_disk_distance",
+      "uncertainty": "medium",
+      "basis": ["manufacturer display/manual identifies disk distance in µm"],
+      "sources": ["https://downloads.mahlkoenig.de/Service/Mahlkoenig_E64_WS_Espresso_Home_Original_instructions_EN.pdf"]
+    },
+    {
+      "model": "DF64 Gen 1",
+      "nativeUnit": "dial marks",
+      "nativeRange": { "min": 0, "max": 90 },
+      "mapping": "linear_reference_only",
+      "uncertainty": "high",
+      "basis": ["printed collar is commonly presented as approximately 0–90 marks; no universal pitch or zero offset was verified"],
+      "sources": ["https://support.clivecoffee.com/en/articles/16426035-df64-single-dose-user-manual"]
+    },
+    {
+      "model": "DF64 Gen 2",
+      "nativeUnit": "dial marks",
+      "nativeRange": { "min": 0, "max": 90 },
+      "mapping": "linear_reference_only",
+      "uncertainty": "high",
+      "basis": ["printed collar reference; indicator and burr changes require a fresh owner zero epoch"],
+      "sources": ["https://df64coffee.com/products/df64-gen-2-single-dose-coffee-grinder"]
+    },
+    {
+      "model": "DF54",
+      "nativeUnit": "dial marks",
+      "nativeRange": { "min": 0, "max": 54 },
+      "mapping": "linear_reference_only",
+      "uncertainty": "high",
+      "basis": ["numbered stepless collar; actual range and zero are revision and owner dependent"],
+      "sources": ["https://df64coffee.com/products/df54"]
+    },
+    {
+      "model": "LAGOM P64",
+      "nativeUnit": "dial micro-ticks",
+      "nativeRange": null,
+      "axialMovementUmPerNative": 10,
+      "mapping": "mechanical_pitch_reference",
+      "uncertainty": "medium",
+      "basis": ["reviewed P64 adjustment reference reports a nominal 0.1 line movement of 10 µm; burr zero and displayed tick offset remain configuration dependent"],
+      "sources": ["https://www.option-o.com/lagomp64userguide"]
+    },
+    {
+      "model": "1Zpresso X-Pro",
+      "nativeUnit": "clicks from zero",
+      "nativeRange": null,
+      "axialMovementUmPerNative": 12.5,
+      "mapping": "mechanical_pitch_reference",
+      "uncertainty": "medium",
+      "basis": ["manufacturer manual states 60 clicks per rotation and 12.5 µm movement per click"],
+      "sources": ["https://1zpresso.coffee/manual-xpro-en/"]
+    },
+    {
+      "model": "1Zpresso J-Max",
+      "nativeUnit": "clicks from zero",
+      "nativeRange": null,
+      "axialMovementUmPerNative": 8.8,
+      "mapping": "mechanical_pitch_reference",
+      "uncertainty": "medium",
+      "basis": ["manufacturer manual states 90 clicks per rotation and 8.8 µm movement per click"],
+      "sources": ["https://1zpresso.coffee/manual-jmax-en/"]
+    }
+  ]
+}
