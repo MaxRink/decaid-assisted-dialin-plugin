@@ -29,7 +29,7 @@ The strongest model-specific numerical finding is **DF64 Gen 2: 0.5 scale mark**
 | Baratza Encore ESP | 1 click | 1 | Verified discrete adjustment; use espresso band 1–20. No fractional clicks. |
 | Sculptor 064S | 0.1 printed-number interval | 0.1 / 0.2 / 0.25 | Low-confidence visual-movement heuristic, only if owner can reproduce it. |
 | Sculptor 078S | 0.1 printed-number interval | 0.1 / 0.2 / 0.25 | Same evidence limit; not a click and not transferred from non-S models. |
-| LAGOM 01 | 1 minor tick | 0.5 / 1 | Tick mechanics documented; espresso correction size is a heuristic. |
+| LAGOM 01 | Owner-supplied step | Unknown | Tick mechanics are documented, but the owner must confirm the tick-to-printed-number mapping and variant. |
 | LAGOM P64 | Owner-supplied step | Unknown | Exact tick-to-number mapping and physical pitch unverified here; no numerical preset is supplied. |
 | 1Zpresso X-Pro | 1 click | 1 | Verified 60 clicks/turn and 12.5 µm burr movement/click; effect on shot unknown. |
 | 1Zpresso J-Max | 1 click | 1 | Verified 90 clicks/turn and 8.8 µm burr movement/click; effect on shot unknown. |

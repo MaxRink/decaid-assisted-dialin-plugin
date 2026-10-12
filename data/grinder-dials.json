@@ -529,9 +529,9 @@
       },
       "direction": "Confirm the numeric finer direction on your own calibrated unit; rotation and printed-number direction are separate.",
       "espressoAdjustment": {
-        "stepNative": 1,
+        "stepNative": null,
         "basis": "cautious_product_heuristic",
-        "note": "Cautious starting trial chosen by this app; no model-specific numerical correction was verified. One tick chosen as a trial; documented pitch does not establish espresso response. Do not add 1 to the printed decimal dial number. Record tick-to-number scale and current/pre-late-2024 variant.",
+        "note": "Identify the change in your printed dial numbers for one minor tick before entering a numeric step. The documented axial movement per tick does not establish tick-to-number mapping or espresso response; current and pre-late-2024 variants differ.",
         "sources": [
           {
             "title": "Option-O: LAGOM 01 competition resource",

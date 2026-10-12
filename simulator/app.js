@@ -675,12 +675,16 @@
     return {beanId: JSON.stringify([c.bean, c.roaster, c.species, c.roast]), grinderId: c.grinderId, burrIdentity: c.burrs, calibrationEpoch: JSON.stringify([c.calibration, c.dialCalibration ? ["grinderId", "model", "burrIdentity", "calibrationEpoch", "dialMin", "dialMax", "dialA", "ddDumA", "dialB", "ddDumB"].map(key => c.dialCalibration[key] ?? null) : null]),
       settingUnit: simpleUnit(), doseG: c.dose, yieldG: c.yield, profile: $("simple-profile-name")?.value || "", clock: "pump", controlMode: $("simple-pressure-confirmed")?.checked ? "pressure" : "unknown"};
   }
+  function nativeResolution() {
+    const profile = dialProfile();
+    return profile?.visibleUnit === "clicks" || profile?.model === "Baratza Encore ESP" ? profile.visibleStep : undefined;
+  }
   function nativeResponse() {
     const latest = simpleShots.at(-1);
     if (!latest || !algorithms.recommendNativeResponse) return null;
     if (dialProfile()?.espressoAdjustment?.espressoSupported === false) return {status: "abstain", reasonCode: "unsupported_grinder", reason: "This grinder is not supported for espresso; no espresso adjustment is proposed."};
     return algorithms.recommendNativeResponse({scope: nativeScope(), currentSetting: simpleNumber("simple-current-dial"), targetTimeSec: config().target, toleranceSec: config().tolerance,
-      stepNative: simpleNumber("simple-step"), numericFinerDelta: Number($("simple-finer")?.value), bounds: {min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")},
+      stepNative: simpleNumber("simple-step"), nativeResolution: nativeResolution(), numericFinerDelta: Number($("simple-finer")?.value), bounds: {min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")},
       stepConfirmed: $("simple-confirm-dial")?.checked === true, clockConfirmed: latest.clockConfirmed, recipeConfirmed: latest.pressureConfirmed,
       taste: latest.taste, prepConcern: ["weak", "channeling"].includes(latest.taste), shots: simpleShots.map(shot => ({id: shot.id, setting: shot.setting, timeSec: shot.time, taste: shot.taste,
         scope: shot.scope, clockConfirmed: shot.clockConfirmed, recipeConfirmed: shot.pressureConfirmed, prepConcern: ["weak", "channeling"].includes(shot.taste)}))});
@@ -689,7 +693,7 @@
     const button = document.createElement("button"); button.type = "button"; text(button, label);
     button.addEventListener("click", () => {
       if (advance) { $("simple-continue")?.click(); return; }
-      const step = destination === "research-inputs" ? 4 : destination === "simple-brew" ? 3 : 1;
+      const step = destination === "research-inputs" ? 4 : destination === "simple-brew" ? 3 : destination === "simple-profile-name" ? 2 : 1;
       navigateSimple(step); const panel = $(destination); if (panel) { panel.classList.toggle("expert-only", false); panel.open = true; panel.scrollIntoView?.({block: "start"}); }
       if (field) { const input = $(field), details = input?.closest?.("details"); if (details) details.open = true; input?.focus(); }
     }); holder.append(button);
@@ -705,7 +709,10 @@
     if (response.status === "suggestion") { const next = document.createElement("p"); text(next, "Bounded next test: " + Number(response.proposedSetting.toFixed(6)) + " " + simpleUnit() + ". This estimate uses your measured shots and moves at most your confirmed step."); holder.append(next); }
     else if (response.suggestedTrial) { const trial = document.createElement("p"); text(trial, "Optional owner trial: " + Number(response.suggestedTrial.setting.toFixed(6)) + " " + simpleUnit() + ". This is one small step to collect evidence, not a learned prediction."); holder.append(trial); }
     if (response.reasonCode === "invalid_setup" || response.reasonCode === "confirmation_required") guideTo(holder, "Check step, direction and allowed trial window", "simple-dial-setup", "simple-bound-min");
-    else if (response.reasonCode === "incomplete_scope") guideTo(holder, "Check coffee and grinder details", "simple-grinder-context", "burrs");
+    else if (response.reasonCode === "incomplete_scope") {
+      if (!$("simple-profile-name")?.value.trim()) guideTo(holder, "Name this machine recipe", "simple-profile-name", "simple-profile-name");
+      else guideTo(holder, "Check coffee and grinder details", "simple-grinder-context", "burrs");
+    }
     else if (["unsupported_controller", "no_eligible_shot", "taste_required"].includes(response.reasonCode)) guideTo(holder, "Check this shot and recipe", "simple-brew", "simple-pressure-confirmed");
     else if (response.status === "hold" && response.reasonCode !== "balanced") guideTo(holder, "Repeat the current setting", "simple-brew", "simple-time", true);
     const fit = response.fit;
@@ -722,7 +729,13 @@
     const fail = message => { text($("simple-brew-status"), message); };
     if (!simpleEditingShot && simpleShots.length >= 100) return fail("This session has 100 shots. Start a new coffee to begin another session.");
     if (!c.bean.trim()) return fail("Enter your coffee name in step 1.");
+    if (!$("simple-profile-name")?.value.trim()) {
+      fail("Enter the machine recipe name in step 2 before recording this shot.");
+      guideTo($("simple-brew-status"), "Name this machine recipe", "simple-profile-name", "simple-profile-name");
+      return;
+    }
     if (current == null) return fail("Read the dial on your grinder and enter its current setting in step 1.");
+    if (nativeResolution() === 1 && !Number.isInteger(current)) return fail("Enter the whole click setting used on this grinder, including complete turns for total-click scales.");
     if (actual == null || actual <= 0 || actual > 600) return fail("Enter the time you measured, between 0 and 600 seconds.");
     if (![c.dose, c.yield, c.target].every(value => value > 0) || c.dose > 100 || c.yield > 200 || c.target > 600) return fail("Check the dose, cup weight and target time in your recipe.");
     const temperature = simpleNumber("simple-temperature"), minutes = simpleNumber("simple-minutes");
@@ -764,7 +777,7 @@
       simpleProposal = learned.proposedSetting;
       action = "Try " + Number(simpleProposal.toFixed(6)) + " " + simpleUnit() + " next (currently " + current + ").";
       why = "Your matching measured shots support this small " + learned.direction + " test. Keep the recipe unchanged and measure again.";
-    } else if (["repeat_variation", "wrong_or_flat_slope", "latest_plateau", "latest_reversal", "response_below_tolerance", "unstable_fit", "fit_direction_conflict", "operating_bounds"].includes(learned?.reasonCode)) {
+    } else if (["repeat_variation", "wrong_or_flat_slope", "latest_plateau", "latest_reversal", "response_below_tolerance", "unstable_fit", "fit_direction_conflict", "operating_bounds", "native_resolution"].includes(learned?.reasonCode)) {
       simpleProposal = current; action = "Keep the grinder at " + current + " " + simpleUnit() + " and repeat the shot."; why = learned.reason;
     } else if (!profile && learned?.suggestedTrial) {
       simpleProposal = learned.suggestedTrial.setting; action = "Optional small trial: from " + current + " to " + Number(simpleProposal.toFixed(6)) + " " + simpleUnit() + ".";
@@ -787,6 +800,14 @@
     simpleShots.forEach((saved, index) => { const entry = document.createElement("li"); text(entry, (saved.practice ? "Practice " : "Shot ") + (index + 1) + " · " + saved.setting + " " + (saved.scope?.settingUnit || simpleUnit()) + " · " + saved.time + " s · " + (saved.taste || "not tasted")); $("simple-history").append(entry); });
     compareAllCalculators(); renderNativeResponse(learned);
     $("simple-continue").disabled = false; text($("simple-brew-status"), ""); setNotice("Shot recorded. Your next step is below."); navigateSimple(4);
+  }
+  function clearRestoredDialConfirmation() {
+    const confirmation = $("simple-confirm-dial");
+    if (!confirmation) return;
+    confirmation.autocomplete = "off";
+    const restored = confirmation.checked;
+    confirmation.checked = false;
+    if (restored) invalidateSimpleAdvice();
   }
   function initializeSimple() {
     if (!$("simple-record")) return;
@@ -858,10 +879,11 @@
     try { lightTheme = storage()?.getItem("decaid.assisted-dialin.theme") === "light"; } catch (_) {}
     document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode");
     $("theme").addEventListener("click", () => { lightTheme = !lightTheme; document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode"); try { storage()?.setItem("decaid.assisted-dialin.theme", lightTheme ? "light" : "dark"); } catch (_) {} });
-    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
+    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles().finally(clearRestoredDialConfirmation); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-overall")?.addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.overall = $("assist-overall").value; renderTable(); } });
     $("assist-taste").addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
-    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple();
+    $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); clearRestoredDialConfirmation();
+    window.addEventListener?.("pageshow", () => { clearRestoredDialConfirmation(); setTimeout(clearRestoredDialConfirmation, 0); });
   }
   init();
 }());

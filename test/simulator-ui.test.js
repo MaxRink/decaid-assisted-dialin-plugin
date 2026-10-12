@@ -45,7 +45,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   const dialData = JSON.parse(fs.readFileSync(require("node:path").join(root, "data/grinder-dials.json"), "utf8"));
   const ids = [
     "simple-bound-min", "simple-bound-max", "simple-step-preset", "simple-bounds-help", "simple-reset-defaults", "simple-zero-changed", "simple-profile-name", "native-response", "research-calibration", "research-inputs", "simple-dial-setup", "simple-grinder-context", "simple-brew",
-    "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
+    "wizard-status", "grinder-load-status", "coffee-catalog", "coffee-catalog-search",
     "simple-current-dial", "simple-step", "simple-finer", "simple-confirm-dial", "simple-unit", "simple-start-practice", "simple-practice-status", "simple-time", "simple-taste", "simple-clock-confirmed", "simple-pressure-confirmed", "simple-temperature", "simple-minutes", "simple-record", "simple-practice", "simple-brew-status", "simple-advice", "simple-continue", "simple-new", "simple-history", "simple-recipe-summary", "simple-brew-summary",
     "view-mode", "notice", "theme", "algorithm", "grinder", "grinder-instance", "grinder-profiles", "add-grinder", "rename-grinder", "save-grinder", "remove-grinder", "burrs", "bean", "roaster", "species", "roast", "calibration", "dose", "yield", "target", "start", "tolerance", "plant", "noise", "pressure", "flow", "next", "run", "reset", "add", "undo", "shots", "assist-profile", "assist-dial", "assist-taste", "assist-overall", "assist", "assist-result", "helper", "helper-fields", "helper-run", "helper-result", "replay", "result", "explain", "comparison-count", "compare", "chart", "dial-panel", "export", "import", "catalog-status", "catalog-search", "catalog", "profile-picker", "all-comparison-inputs", "all-comparison-results", "all-comparison-context", "comparison-source", "compare-all-lab", "shot-trace-import", "clear-shot-trace", "export-shot-trace", "shot-trace-status", "actual-shot-trace", "actual-shot-details", "actual-shot-time", "actual-shot-clock", "taste-temperature", "taste-minutes", "manual-stop-confirmed",
   ];
@@ -90,7 +90,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
     createElementNS(_namespace, tag) { return new Element(tag); },
     createTextNode(value) { const node = new Element("text"); node.textContent = value; return node; },
   };
-  const downloads = [];
+  const downloads = [], windowEvents = new Map();
   class BlobFixture {
     constructor(parts, options) { this.parts = parts; this.type = options?.type || ""; this.size = parts.reduce((sum, part) => sum + String(part).length, 0); }
   }
@@ -102,6 +102,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   URLFixture.revokeObjectURL = () => {};
   const context = {
     console,
+    addEventListener(name, listener) { windowEvents.set(name, listener); },
     Date,
     JSON,
     Math,
@@ -129,7 +130,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
   vm.runInContext(`${pluginSource}\nthis.createResearchAlgorithms = createResearchAlgorithms;`, context);
   vm.runInContext(engineSource, context);
   vm.runInContext(appSource, context);
-  return { context, elements, downloads };
+  return { context, elements, downloads, windowEvents };
 }
 
 test("simulator UI runs a first shot and renders every comparison algorithm", () => {
@@ -814,4 +815,81 @@ test("changed target and tolerance refresh the last recorded shot instead of inv
   }
   assert.equal(comparisonValue(ui,"GbS2").case.input.targetBrewTimeMs, 25000);
   assert.equal(comparisonValue(ui,"GbS2").case.input.toleranceMs, 2000);
+});
+
+test("blank machine recipes cannot record and their recovery opens the recipe step", () => {
+  const ui = uiFixture(), record = nativeSession(ui), field = id => ui.elements.get("simple-" + id);
+  let focused = false; field("profile-name").focus = () => { focused = true; };
+  field("profile-name").value = "   "; record(22, 34);
+  assert.equal(field("history").children.length, 0);
+  assert.match(field("brew-status").textContent, /machine recipe name in step 2/);
+  field("brew-status").children.find(node => node.tagName === "BUTTON").click();
+  assert.match(ui.elements.get("wizard-status").textContent, /Step 2 of 4/);
+  assert.equal(focused, true);
+  field("profile-name").value = "My pressure recipe"; record(22, 34);
+  assert.equal(field("history").children.length, 1);
+  field("profile-name").value = ""; field("profile-name").dispatch("change");
+  focused = false;
+  ui.elements.get("native-response").children.find(node => node.tagName === "BUTTON").click();
+  assert.match(ui.elements.get("wizard-status").textContent, /Step 2 of 4/);
+  assert.equal(focused, true, "an incomplete recipe points back to its own field");
+  record(23, 30); assert.equal(field("history").children.length, 1, "failed recording retains measured history");
+});
+
+test("physical click grinders never propose a fractional setting while stepless marks can", () => {
+  for (const model of ["1Zpresso X-Pro", "1Zpresso J-Max", "1Zpresso K series", "Baratza Encore ESP", "DF64 Gen 2"]) {
+    const ui = uiFixture(), field = id => ui.elements.get("simple-" + id);
+    ui.elements.get("grinder").value = model; ui.elements.get("grinder").dispatch("change");
+    const record = nativeSession(ui, 24);
+    field("step").value = "1"; field("bound-min").value = "5"; field("bound-max").value = "20";
+    for (const [setting, time] of [[10, 34], [11, 30], [12, 26]]) {
+      if (field("history").children.length) field("continue").click();
+      record(setting, time);
+    }
+    if (model === "DF64 Gen 2") {
+      assert.equal(ui.elements.get("native-response").attributes["data-status"], "suggestion");
+      assert.match(field("advice").textContent, /Try 12.5 marks next/);
+      field("continue").click(); assert.equal(field("current-dial").value, "12.5");
+    } else {
+      assert.equal(ui.elements.get("native-response").attributes["data-reason"], "native_resolution", model);
+      assert.match(field("advice").textContent, /Keep the grinder at 12 /, model);
+      field("continue").click(); assert.equal(field("current-dial").value, "12", model);
+      record(12.5, 24); assert.equal(field("history").children.length, 3, model);
+      assert.match(field("brew-status").textContent, /whole click setting/, model);
+    }
+  }
+});
+
+test("LAGOM 01 printed decimal dial requires an owner step instead of adding one micro-tick", async () => {
+  const ui = uiFixture(); await new Promise(setImmediate);
+  ui.elements.get("grinder").value = "LAGOM 01"; ui.elements.get("grinder").dispatch("change");
+  assert.equal(ui.elements.get("simple-step").value, "");
+  assert.equal(ui.elements.get("simple-confirm-dial").checked, false);
+  assert.match(ui.elements.get("simple-step-preset").textContent, /No numeric step is assumed|printed|tick.to.number/i);
+  const field = id => ui.elements.get("simple-" + id);
+  field("current-dial").value = "2.3"; field("time").value = "34"; field("taste").value = "too bitter";
+  field("finer").value = "-1"; field("bound-min").value = "2"; field("bound-max").value = "3";
+  field("clock-confirmed").checked = true; field("pressure-confirmed").checked = true; field("record").click();
+  assert.equal(field("history").children.length, 1, "decimal native observations remain valid");
+  assert.equal(ui.elements.get("native-response").attributes["data-reason"], "invalid_setup");
+  field("continue").click(); assert.equal(field("current-dial").value, "2.3", "unknown tick scale cannot move the dial by one printed number");
+});
+
+
+test("boot and restored pages clear dial confirmation without erasing the owner step", async () => {
+  const ui = uiFixture(), confirmation = ui.elements.get("simple-confirm-dial"), step = ui.elements.get("simple-step");
+  step.value = "0.25"; confirmation.checked = true;
+  await new Promise(setImmediate);
+  assert.equal(confirmation.checked, false, "async metadata boot clears restored approval");
+  assert.equal(step.value, "0.25");
+  assert.equal(confirmation.autocomplete, "off");
+  const record = nativeSession(ui); record(22, 34);
+  assert.equal(ui.elements.get("simple-continue").disabled, false);
+  ui.windowEvents.get("pageshow")({persisted: true});
+  assert.equal(confirmation.checked, false);
+  assert.equal(ui.elements.get("simple-continue").disabled, true, "restored advice cannot retain an approved movement");
+  confirmation.checked = true;
+  await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(confirmation.checked, false, "form restoration after pageshow is also cleared");
+  assert.equal(step.value, "0.25");
 });
