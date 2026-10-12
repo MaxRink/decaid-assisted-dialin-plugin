@@ -3679,7 +3679,7 @@ try{if(localStorage.getItem('decaid-ui-mode')==='expert'&&modeToggle)modeToggle.
 
   return {
     id: ID,
-    version: "0.2.0",
+    version: "0.3.1",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;

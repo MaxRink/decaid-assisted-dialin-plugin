@@ -63,3 +63,9 @@ test('numeric host settings strings can supply missing current dose and yield', 
   assert.equal(body.status, 'recommendation');
   assert.deepEqual(body.comparison.userSuppliedCurrentFields.filter(key => key === 'dose' || key === 'yield').sort(), ['dose', 'yield']);
 });
+
+test('runtime plugin version matches the install manifest', () => {
+  const {plugin} = load();
+  assert.equal(plugin.version, JSON.parse(fs.readFileSync('manifest.json', 'utf8')).version);
+  plugin.onUnload();
+});
