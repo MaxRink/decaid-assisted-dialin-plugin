@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -52,18 +53,12 @@ jobs:
       - run: node --check simulator/app.js && node --check simulator/engine.js
       - run: python3 scripts/build-simulator.py
       - run: npm run package
-      - name: Check package root
-        shell: bash
-        run: |
-          expected=$'LICENSE\nNOTICE\nREADME.md\nmanifest.json\nplugin.js'
-          actual=$(unzip -Z1 dist/decaid-assisted-dialin-plugin-0.3.0.zip | awk 'index($0, "/") == 0' | sort)
-          test "$actual" = "$expected"
-          python3 -c "import zipfile; z = zipfile.ZipFile('dist/decaid-assisted-dialin-plugin-0.3.0.zip'); assert 'docs/GBS_GUIDE.md' in z.namelist(); assert z.testzip() is None"
+      - run: python3 -m unittest discover -s test -p package_plugin_test.py
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.x'
         with:
           name: decaid-assisted-dialin-plugin-${{ github.sha }}
-          path: dist/decaid-assisted-dialin-plugin-0.3.0.zip
+          path: dist/*.zip
           if-no-files-found: error
 
   algorithm-plots:
@@ -125,7 +120,7 @@ jobs:
           mkdir -p source-archive local-zip
           git archive --format=zip --prefix=decaid-assisted-dialin-plugin-main/ HEAD > /tmp/dialin-source.zip
           unzip -q /tmp/dialin-source.zip -d source-archive
-          unzip -q dist/decaid-assisted-dialin-plugin-0.3.0.zip -d local-zip
+          unzip -q dist/*.zip -d local-zip
       - run: cp ci/validate-host-contract.dart decaid-host/tool/validate-dialin-contract.dart
       - name: Validate extended endpoint contract
         run: |
