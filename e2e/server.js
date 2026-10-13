@@ -19,7 +19,7 @@ function savedShot(id = 'shot-1') {
 }
 function newSession() {
   const shots = ['shot-1', 'shot-2', 'shot-3'].map(savedShot);
-  const state = {shots, workflow: clone(shots[0].workflow), beans: [{id: 'bean-1', name: 'Fixture coffee', roaster: 'Owner', species: 'Arabica'}], grinders: [{id: 'grinder-1', model: 'E64 WS', burrs: 'stock', settingType: 'numeric'}], storage: {}, requests: [], config: {}, settings: {TargetTimeSec: 30, StepSize: 10, NumericFinerDelta: -1}};
+  const state = {shots, workflow: clone(shots[0].workflow), beans: [{id: 'bean-1', name: 'Fixture coffee', roaster: 'Owner', species: 'Arabica'}], grinders: [{id: 'grinder-1', model: 'E64 WS', burrs: 'stock', settingType: 'numeric'}], storage: {}, requests: [], config: {}, grinderObservation: {info: {observations: ['setting'], capabilities: []}, snapshot: {timestamp: new Date().toISOString(), state: 'idle', observedSetting: '501 ddValueDum'}}, settings: {TargetTimeSec: 30, StepSize: 10, NumericFinerDelta: -1}};
   state.fetch = async (url, init = {}) => {
     const u = new URL(url, 'http://127.0.0.1');
     const pathname = u.pathname;
@@ -27,6 +27,8 @@ function newSession() {
     if (state.config.delayPath === pathname) await new Promise(resolve => setTimeout(resolve, state.config.delayMs || 250));
     if (state.config.failPath === pathname) return json({error: 'Injected host failure'}, state.config.status || 503);
     if (pathname === '/api/v1/workflow') return json(state.workflow);
+    if (pathname === '/api/v1/grinder/info') return json((state.config.grinderObservation || state.grinderObservation).info);
+    if (pathname === '/api/v1/grinder/state') return json((state.config.grinderObservation || state.grinderObservation).snapshot);
     if (pathname === '/api/v1/shots') return json({items: state.shots.map(({id,timestamp,workflow}) => ({id,timestamp,workflow})), total: state.shots.length});
     if (pathname.startsWith('/api/v1/shots/')) return json(state.shots.find(s => s.id === decodeURIComponent(pathname.split('/').at(-1))) || {error: 'No such shot'}, state.shots.some(s => s.id === decodeURIComponent(pathname.split('/').at(-1))) ? 200 : 404);
     if (pathname === '/api/v1/beans' && init.method === 'POST') { const item = {id: 'bean-' + randomUUID(), ...JSON.parse(init.body)}; state.beans.push(item); return json(item, 201); }

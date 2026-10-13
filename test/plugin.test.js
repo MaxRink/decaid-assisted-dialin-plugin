@@ -70,6 +70,11 @@ test('runtime plugin version matches the install manifest', () => {
   plugin.onUnload();
 });
 
+test('manifest registers the live grinder observation endpoint', () => {
+  const ids = JSON.parse(fs.readFileSync('manifest.json', 'utf8')).api.map(item => item.id);
+  assert.ok(ids.includes('grinder-observation'));
+});
+
 test('exposes a healthy grinder observation as opaque live provenance', async () => {
   const fetchImpl = async (url) => {
     if (url.endsWith('/grinder/info')) return {ok: true, status: 200, json: async () => ({observations: ['setting'], capabilities: []})};
