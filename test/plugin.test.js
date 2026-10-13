@@ -73,7 +73,7 @@ test('runtime plugin version matches the install manifest', () => {
 test('exposes a healthy grinder observation as opaque live provenance', async () => {
   const fetchImpl = async (url) => {
     if (url.endsWith('/grinder/info')) return {ok: true, status: 200, json: async () => ({observations: ['setting'], capabilities: []})};
-    if (url.endsWith('/grinder/state')) return {ok: true, status: 200, json: async () => ({observedSetting: '501 ddValueDum', ddSensorFailed: false})};
+    if (url.endsWith('/grinder/state')) return {ok: true, status: 200, json: async () => ({state: 'running', observedSetting: '501 ddValueDum'})};
     return {ok: false, status: 404, json: async () => ({})};
   };
   const {plugin} = load({fetchImpl});
@@ -88,7 +88,7 @@ test('exposes a healthy grinder observation as opaque live provenance', async ()
 test('does not expose a failed or malformed grinder observation', async () => {
   const fetchImpl = async (url) => url.endsWith('/grinder/info')
     ? {ok: true, status: 200, json: async () => ({observations: ['setting']})}
-    : {ok: true, status: 200, json: async () => ({observedSetting: '501 ddValueDum', ddSensorFailed: true})};
+    : {ok: true, status: 200, json: async () => ({state: 'running'})};
   const {plugin} = load({fetchImpl});
   const body = JSON.parse((await plugin.handleHttpRequest({endpoint: 'grinder-observation', method: 'GET'})).body);
   assert.equal(body.status, 'unavailable');

@@ -142,6 +142,8 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   const saveGrinder = new Element("saveGrinder");
   const selectGrinder = new Element("selectGrinder");
   const grinderManagerStatus = new Element("grinderManagerStatus");
+  const grinderObservation = new Element("grinderObservation");
+  const grinderObservationStatus = new Element("grinderObservationStatus");
   analysis.fields = { shotId: "shot-1" };
   form.fields = { shotId: "shot-1", notes: "<img src=x onerror=alert(1)>" };
   form.fields = {
@@ -192,6 +194,8 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
         "#saveGrinder": saveGrinder,
         "#selectGrinder": selectGrinder,
         "#grinderManagerStatus": grinderManagerStatus,
+        "#grinderObservation": grinderObservation,
+        "#grinderObservationStatus": grinderObservationStatus,
       }[selector] || sharingElements[selector.slice(1)];
     },
     createElement() {
@@ -228,6 +232,8 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
     saveGrinder,
     selectGrinder,
     grinderManagerStatus,
+    grinderObservation,
+    grinderObservationStatus,
     context,
     sharingElements,
   };
@@ -241,6 +247,17 @@ test("recommendation success renders JSON as text", async () => {
   assert.match(ui.output.textContent, /recommendation/);
   assert.match(ui.output.textContent, /2\.2/);
   assert.equal(ui.output.innerHTML, "");
+});
+
+test("live grinder observation is available from the equipment step", async () => {
+  const ui = await uiFixture(async (url) => {
+    if (String(url).endsWith("grinder-observation"))
+      return response({ status: "available", setting: "501 ddValueDum", unit: "opaque", provenance: "live read-only" });
+    return response({});
+  });
+  await ui.grinderObservation.click();
+  assert.match(ui.grinderObservationStatus.textContent, /501 ddValueDum/);
+  assert.match(ui.grinderObservationStatus.textContent, /live read-only/);
 });
 
 test("native grinder manager uses host IDs, saves anchors, selects and reads back the setting", async () => {
