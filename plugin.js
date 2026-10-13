@@ -4651,7 +4651,7 @@ if(researchPanel){
 
   return {
     id: ID,
-    version: "0.5.0",
+    version: "0.6.0",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;

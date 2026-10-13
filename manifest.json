@@ -3,7 +3,7 @@
   "name": "Assisted dial-in",
   "author": "Maximilian Rink and Decaid contributors",
   "description": "Local assisted dial-in with bean context, post-brew flavour, brew metrics and recovered algorithm replay.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "apiVersion": 1,
   "permissions": [
     "log",
