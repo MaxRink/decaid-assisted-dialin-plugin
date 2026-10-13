@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function load({shots = [], stored = null, settings = {GrinderId: 'e64', GrinderModel: 'E64', BeanBatchId: 'batch-a', ProfileId: 'espresso'}} = {}) {
+function load({shots = [], stored = null, settings = {GrinderId: 'e64', GrinderModel: 'E64', BeanBatchId: 'batch-a', ProfileId: 'espresso'}, fetchImpl = null} = {}) {
   const events = [];
   const host = {
     log: (message) => events.push(message),
@@ -14,9 +14,9 @@ function load({shots = [], stored = null, settings = {GrinderId: 'e64', GrinderM
   };
   let plugin;
   const source = fs.readFileSync('plugin.js', 'utf8');
-  const fetchStub = async (url) => url.includes('/workflow')
+  const fetchStub = fetchImpl || (async (url) => url.includes('/workflow')
     ? {ok: true, status: 200, json: async () => ({context: {beanBatchId: settings.BeanBatchId, grinderId: settings.GrinderId, grinderModel: settings.GrinderModel}, profile: {title: settings.ProfileId, steps: [{pump: 'pressure', pressure: 9}]}})}
-    : {ok: true, status: 200, json: async () => ({items: shots, total: shots.length})};
+    : {ok: true, status: 200, json: async () => ({items: shots, total: shots.length})});
   const context = {console, setTimeout, clearTimeout, Date, JSON, Math, Promise, URLSearchParams, fetch: fetchStub, btoa: (s) => Buffer.from(s).toString('base64')};
   vm.createContext(context);
   vm.runInContext(`${source}\nthis.createPlugin = createPlugin;`, context);
@@ -68,4 +68,29 @@ test('runtime plugin version matches the install manifest', () => {
   const {plugin} = load();
   assert.equal(plugin.version, JSON.parse(fs.readFileSync('manifest.json', 'utf8')).version);
   plugin.onUnload();
+});
+
+test('exposes a healthy grinder observation as opaque live provenance', async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/grinder/info')) return {ok: true, status: 200, json: async () => ({observations: ['setting'], capabilities: []})};
+    if (url.endsWith('/grinder/state')) return {ok: true, status: 200, json: async () => ({observedSetting: '501 ddValueDum', ddSensorFailed: false})};
+    return {ok: false, status: 404, json: async () => ({})};
+  };
+  const {plugin} = load({fetchImpl});
+  const body = JSON.parse((await plugin.handleHttpRequest({endpoint: 'grinder-observation', method: 'GET'})).body);
+  assert.deepEqual(body, {
+    status: 'available', setting: '501 ddValueDum', unit: 'opaque', verified: false,
+    source: 'decaid-grinder-observation',
+    provenance: 'Live read-only grinder display observation. The value is opaque and is not a micron conversion, verified shot setting, or automatic control command.',
+  });
+});
+
+test('does not expose a failed or malformed grinder observation', async () => {
+  const fetchImpl = async (url) => url.endsWith('/grinder/info')
+    ? {ok: true, status: 200, json: async () => ({observations: ['setting']})}
+    : {ok: true, status: 200, json: async () => ({observedSetting: '501 ddValueDum', ddSensorFailed: true})};
+  const {plugin} = load({fetchImpl});
+  const body = JSON.parse((await plugin.handleHttpRequest({endpoint: 'grinder-observation', method: 'GET'})).body);
+  assert.equal(body.status, 'unavailable');
+  assert.match(body.reason, /sensor/);
 });

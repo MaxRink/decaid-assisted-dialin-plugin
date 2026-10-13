@@ -66,6 +66,16 @@ test('request rate and storage budgets bound ingestion', async t => {
   assert.equal((await capped.post(large)).status, 507); assert.ok((await fs.readdir(capped.directory)).length < 25); // A partial batch is safely retried by observation ID.
 });
 
+test('collector validates and applies the public ingestion connection cap', async t => {
+  const f = await fixture(t, { maxConnections: 3 });
+  assert.equal(f.server.maxConnections, 3);
+  const invalidLow = await fs.mkdtemp(path.join(os.tmpdir(), 'dialin-invalid-cap-'));
+  const invalidHigh = await fs.mkdtemp(path.join(os.tmpdir(), 'dialin-invalid-cap-'));
+  t.after(() => Promise.all([fs.rm(invalidLow, { recursive: true, force: true }), fs.rm(invalidHigh, { recursive: true, force: true })]));
+  await assert.rejects(() => createCollector({ directory: invalidLow, maxConnections: 0 }));
+  await assert.rejects(() => createCollector({ directory: invalidHigh, maxConnections: 10001 }));
+});
+
 test('retention removes only aged collector-owned files and never serves or deletes unrelated files', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'dialin-retention-test-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

@@ -3304,6 +3304,43 @@ function createPlugin(host, services) {
     return workflow;
   }
 
+  // Decaid exposes the current grinder display as a read-only observation.
+  // The value is deliberately opaque: ddValueDum is not a micron unit and
+  // must never be converted or copied into historical shot context.
+  async function grinderObservation() {
+    const infoResponse = await apiRequest(`${API_BASE}/api/v1/grinder/info`);
+    if (!infoResponse.ok) throw new Error("grinder observation unavailable");
+    const info = await infoResponse.json();
+    const stateResponse = await apiRequest(`${API_BASE}/api/v1/grinder/state`);
+    if (!stateResponse.ok) throw new Error("grinder observation unavailable");
+    const state = await stateResponse.json();
+    if (!info || typeof info !== "object" || !Array.isArray(info.observations) ||
+        !info.observations.includes("setting")) {
+      return {
+        status: "unavailable",
+        reason: "This grinder does not advertise a read-only setting observation",
+        provenance: "Decaid read-only grinder observation; no historical shot state was changed",
+      };
+    }
+    if (!state || typeof state !== "object" || state.ddSensorFailed !== false ||
+        typeof state.observedSetting !== "string" || !state.observedSetting.trim() ||
+        state.observedSetting.length > 128) {
+      return {
+        status: "unavailable",
+        reason: "The grinder setting observation is missing or its sensor is not healthy",
+        provenance: "Decaid read-only grinder observation; no historical shot state was changed",
+      };
+    }
+    return {
+      status: "available",
+      setting: state.observedSetting,
+      unit: "opaque",
+      verified: false,
+      source: "decaid-grinder-observation",
+      provenance: "Live read-only grinder display observation. The value is opaque and is not a micron conversion, verified shot setting, or automatic control command.",
+    };
+  }
+
   function compare(current, candidate) {
     const missing = [];
     const mismatched = [];
@@ -4761,6 +4798,8 @@ if(researchPanel){
           return json(200, await suggestion());
         if (endpoint === "bean-context" && request.method === "GET")
           return json(200, await beanContext());
+        if (endpoint === "grinder-observation" && request.method === "GET")
+          return json(200, await grinderObservation());
         if (endpoint === "analysis" && request.method === "POST") {
           const input = bodyOf(request),
             id = textOrNull(input?.shotId);
