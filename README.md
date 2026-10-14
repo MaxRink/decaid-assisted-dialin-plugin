@@ -74,6 +74,12 @@ physical hardware remain unvalidated. Browser checks use synthetic local records
 the real QuickJS fixtures verify the host/API/storage boundary.
 Missing historic bean/grinder/calibration information cannot be reconstructed by
 entering today's settings. RPM or observed configuration is not added to shots.
+The plugin also exposes `GET /api/v1/plugins/assisted-dialin.reaplugin/grinder-observation`.
+When the host advertises the read-only grinder setting observation and reports a
+healthy sensor, this returns the current opaque display value with provenance.
+It is live device state only: `ddValueDum` is not a micron unit, is never
+converted, and is never copied into historical shots or used for automatic
+control. Unsupported, stale or failed observations are surfaced as unavailable.
 
 ## Rich suggestions
 
@@ -302,7 +308,7 @@ these browser checks complement the pinned QuickJS host tests. CI retains
 browser reports and failure traces. Neither fixture proves physical grinder
 performance.
 
-The host contract is pinned to Decaid commit `af4e99524ad7731dbdb7db4540cd272bc91da038` in CI.
+The host contract is pinned to Decaid commit `bafa9b3f2b90e65334e990b0b9601a9965cf979b` in CI.
 
 ## Attribution
 

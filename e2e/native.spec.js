@@ -52,6 +52,15 @@ test.beforeEach(async ({ page, request, baseURL }) => {
   await page.goto(UI);
 });
 
+test('live grinder display uses the published snapshot DTO and surfaces unavailable state', async ({ page, request }) => {
+  await step(page, 1);
+  const response = pluginResponse(page, 'grinder-observation'); await page.locator('#grinderObservation').click();
+  await response; await expect(page.locator('#grinderObservationStatus')).toContainText('501 ddValueDum');
+  await request.post('/__test/config', {data: {grinderObservation: {info: {observations: ['setting'], capabilities: []}, snapshot: {timestamp: new Date().toISOString(), state: 'idle'}}}});
+  const unavailable = pluginResponse(page, 'grinder-observation'); await page.locator('#grinderObservation').click(); await unavailable;
+  await expect(page.locator('#grinderObservationStatus')).toContainText('missing');
+});
+
 test('all four wizard steps hide inactive content in both modes and expose all 104 profile policies', async ({ page }) => {
   for (const expert of [false, true]) {
     if (expert) await page.locator('#modeToggle').click();

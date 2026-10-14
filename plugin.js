@@ -3304,6 +3304,45 @@ function createPlugin(host, services) {
     return workflow;
   }
 
+  // Decaid exposes the current grinder display as a read-only observation.
+  // The value is deliberately opaque: ddValueDum is not a micron unit and
+  // must never be converted or copied into historical shot context.
+  async function grinderObservation() {
+    const infoResponse = await apiRequest(`${API_BASE}/api/v1/grinder/info`);
+    if (!infoResponse.ok) throw new Error("grinder observation unavailable");
+    const info = await infoResponse.json();
+    const stateResponse = await apiRequest(`${API_BASE}/api/v1/grinder/state`);
+    if (!stateResponse.ok) throw new Error("grinder observation unavailable");
+    const state = await stateResponse.json();
+    if (!info || typeof info !== "object" || !Array.isArray(info.observations) ||
+        !info.observations.includes("setting")) {
+      return {
+        status: "unavailable",
+        reason: "This grinder does not advertise a read-only setting observation",
+        provenance: "Decaid read-only grinder observation; no historical shot state was changed",
+      };
+    }
+    const observedSetting = state && typeof state === "object"
+      ? (state.observedSetting ?? state.state?.observedSetting)
+      : null;
+    if (typeof observedSetting !== "string" || !observedSetting.trim() ||
+        observedSetting.length > 128) {
+      return {
+        status: "unavailable",
+        reason: "The grinder setting observation is missing or its sensor is not healthy",
+        provenance: "Decaid read-only grinder observation; no historical shot state was changed",
+      };
+    }
+    return {
+      status: "available",
+      setting: observedSetting,
+      unit: "opaque",
+      verified: false,
+      source: "decaid-grinder-observation",
+      provenance: "Live read-only grinder display observation. The value is opaque and is not a micron conversion, verified shot setting, or automatic control command.",
+    };
+  }
+
   function compare(current, candidate) {
     const missing = [];
     const mismatched = [];
@@ -4386,7 +4425,7 @@ function createPlugin(host, services) {
 <nav class="setup-steps" aria-label="Dial-in steps"><button type="button" data-native-step="1" aria-current="step">1. Coffee &amp; equipment</button><button type="button" data-native-step="2">2. Recipe &amp; profile</button><button type="button" data-native-step="3">3. Brew trace &amp; taste</button><button type="button" data-native-step="4">4. Next setting</button></nav><p id="nativeWizardStatus" aria-live="polite">Step 1 of 4 · Coffee and equipment</p><p><button id="nativeWizardBack" type="button" disabled>Back</button> <button id="nativeWizardNext" type="button">Next</button></p>
 <section id="coffeeStep" data-native-step="1">
 <h2>Coffee and equipment</h2><p>Use the saved workflow and bean batch for shot matching. Owner confirmations stay attached to the selected historical shot.</p>
-<button id="recommend" type="button">Find recorded recommendation</button><button id="suggestion" type="button">Suggest next step</button><button id="beans" type="button">Show current bean and roast catalog</button><button id="references" type="button">Recipe and grinder references</button>
+<button id="recommend" type="button">Find recorded recommendation</button><button id="suggestion" type="button">Suggest next step</button><button id="grinderObservation" type="button">Read live grinder display</button><button id="beans" type="button">Show current bean and roast catalog</button><button id="references" type="button">Recipe and grinder references</button><p id="grinderObservationStatus" role="status" aria-live="polite"></p>
 <details class="expert-panel" hidden><summary>Individual grinder profiles and calibration</summary><div id="grinderManager" aria-live="polite"><button id="loadGrinders" type="button">Load host grinders</button><label>Current host grinder <select id="grinderProfileSelect"><option value="">Load host grinders first</option></select></label><label>Model <select id="grinderModel"></select></label><label>Profile label <input id="grinderLabel" maxlength="128" autocomplete="off"></label><label>Burr identity <input id="grinderBurrs" maxlength="256" autocomplete="off"></label><label>Calibration epoch <input id="grinderEpoch" maxlength="256" autocomplete="off"></label><label>Source / calibration note <input id="grinderPitchSource" maxlength="512" value="Owner-confirmed; no universal model conversion claimed" autocomplete="off"></label><label>Optional owner anchors (JSON) <textarea id="grinderAnchors" maxlength="4096" placeholder='{"dialMin":0,"dialMax":90,"dialA":0,"ddDumA":300,"dialB":90,"ddDumB":1200}'></textarea></label><button id="saveGrinder" type="button">Create or update host grinder profile</button><button id="selectGrinder" type="button">Use selected profile for suggestions</button><p id="grinderManagerStatus" role="status"></p></div></details>
 <details><summary>Browse coffee references and import a bean</summary><p>Preview before importing. Unknown format needs explicit confirmation; capsules, bundles, green beans and ready-to-drink products cannot be imported as roasted whole beans.</p><button id="loadCoffeeCatalog" type="button">Load coffee catalogue</button><label>Search coffee catalogue<input id="nativeCoffeeSearch" type="search"></label><div id="coffeeCatalog" aria-live="polite"></div></details>
 </section>
@@ -4484,6 +4523,7 @@ const endpoint=name=>basePath?basePath+'/'+name:name;
 const coreBase='http://127.0.0.1:8080/api/v1';
 const grinderState={items:[],profiles:new Map(),selected:null};
 const grinderStatus=document.querySelector('#grinderManagerStatus');
+const grinderObservationStatus=document.querySelector('#grinderObservationStatus');
 const grinderMessage=(message,error)=>{if(grinderStatus){grinderStatus.textContent=String(message||'');grinderStatus.dataset.error=error?'true':'false';}};
 const grinderJson=async(response)=>{let body={};try{body=await response.json();}catch(_){ }if(!response.ok)throw new Error(body.error||'Host grinder request failed.');return body;};
 const knownModelOptions=()=>{const select=document.querySelector('#grinderModel');if(!select)return;select.textContent='';knownGrinders.forEach(model=>{const option=document.createElement('option');option.value=model;option.textContent=model;select.appendChild(option);});};
@@ -4495,6 +4535,7 @@ const saveGrinder=async()=>{try{const selected=currentGrinder(),model=document.q
 const selectGrinder=async()=>{try{const selected=currentGrinder();if(!selected)throw new Error('Select a host grinder first.');const response=await fetch(endpoint('settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({GrinderProfileId:String(selected.id)})});await grinderJson(response);const readback=await grinderJson(await fetch(endpoint('settings')));if(String(readback.GrinderProfileId||'')!==String(selected.id))throw new Error('Host did not confirm the selected grinder profile.');grinderMessage('Using '+selected.model+' ('+selected.id+') for future suggestions.');}catch(error){grinderMessage(error.message||'Could not select grinder profile.',true);}};
 knownModelOptions();
 document.querySelector('#loadGrinders')?.addEventListener('click',loadGrinders);document.querySelector('#grinderProfileSelect')?.addEventListener('change',event=>{grinderState.selected=event.target.value;fillGrinderForm();});document.querySelector('#saveGrinder')?.addEventListener('click',saveGrinder);document.querySelector('#selectGrinder')?.addEventListener('click',selectGrinder);
+document.querySelector('#grinderObservation')?.addEventListener('click',async event=>{const button=event.currentTarget||event.target;try{button.disabled=true;const body=await grinderJson(await fetch(endpoint('grinder-observation')));if(grinderObservationStatus)grinderObservationStatus.textContent=body.status==='available'?'Live grinder display: '+String(body.setting)+' ('+String(body.unit)+'). '+String(body.provenance):String(body.reason||'Live grinder observation unavailable.');}catch(error){if(grinderObservationStatus)grinderObservationStatus.textContent=error.message||'Live grinder observation unavailable. Try again.';}finally{button.disabled=false;}});
 const catalogBox=document.querySelector('#coffeeCatalog'),catalogButton=document.querySelector('#loadCoffeeCatalog');
 let nativeCoffeeProducts=[],nativeCoffeePage=1;
 function renderCoffeeCatalog(){if(!catalogBox)return;catalogBox.textContent='';const query=(document.querySelector('#nativeCoffeeSearch')?.value||'').toLowerCase();const matches=nativeCoffeeProducts.filter(item=>[item.name,item.publisher,item.origin,item.process,item.format].join(' ').toLowerCase().includes(query));matches.slice(0,nativeCoffeePage*10).forEach(item=>{
@@ -4610,7 +4651,7 @@ if(researchPanel){
 
   return {
     id: ID,
-    version: "0.5.0",
+    version: "0.6.0",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;
@@ -4761,6 +4802,8 @@ if(researchPanel){
           return json(200, await suggestion());
         if (endpoint === "bean-context" && request.method === "GET")
           return json(200, await beanContext());
+        if (endpoint === "grinder-observation" && request.method === "GET")
+          return json(200, await grinderObservation());
         if (endpoint === "analysis" && request.method === "POST") {
           const input = bodyOf(request),
             id = textOrNull(input?.shotId);

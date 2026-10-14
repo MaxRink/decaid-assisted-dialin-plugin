@@ -22,10 +22,12 @@ async function createCollector(options = {}) {
   const maxStorageBytes = options.maxStorageBytes ?? 256 * 1024 * 1024;
   const perMinute = options.perMinute ?? 60;
   const maxRecords = options.maxRecords ?? 100000;
+  const maxConnections = options.maxConnections ?? 128;
   if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 90 ||
       !Number.isInteger(maxStorageBytes) || maxStorageBytes < 1024 ||
       !Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > 1000000 ||
-      !Number.isInteger(perMinute) || perMinute < 1 || perMinute > 10000) throw new Error("Invalid collector limits");
+      !Number.isInteger(perMinute) || perMinute < 1 || perMinute > 10000 ||
+      !Number.isInteger(maxConnections) || maxConnections < 1 || maxConnections > 10000) throw new Error("Invalid collector limits");
   const metricsEnabled = options.metricsEnabled === true;
   let metrics = createResearchMetrics(), metricsText = null;
   const now = options.now || Date.now;
@@ -191,6 +193,10 @@ async function createCollector(options = {}) {
   server.headersTimeout = 5000;
   server.keepAliveTimeout = 1000;
   server.maxHeadersCount = 32;
+  // Bound concurrent public ingestion sockets independently of the request
+  // rate limit. The collector is intentionally credentialless, so connection
+  // exhaustion must be handled before request bodies reach the storage queue.
+  server.maxConnections = maxConnections;
   return server;
 }
 
@@ -201,6 +207,7 @@ if (require.main === module) {
     maxStorageBytes: Number(process.env.RESEARCH_MAX_STORAGE_BYTES || 268435456),
     maxRecords: Number(process.env.RESEARCH_MAX_RECORDS || 100000),
     perMinute: Number(process.env.RESEARCH_REQUESTS_PER_MINUTE || 60),
+    maxConnections: Number(process.env.RESEARCH_MAX_CONNECTIONS || 128),
     metricsEnabled: !!process.env.RESEARCH_METRICS_PORT }).then(server => {
     const port = Number(process.env.PORT || 8787);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");

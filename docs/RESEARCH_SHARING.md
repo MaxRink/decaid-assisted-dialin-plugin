@@ -107,13 +107,14 @@ Run as a dedicated unprivileged account with write access only to the private di
 | `RESEARCH_MAX_RECORDS` | 100000; integer 1–1000000. New observation keys stop at this cap; revisions/retries remain eligible. |
 | `RESEARCH_MAX_STORAGE_BYTES` | 268435456 (256 MiB); integer at least 1024. |
 | `RESEARCH_REQUESTS_PER_MINUTE` | 60; integer 1–10000 per directly connected address. |
+| `RESEARCH_MAX_CONNECTIONS` | 128; integer 1–10000 simultaneous public ingestion sockets. |
 | `RESEARCH_BIND_HOST` | `127.0.0.1`; alternatively `::1` or `0.0.0.0` (container only in the supplied deployment). |
 | `PORT` | 8787; integer 1–65535. |
 | `RESEARCH_DOMAIN` | Compose/Caddy hostname; required for the bundled TLS deployment. |
 
 A browser Origin, if supplied, must match the allowlist. Native plugin requests without Origin are deliberately accepted. CORS is not authentication: arbitrary non-browser clients can submit allowed numeric/category records. Do not treat submissions as verified experiments or trusted training labels. There is no public catalog or raw-record read API. Put an additional operator-controlled ingress restriction in front if the research deployment needs a closed participant group; do not add personal tokens to research records.
 
-Requests require uncompressed JSON, have a 64 KiB body limit, an 8 KiB header limit, and a maximum of 25 records. There are connection/header/request timeouts and bounded in-memory abuse counters. Counters use the actual socket address, never forwarded identity headers. With the supplied proxy, requests share its address and therefore a collector-wide budget. Increase that budget deliberately if needed; do not silently start retaining end-user IPs to change its meaning.
+Requests require uncompressed JSON, have a 64 KiB body limit, an 8 KiB header limit, and a maximum of 25 records. The public listener has a bounded simultaneous connection cap (`RESEARCH_MAX_CONNECTIONS`) in addition to connection/header/request timeouts and bounded in-memory abuse counters. Counters use the actual socket address, never forwarded identity headers. With the supplied proxy, requests share its address and therefore a collector-wide budget. Increase either budget deliberately if needed; do not silently start retaining end-user IPs to change its meaning.
 
 The byte or observation-count cap returns HTTP 507 and keeps unsent client data queued. Other storage errors return 503. Each accepted observation is written with a temporary file, file sync, atomic rename and parent-directory sync before acknowledgment. A directory-sync failure returns 503; retry must pass that sync even when the record already exists. These filesystem barriers require a filesystem that supports directory fsync; storage hardware and backups remain operator responsibilities. Batch failure can occur after some records were stored; retry is safe because the same keys/revisions replace or acknowledge those observations. A received older/equal revision does not overwrite a newer correction. Successful acknowledgment counts every accepted observation, including retries. The server never echoes submitted free text in an error.
 
