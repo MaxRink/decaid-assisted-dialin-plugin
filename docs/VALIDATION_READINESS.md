@@ -7,8 +7,8 @@ physical grinder’s calibration or prove that a recommendation improves a drink
 |---|---|---|
 | Plugin packaging and installation | Minimal ZIP, manifest parser and real pinned host runtime in CI | A matching GitHub release with one tested ZIP |
 | Beginner and expert UI | Chromium, Firefox, WebKit and mobile synthetic journeys | Retain the browser matrix on every release |
-| Observed grinder setting/RPM in saved shots | Intended workflow data and explicit owner confirmations only | Upstream [read-only observations #973](https://github.com/decentespresso/decaid/issues/973) and [capture/provenance #974](https://github.com/decentespresso/decaid/issues/974) contracts, then round-trip/race tests against them |
-| Streamline navigation and history actions | Native extension URL is available | Upstream [PR #100](https://github.com/decentespresso/streamline-js/pull/100) review and merge |
+| Live grinder observation and provenance display | Read-only opaque observation endpoint is implemented and covered with available/unavailable/stale mock cases; it is kept separate from saved-shot evidence | Immutable shot capture/provenance association remains pending under [#974](https://github.com/decentespresso/decaid/issues/974), followed by round-trip/race tests |
+| Streamline navigation and history actions | Native extension URL is available and upstream [PR #100](https://github.com/decentespresso/streamline-js/pull/100) has landed | Retain the browser matrix and verify the installed extension contract on each release |
 | Old shots with incomplete context | Explicit per-shot confirmation or abstention | Owner confirmation of the actual historical facts; never copy today’s setup backwards |
 | Grinder-specific response | Owner-confirmed native units and bounded suggestions | Individual grinder/burr/zero calibration and controlled physical shots |
 | Optional mechanical estimates | Manufacturer dial references and clearly marked sensitivity assumptions; explicit owner step and bounds | Individual physical mapping validation; never convert an estimate into owner calibration |
@@ -55,7 +55,11 @@ There is no universal minimum sample count or transferable dial response claimed
 here. Until a physical trial exists, the UI describes a conditional experiment
 and uses owner-confirmed bounds; it does not advertise validated efficacy.
 
-## When the upstream observation contract is accepted
+## Live observation versus immutable shot evidence
+
+The plugin may display the current read-only grinder observation from [#973](https://github.com/decentespresso/decaid/issues/973) when the host reports a validated opaque setting. The value is labelled as live provenance and is never used to rewrite an older shot or converted into micrometres. Immutable association of a measured setting with the shot that produced it remains the separate [#974](https://github.com/decentespresso/decaid/issues/974) work item.
+
+## When the upstream shot-evidence contract is accepted
 
 Add its adapter in one reviewed change. Test absent/old records, intended versus
 observed values, units and provenance, unavailable/stale device state, explicit
