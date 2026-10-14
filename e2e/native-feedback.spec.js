@@ -1,4 +1,5 @@
-const {test, expect} = require('@playwright/test');
+const {test: base, expect} = require('@playwright/test');
+const test = base.extend({request: async ({context}, use) => use(context.request)});
 const PREFIX = '/api/v1/plugins/assisted-dialin.reaplugin';
 const UI = PREFIX + '/ui';
 const analysisResponse = (page, shotId) => page.waitForResponse(r => new URL(r.url()).pathname === PREFIX + '/analysis' && r.request().method() === 'POST' && r.request().postDataJSON().shotId === shotId);
@@ -21,6 +22,9 @@ test.beforeEach(async ({page, request, baseURL}) => {
     const response = await route.fetch({url: new URL(url.pathname + url.search, baseURL).href});
     await route.fulfill({response, headers: {...response.headers(), 'access-control-allow-origin': baseURL, 'access-control-allow-credentials': 'true', 'access-control-allow-methods': 'GET, POST, PUT, PATCH, OPTIONS', 'access-control-allow-headers': 'content-type'}});
   });
+  const saved = id => ({shotId: id, good: true, notes: 'saved '+id, taste: 'sour', flavour: {overall: 'under-extracted', servingTemperatureC: 54, descriptors: ['citrus']}, confirmedContext: {grinderRpm: 900}, measuredBeanDose: {deviceId: 'old-scale', connectionRole: 'auxiliary', purpose: 'beans', weightG: 18.2, units: 'g', capturedAt: '2026-10-25T01:30:22.222Z', sampleTimestamp: '2026-10-25T01:30:20.000Z', userConfirmed: true}});
+  await request.post(PREFIX + '/feedback', {data: saved('shot-1')});
+  await request.post(PREFIX + '/feedback', {data: saved('shot-2')});
 });
 
 test('dropdown and typed shot ownership hydrate before save', async ({page}) => {
