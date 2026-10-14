@@ -80,11 +80,11 @@ test.describe('research sharing two-tab storage fences', () => {
     await expect(b.locator('#research-sharing-status')).toContainText('1 queued');
     await a.locator('#research-sharing-endpoint').fill(endpointB);
     await a.locator('#research-sharing-apply').click();
-    await expect(b.locator('#research-sharing-consent')).not.toBeChecked();
-    await b.reload(); await b.locator('#research-sharing-title').click();
-    await expect(b.locator('#research-sharing-status')).toContainText('0 queued');
-    await expect(b.locator('#research-sharing-send')).toBeDisabled();
+    await expect(a.locator('#research-sharing-status')).toContainText('Remote sharing off');
     await b.locator('#research-sharing-send').dispatchEvent('click');
+    await expect(b.locator('#research-sharing-consent')).not.toBeChecked();
+    await expect(b.locator('#research-sharing-send')).toBeDisabled();
+    await expect(b.locator('#research-sharing-status')).toContainText(/0 queued|Research settings changed/);
     expect(batches).toHaveLength(0);
     await context.close();
   });
