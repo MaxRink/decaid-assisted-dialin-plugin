@@ -187,7 +187,7 @@ function createResearchSharing() {
         throw new Error("Invalid local research entry");
       return { key: localKey(value.key), revision: value.revision, record: validateRecord(value.record) };
     };
-    let state = fresh(), generation = 0, permitted = false, refreshPermitted = true, chain = Promise.resolve(), inflight = null, abort = null, storageError = null, lockDepth = 0;
+    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
     const decode = value => {
       if (value == null) return;
       if (!object(value) || value.schemaVersion !== VERSION || value.policyVersion !== POLICY ||
@@ -207,34 +207,24 @@ function createResearchSharing() {
       return { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
         endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
     };
-    const install = (value, initial = false) => {
-      const decoded = decode(value) || fresh();
-      state = decoded;
-      permitted = state.sharing && refreshPermitted && (!initial || generation === 0);
-      if (!permitted) { state.sharing = false; state.queue = []; state.fingerprints = []; }
-    };
-    const ready = Promise.resolve().then(() => adapters.load()).then(value => { refreshPermitted = true; install(value, true); }).catch(() => { state = fresh(); permitted = false; refreshPermitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
+    const updatePermission = () => { permitted = state.sharing && pendingConsent === null && !storageError; };
+    const install = value => { state = decode(value) || fresh(); updatePermission(); };
+    const ready = Promise.resolve().then(() => adapters.load()).then(install).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
     const refresh = async () => {
       if (typeof adapters.reload !== "function") return;
-      if (storageError) throw new Error(storageError);
       try { install(await adapters.reload()); }
-      catch (_) { permitted = false; refreshPermitted = false; state.sharing = false; state.queue = []; generation++; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
+      catch (_) { permitted = false; generation++; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
     };
-    const coordinate = run => {
-      if (lockDepth || typeof adapters.withLock !== "function") return run();
-      return adapters.withLock(async () => { lockDepth++; try { return await run(); } finally { lockDepth--; } });
-    };
-    const runOperation = (operation, useLock = true) => {
-      const run = async () => { await refresh(); return operation(); };
-      return useLock ? coordinate(run) : run();
-    };
-    const serial = (operation, useLock = true) => {
-      const result = chain.then(() => ready).then(() => runOperation(operation, useLock));
+    const serial = operation => {
+      const result = chain.then(() => ready).then(() => {
+        const run = async () => { await refresh(); return operation(); };
+        return typeof adapters.withLock === "function" ? adapters.withLock(run) : run();
+      });
       chain = result.catch(() => {}); return result;
     };
-    async function save(next) {
-      try { await adapters.save(clone(next)); state = next; storageError = null; refreshPermitted = next.sharing; }
-      catch (_) { permitted = false; refreshPermitted = false; state.sharing = false; state.queue = []; generation++; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
+    async function save(next, resetError = false) {
+      try { await adapters.save(clone(next)); state = next; if (resetError) storageError = null; updatePermission(); }
+      catch (_) { permitted = false; generation++; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
     }
     const status = () => ({ localEnabled: state.localEnabled, sharing: permitted && state.sharing && !storageError, endpoint: state.endpoint,
       localCount: state.records.length, queuedCount: permitted ? state.queue.length : 0, error: storageError, policyVersion: POLICY });
@@ -243,11 +233,12 @@ function createResearchSharing() {
       const targetEndpoint = enabled && target != null && target !== "" ? endpoint(target) : null;
       // Revoke immediately, before waiting for disk or an earlier network request.
       const requestGeneration = ++generation;
-      permitted = false; refreshPermitted = false; abort?.();
+      pendingConsent = requestGeneration; permitted = false; abort?.();
       return serial(async () => {
-        const current = requestGeneration === generation;
-        await save({ ...state, sharing: current && enabled, endpoint: current ? targetEndpoint : null, queue: [], fingerprints: [] });
-        permitted = current && requestGeneration === generation && enabled && refreshPermitted;
+        if (requestGeneration !== generation) return status();
+        await save({ ...state, sharing: enabled, endpoint: targetEndpoint, queue: [], fingerprints: [] }, true);
+        if (requestGeneration === generation) pendingConsent = null;
+        updatePermission();
         return status();
       });
     }
@@ -287,7 +278,8 @@ function createResearchSharing() {
     }
     async function flush() {
       if (inflight) return inflight;
-      const operation = async () => runOperation(async () => {
+      const operation = async () => {
+        const batch = await serial(() => {
           if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint) return null;
           if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
           const entries = [];
@@ -295,23 +287,33 @@ function createResearchSharing() {
             if (JSON.stringify(entries.concat([item]).map(entry => entry.record)).length > 60000) break;
             entries.push(item);
           }
-          const batch = { generation, endpoint: state.endpoint, entries: clone(entries) };
-          if (batch.generation !== generation || !permitted) return null;
           const controller = typeof AbortController === "function" ? new AbortController() : null;
           abort = () => controller?.abort();
-          try {
-            const response = await adapters.send(batch.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
-              headers: { "Content-Type": "application/json" }, signal: controller?.signal,
-              body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: batch.entries.map(item => item.record) }) });
-            if (!response || !response.ok || response.redirected) throw new Error("Research upload was not acknowledged");
-            const receipt = await response.json();
-            if (!receipt || receipt.accepted !== batch.entries.length) throw new Error("Invalid research upload acknowledgment");
-            if (batch.generation !== generation || !permitted) return { sent: 0, ...status() };
-            const acknowledged = new Set(batch.entries.map(item => item.revision));
-            await save({ ...state, queue: state.queue.filter(item => !acknowledged.has(item.revision)) });
-            return { sent: batch.entries.length, ...status() };
-          } finally { abort = null; }
+          // Start the request before releasing the storage lock. Awaiting it must
+          // not block another tab's deletion, opt-out, or new observation.
+          const response = adapters.send(state.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
+            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
+            body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: entries.map(item => item.record) }) });
+          return { generation, endpoint: state.endpoint, entries: clone(entries), response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
         });
+        if (!batch) return { sent: 0, ...status() };
+        try {
+          const result = await batch.response;
+          if (result.error) throw result.error;
+          const response = result.value;
+          if (!response || !response.ok || response.redirected) throw new Error("Research upload was not acknowledged");
+          const receipt = await response.json();
+          if (!receipt || receipt.accepted !== batch.entries.length) throw new Error("Invalid research upload acknowledgment");
+          return await serial(async () => {
+            if (batch.generation !== generation || !permitted || state.endpoint !== batch.endpoint) return { sent: 0, ...status() };
+            const identity = item => item.record.observationId + ":" + item.record.revision + ":" + item.revision;
+            const acknowledged = new Set(batch.entries.map(identity));
+            const queue = state.queue.filter(item => !acknowledged.has(identity(item)));
+            if (queue.length !== state.queue.length) await save({ ...state, queue });
+            return { sent: batch.entries.length, ...status() };
+          });
+        } finally { abort = null; }
+      };
       inflight = operation();
       try { return await inflight; } finally { inflight = null; }
     }
@@ -320,8 +322,14 @@ function createResearchSharing() {
       return serial(async () => { await save({ ...state, localEnabled: enabled, fingerprints: enabled || permitted ? state.fingerprints : [] }); return status(); });
     }
     function clear() {
-      generation++; permitted = false; refreshPermitted = false; abort?.();
-      return serial(async () => { await save({ ...fresh(), localEnabled: state.localEnabled }); return status(); });
+      const requestGeneration = ++generation;
+      pendingConsent = requestGeneration; permitted = false; abort?.();
+      return serial(async () => {
+        await save({ ...fresh(), localEnabled: state.localEnabled }, true);
+        if (requestGeneration === generation) pendingConsent = null;
+        updatePermission();
+        return status();
+      });
     }
     return { ready: ready.then(status), status: () => serial(status), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };

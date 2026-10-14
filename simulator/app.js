@@ -37,7 +37,8 @@
   const RESEARCH_LOCK = "decaid.assisted-dialin.research-state";
   const researchWithLock = operation => {
     const locks = typeof navigator !== "undefined" ? navigator.locks : null;
-    return locks && typeof locks.request === "function" ? locks.request(RESEARCH_LOCK, {mode: "exclusive"}, operation) : operation();
+    if (!locks || typeof locks.request !== "function") throw new Error("Research archiving requires browser Web Locks.");
+    return locks.request(RESEARCH_LOCK, {mode: "exclusive"}, operation);
   };
 
   async function renderResearchSharing(message) {
@@ -86,6 +87,11 @@
     if (!$("research-sharing-consent")) return;
     $("research-sharing-consent").disabled = true;
     if (typeof window.createResearchSharing !== "function") { text($("research-sharing-status"), "Research archiving is unavailable. Your dial-in tools still work."); return; }
+    if (typeof navigator.locks?.request !== "function") {
+      for (const id of ["research-local-enabled", "research-sharing-disable", "research-sharing-delete", "research-sharing-send", "research-sharing-export", "research-sharing-apply"]) $(id).disabled = true;
+      text($("research-sharing-status"), "Research archiving is unavailable in this browser. Remote sharing is off. Saved records are unchanged; use a browser with Web Locks support to access them.");
+      return;
+    }
     researchFactory = window.createResearchSharing();
     try {
       const saved = storage()?.getItem(RESEARCH_ENDPOINT_KEY);
