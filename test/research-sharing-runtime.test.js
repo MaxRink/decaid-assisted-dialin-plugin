@@ -159,7 +159,7 @@ test('random series resets for changed bean, grinder or recipe; corrections and 
     f.plugin.onEvent({name:'shotStored',payload:{id:next.id}});await captured(f,i+1);
   }
   const records=(await f.request('GET',null,'sharing-export')).body.records;
-  const previousRevision=Number(records[0].revision||0);
+  const previousRevision=Math.max(...records.map(record=>Number(record.revision||0)));
   assert.match(records[0].researchSeries,/^[a-f0-9]{32}$/);
   assert.equal(records[0].researchSeries,records[1].researchSeries);
   for(let i=2;i<records.length;i++)assert.notEqual(records[i-1].researchSeries,records[i].researchSeries);
