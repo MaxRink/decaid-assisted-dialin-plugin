@@ -210,6 +210,37 @@ test('amendments keep the newest revision when the private archive is older than
   assert.equal(reverted.revision, 4);
 });
 
+for (const reset of ['consent', 'ledger eviction']) {
+  test('corrections and reverts survive ' + reset + ' with an older retained archive', async () => {
+    const first = setup(); let client = first.client;
+    await client.setSharing(true, 'https://collector.example.org/v1/events');
+    await client.capture(record(20), 'shot'); await client.flush();
+    const original = JSON.parse(first.sent[0].init.body).records[0];
+    await client.setLocalCollection(false);
+    await client.capture(record(21), 'shot'); await client.flush();
+    await client.capture(record(22), 'shot'); await client.flush();
+    if (reset === 'consent') {
+      await client.setSharing(false); await client.setSharing(true, 'https://collector.example.org/v1/events');
+    } else {
+      for (let n = 0; n < schema.limits.local; n++) {
+        await client.capture(record(30), 'other:' + n);
+        await client.flush();
+      }
+    }
+    assert.equal(first.stored().fingerprints.some(item => item.key === 'shot'), false);
+    const restarted = setup({ load: async () => first.stored() }); client = restarted.client;
+    await client.capture(record(20), 'shot'); await client.flush();
+    const reverted = JSON.parse(restarted.sent[0].init.body).records[0];
+    assert.equal(reverted.observationId, original.observationId);
+    assert.ok(reverted.revision > 3, 'reverting to the archived value is a new correction');
+    await client.capture(record(23), 'shot'); await client.flush();
+    const corrected = JSON.parse(restarted.sent[1].init.body).records[0];
+    assert.equal(corrected.observationId, original.observationId);
+    assert.ok(corrected.revision > reverted.revision);
+    assert.equal(corrected.measurements.pumpTimeSec, 23);
+  });
+}
+
 test('coordinated browser clients reload before saving and cannot send after another tab deletes state', async () => {
   let stored = null; let lock = Promise.resolve(); const sent = [];
   const withLock = operation => {
