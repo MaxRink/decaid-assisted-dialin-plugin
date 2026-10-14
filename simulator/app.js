@@ -910,8 +910,9 @@
   function saveNativeSetup() {
     const profile = activeProfile(), step = simpleNumber("simple-step"), sign = Number($("simple-finer")?.value);
     if (simplePractice || !profile || profile.model !== config().grinder || !$("simple-confirm-dial")?.checked || !(step > 0) || ![-1, 1].includes(sign)) return;
-    profile.stepSize = step;
-    profile.nativeSetup = {settingUnit: simpleUnit(), burrIdentity: config().burrs, calibrationEpoch: config().calibration, numericFinerDelta: sign, min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")};
+    const candidate = {...profile, stepSize: step, nativeSetup: {settingUnit: simpleUnit(), burrIdentity: config().burrs, calibrationEpoch: config().calibration, numericFinerDelta: sign, min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")}};
+    if (!validProfile(candidate)) { setNotice("The owner dial setup is invalid or exceeds the supported range; nothing was saved.", true); return; }
+    Object.assign(profile, candidate);
     persistProfiles();
   }
   function nativeScope() {
