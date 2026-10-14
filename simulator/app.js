@@ -134,7 +134,7 @@
       }
       // The shared client reloads under the Web Lock before every operation;
       // this event only refreshes visible controls promptly in another tab.
-      researchAction(() => Promise.resolve(), "Research settings changed in another tab; current storage was reloaded.");
+      researchAction(() => Promise.resolve());
     });
   }
 
