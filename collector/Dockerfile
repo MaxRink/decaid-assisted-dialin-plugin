@@ -2,6 +2,9 @@ FROM node:26-alpine
 WORKDIR /app
 COPY research-sharing.js ./research-sharing.js
 COPY collector/server.js collector/metrics.js ./collector/
+COPY collector/telemetry.js ./collector/
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
     && mkdir -p /var/lib/research && chown node:node /var/lib/research
 USER node

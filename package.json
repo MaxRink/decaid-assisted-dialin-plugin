@@ -11,5 +11,10 @@
   "license": "GPL-3.0-or-later",
   "devDependencies": {
     "@playwright/test": "1.64.0"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.208.0",
+    "@opentelemetry/sdk-node": "0.208.0"
   }
 }

@@ -7,6 +7,7 @@ const { randomUUID } = require("node:crypto");
 const { createResearchSharing } = require("../research-sharing.js");
 const schema = createResearchSharing();
 const { createResearchMetrics } = require("./metrics.js");
+const { startHttpSpan } = require("./telemetry.js");
 const FILE = /^research-([a-f0-9]{32})\.json$/;
 
 async function createCollector(options = {}) {
@@ -86,6 +87,7 @@ async function createCollector(options = {}) {
     res.writeHead(status, headers); res.end(JSON.stringify(value));
   }
   const server = http.createServer({ maxHeaderSize: 8192, connectionsCheckingInterval: 1000 }, async (req, res) => {
+    startHttpSpan(req, res);
     const origin = req.headers.origin;
     if (origin && !origins.has(origin)) return answer(res, 403, { error: "Origin not allowed" });
     // Addresses are used only in a bounded, expiring in-memory abuse counter.
@@ -161,7 +163,8 @@ async function createCollector(options = {}) {
       const host = typeof req.headers.host === "string" ? req.headers.host.toLowerCase() : "";
       const hostHeaders = req.rawHeaders.filter((_, index) => index % 2 === 0 && req.rawHeaders[index].toLowerCase() === "host").length;
       const port = req.socket.localPort;
-      const names = ["localhost", "127.0.0.1", "[::1]", "collector"];
+      const configuredName = process.env.RESEARCH_METRICS_HOSTNAME || "collector";
+      const names = ["localhost", "127.0.0.1", "[::1]", "collector", configuredName].filter((value, index, all) => all.indexOf(value) === index);
       const allowedHosts = names.map(name => name + ":" + port);
       if (port === 80) allowedHosts.push(...names);
       if (hostHeaders !== 1 || !allowedHosts.includes(host)) { res.writeHead(403, headers); return res.end("Metrics host is not allowed\n"); }
