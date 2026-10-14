@@ -261,6 +261,24 @@ test('a pending opt-out cannot be undone by reload before a queued send', async 
   assert.equal(sends, 0); assert.equal(shared.stored().sharing, false);
 });
 
+test('a failed capture save cannot supersede an opt-out already waiting for storage', async () => {
+  let stored = null, fail = false;
+  const started = deferred(), release = deferred();
+  const client = schema.createClient({ load: async () => stored, save: async value => {
+    if (fail) { fail = false; started.resolve(); await release.promise; throw new Error('disk full'); }
+    stored = structuredClone(value);
+  } });
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(), 'shot');
+  fail = true;
+  const capture = client.capture(record(28), 'shot'); await started.promise;
+  const disabling = client.setSharing(false); release.resolve();
+  await assert.rejects(capture, /could not be saved/);
+  const status = await disabling;
+  assert.equal(stored.sharing, false); assert.deepEqual(stored.queue, []);
+  assert.equal(status.error, null); assert.equal(status.sharing, false);
+});
+
 test('ordinary local-only saves do not prevent observing another tab enabling sharing', async () => {
   const shared = coordinated(), first = shared.make(), second = shared.make();
   await first.capture(record(), 'local-only');

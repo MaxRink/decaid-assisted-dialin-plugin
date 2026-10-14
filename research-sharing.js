@@ -213,7 +213,7 @@ function createResearchSharing() {
     const refresh = async () => {
       if (typeof adapters.reload !== "function") return;
       try { install(await adapters.reload()); }
-      catch (_) { permitted = false; generation++; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
+      catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
     };
     const serial = operation => {
       const result = chain.then(() => ready).then(() => {
@@ -224,7 +224,7 @@ function createResearchSharing() {
     };
     async function save(next, resetError = false) {
       try { await adapters.save(clone(next)); state = next; if (resetError) storageError = null; updatePermission(); }
-      catch (_) { permitted = false; generation++; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
+      catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
     }
     const status = () => ({ localEnabled: state.localEnabled, sharing: permitted && state.sharing && !storageError, endpoint: state.endpoint,
       localCount: state.records.length, queuedCount: permitted ? state.queue.length : 0, error: storageError, policyVersion: POLICY });
