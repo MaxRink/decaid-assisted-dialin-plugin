@@ -211,6 +211,14 @@ test("simulator rejects a conflicting imported grinder ID without losing the act
   assert.equal(ui.elements.get("shots").children.length, 1);
 });
 
+test("simulator preserves malformed saved grinder profiles instead of overwriting them", async () => {
+  const storage = { data: new Map([["decaid.assisted-dialin.grinder-instances.v1", "{"]]), getItem(key) { return this.data.has(key) ? this.data.get(key) : null; }, setItem(key, value) { this.data.set(key, String(value)); }, removeItem(key) { this.data.delete(key); } };
+  const ui = uiFixture({ schemaVersion: 1, sources: [] }, storage);
+  await new Promise(setImmediate);
+  assert.equal(storage.getItem("decaid.assisted-dialin.grinder-instances.v1"), "{");
+  assert.match(ui.elements.get("notice").textContent, /malformed|preserved/i);
+});
+
 test("simulator uses shipped E64 micrometre normalization and exposes all dial profiles", async () => {
   const ui = uiFixture();
   await new Promise(setImmediate);
@@ -852,7 +860,7 @@ test("research archive defaults local-only and exports amended shots without per
 test("remote research requires consent and explicit send; opt-out and local-off persist", async () => {
   const ui = uiFixture(); await settleResearch();
   const calls = []; ui.context.fetch = async (url, init) => { calls.push({url, init}); return {ok: true, json: async () => ({accepted: JSON.parse(init.body).records.length})}; };
-  const endpoint = ui.elements.get("research-sharing-endpoint"); endpoint.value = "https://collector.example/records";
+  const endpoint = ui.elements.get("research-sharing-endpoint"); endpoint.value = "https://collector.example/v1/events";
   await ui.elements.get("research-sharing-apply").click();
   assert.equal(ui.elements.get("research-sharing-consent").checked, false);
   ui.elements.get("research-sharing-consent").checked = true; await ui.elements.get("research-sharing-consent").dispatch("change");
@@ -881,10 +889,10 @@ test("remote research requires consent and explicit send; opt-out and local-off 
 test("research endpoint changes revoke consent and unsafe endpoints cannot enable sharing", async () => {
   const ui = uiFixture(); await settleResearch();
   const endpoint = ui.elements.get("research-sharing-endpoint");
-  endpoint.value = "https://collector.example/records?token=private"; await ui.elements.get("research-sharing-apply").click();
+  endpoint.value = "https://collector.example/v1/events?token=private"; await ui.elements.get("research-sharing-apply").click();
   assert.match(ui.elements.get("research-sharing-status").textContent, /HTTPS without credentials, query or fragment/);
   assert.equal(ui.elements.get("research-sharing-consent").disabled, true);
-  endpoint.value = "https://collector.example/records"; await ui.elements.get("research-sharing-apply").click();
+  endpoint.value = "https://collector.example/v1/events"; await ui.elements.get("research-sharing-apply").click();
   ui.elements.get("research-sharing-consent").checked = true; await ui.elements.get("research-sharing-consent").dispatch("change");
   recordResearchFixture(ui); await settleResearch();
   endpoint.value = "https://another.example/records"; await ui.elements.get("research-sharing-apply").click();
@@ -894,7 +902,7 @@ test("research endpoint changes revoke consent and unsafe endpoints cannot enabl
 });
 
 test("deployment research destination never grants consent and unknown measured clocks stay unknown", async () => {
-  const ui = uiFixture(undefined, null, {researchConfig: {endpoint: "https://deployment.example/records"}}); await settleResearch();
+  const ui = uiFixture(undefined, null, {researchConfig: {endpoint: "https://deployment.example/v1/events"}}); await settleResearch();
   assert.equal(ui.elements.get("research-sharing-consent").checked, false);
   assert.equal(ui.elements.get("research-sharing-consent").disabled, false);
   assert.match(ui.elements.get("research-sharing-destination").textContent, /deployment.example/);

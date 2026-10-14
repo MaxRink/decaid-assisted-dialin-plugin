@@ -30,14 +30,14 @@ test('local research export filters personal text and replaces an amended shot w
 });
 test('configured research collector sends only on explicit consent and Send; opt-out clears queue', async ({page}) => {
   const batches = [];
-  await page.route('https://collector.example/records', async route => {
+  await page.route('https://collector.example/v1/events', async route => {
     const request = route.request(), body = request.postDataJSON(); batches.push(body);
     await route.fulfill({status:200, contentType:'application/json', body:JSON.stringify({accepted:body.records.length})});
   });
   await page.goto('/simulator/'); await page.locator('#view-mode').selectOption('expert');
   await page.locator('#research-sharing-title').click();
   await page.getByText('Configure your research collector', {exact:true}).click();
-  await page.locator('#research-sharing-endpoint').fill('https://collector.example/records');
+  await page.locator('#research-sharing-endpoint').fill('https://collector.example/v1/events');
   await page.locator('#research-sharing-apply').click();
   await expect(page.locator('#research-sharing-consent')).toBeEnabled();
   await page.locator('#research-sharing-consent').check();

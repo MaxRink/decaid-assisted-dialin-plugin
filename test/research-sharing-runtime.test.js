@@ -46,7 +46,7 @@ async function captured(f,count=1) {
   for(let i=0;i<30;i++){await tick();const result=await f.request();if(result.body.localCount===count)return result.body;}
   assert.fail('research capture did not settle');
 }
-const enable = f => f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/records',acknowledgeHostLimits:true});
+const enable = f => f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/events',acknowledgeHostLimits:true});
 test('local archive defaults on, remote off; export omits identities, notes and timestamps',async t=>{
   const f=fixture(t);assert.equal((await f.request()).body.sharing,false);
   f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);
@@ -57,7 +57,7 @@ test('local archive defaults on, remote off; export omits identities, notes and 
 });
 test('consent requires HTTPS and host-limits acknowledgment; no archive backfill',async t=>{
   const f=fixture(t);f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);
-  assert.equal((await f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/records'})).status,400);
+  assert.equal((await f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/events'})).status,400);
   assert.equal((await f.request('POST',{sharing:true,endpoint:'http://collector.example',acknowledgeHostLimits:true})).status,400);
   assert.equal((await enable(f)).status,200);assert.equal((await f.request()).body.queuedCount,0);
   assert.equal((await f.request()).body.hostCapabilities.requestCancellation,false);

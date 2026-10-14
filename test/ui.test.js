@@ -46,6 +46,13 @@ class Element {
     this.children = [];
     this.dataset = {};
     this.focused = false;
+    this.elements = { namedItem: (name) => ({
+      get value() { return this.owner.fields[name] ?? ""; },
+      set value(value) { this.owner.fields[name] = String(value); },
+      get checked() { return this.owner.fields[name] === true || this.owner.fields[name] === "on"; },
+      set checked(value) { this.owner.fields[name] = value ? "on" : ""; },
+      owner: this,
+    }) };
     this.hidden = true;
     this.dataset = {};
   }
@@ -674,6 +681,36 @@ test("analysis rendering explains target differences and preserves zero metrics"
   assert.ok(ui.output.textContent.includes("\n"));
 });
 
+test("analysis hydrates the selected shot and a later shot cannot inherit its feedback", async () => {
+  const ui = await uiFixture(async (url) => {
+    if (url === "analysis") return response({
+      shotId: "shot-1",
+      metrics: {},
+      feedback: {
+        good: true,
+        notes: "first shot",
+        taste: "sour",
+        flavour: { overall: "under-extracted", descriptors: ["citrus"], servingTemperatureC: 61 },
+        confirmedContext: { beanType: "washed", grinderRpm: 1200 },
+        manualStopConfirmed: true,
+        measuredBeanDose: { deviceId: "scale-1", connectionRole: "auxiliary", weightG: 18.2, units: "g", capturedAt: "2026-10-11T12:00:00.000Z", sampleTimestamp: null, userConfirmed: true },
+      },
+    });
+    return response({});
+  });
+  await ui.analysis.onsubmit({ preventDefault() {}, target: ui.analysis });
+  assert.equal(ui.form.fields.notes, "first shot");
+  assert.equal(ui.form.fields.taste, "sour");
+  assert.equal(ui.form.fields.overall, "under-extracted");
+  assert.equal(ui.form.fields.beanWeight, "18.2");
+  assert.equal(ui.form.fields.confirmBeanMeasurement, "on");
+  ui.shotSelect.onchange({ target: { value: "shot-2" } });
+  assert.equal(ui.form.fields.notes, "");
+  assert.equal(ui.form.fields.taste, "");
+  assert.equal(ui.form.fields.beanWeight, "");
+  assert.equal(ui.form.fields.confirmBeanMeasurement, "");
+});
+
 test("matched references render as safe human-readable source details", async () => {
   const ui = await uiFixture(async () =>
     response({
@@ -777,7 +814,7 @@ test("research controls save explicit choices and show offline errors without po
     return response(state);
   });
   const el=ui.sharingElements;
-  el.researchEndpoint.value="https://collector.example/v1/records";
+  el.researchEndpoint.value="https://collector.example/v1/events";
   await el.researchEnable.click();assert.match(el.researchStatus.textContent,/Acknowledge/);
   el.researchHostLimits.checked=true;await el.researchEnable.click();assert.equal(state.sharing,true);
   assert.equal(JSON.parse(calls.at(-1).init.body).acknowledgeHostLimits,true);

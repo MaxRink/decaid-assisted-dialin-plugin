@@ -159,7 +159,7 @@
         <div class="actions"><button id="research-sharing-export" type="button">Save a research file locally</button><button id="research-sharing-send" type="button" disabled>Send queued records</button><button id="research-sharing-disable" type="button">Turn off and delete queued records</button><button id="research-sharing-delete" type="button">Delete all research records</button></div>
         <p class="hint">Local export works without a collector or sharing consent. Turning sharing off deletes unsent records from this browser. Random research record and series keys identify corrections and related shots; there is no permanent visitor identifier. Your collector may receive network connection metadata.</p>
         <details class="expert-only"><summary>Configure your research collector</summary>
-          <label>Collector HTTPS URL<input id="research-sharing-endpoint" type="url" placeholder="https://your-collector.example/records" autocomplete="off" spellcheck="false"></label>
+          <label>Collector HTTPS URL<input id="research-sharing-endpoint" type="url" placeholder="https://your-collector.example/v1/events" autocomplete="off" spellcheck="false"></label>
           <button id="research-sharing-apply" type="button">Use this collector</button>
           <p class="hint">Use an endpoint you trust and control. There is no built-in collector. Changing the destination asks for fresh sharing consent.</p>
         </details>
