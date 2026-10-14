@@ -2239,7 +2239,8 @@ function createResearchSharing() {
         if (storageError) throw new Error(storageError);
         if (!state.localEnabled && !permitted) return { record: clone(record), ...status() };
         const digest = fingerprint(record);
-        const known = key == null ? [] : state.records.filter(item => item.key === key).concat(state.queue.filter(item => item.key === key));
+        const queued = key == null ? null : state.queue.find(item => item.key === key);
+        const known = key == null ? [] : state.records.filter(item => item.key === key).concat(queued ? [queued] : []);
         const ledger = key == null ? null : state.fingerprints.find(item => item.key === key);
         // The archive can intentionally stop changing while transport state and
         // its fingerprint ledger continue to advance (for example when local
@@ -2249,14 +2250,17 @@ function createResearchSharing() {
           item.record.revision === latest.record.revision && item.revision > latest.revision ? item : latest, null);
         const latestRevision = Math.max(prior?.record.revision || 0, ledger?.revision || 0);
         const latestObservationId = ledger && ledger.revision >= (prior?.record.revision || 0) ? ledger.observationId : prior?.record.observationId;
-        if (prior && prior.record.revision === latestRevision && canonical(observationContent(prior.record)) === canonical(record) ||
+        // An archive retained while collection was off can predate a correction
+        // whose transport ledger was deleted or evicted.
+        const duplicate = permitted ? queued : prior;
+        if (duplicate && duplicate.record.revision === latestRevision && canonical(observationContent(duplicate.record)) === canonical(record) ||
           ledger && ledger.revision === latestRevision && ledger.fingerprint === digest)
           return { record: clone(record), ...status() };
         const revision = state.nextRevision + 1;
         if (!Number.isSafeInteger(revision)) throw new Error("Local research revision limit reached; export and clear");
         const observationId = latestObservationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
         if (!validId(observationId)) throw new Error("Random observation key must contain 32 lowercase hexadecimal characters");
-        const observationRevision = latestRevision + 1;
+        const observationRevision = Math.max(latestRevision, state.nextRevision) + 1;
         const item = { key: key == null ? "entry:" + revision : key, revision, record: { ...record, observationId, revision: observationRevision } };
         const replace = list => list.filter(prior => prior.key !== item.key).concat([item]);
         let queue = state.queue;
@@ -2321,7 +2325,7 @@ function createResearchSharing() {
         return status();
       });
     }
-    return { ready: ready.then(status), status: () => serial(status), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
+    return { ready: ready.then(status), status: () => serial(status).catch(error => { if (storageError) return status(); throw error; }), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };
   }
   return { schemaVersion: VERSION, policyVersion: POLICY, limits: { local: MAX_LOCAL, queue: MAX_QUEUE, batch: MAX_BATCH },
