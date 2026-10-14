@@ -219,6 +219,23 @@ test('coordinated browser clients reload before saving and cannot send after ano
   assert.equal((await second.status()).queuedCount, 0);
 });
 
+test('a failed persistence cannot be undone by a refresh of the old opted-in state', async () => {
+  const first = setup(); await first.client.ready;
+  await first.client.setSharing(true, 'https://collector.example.org/v1/events');
+  const persisted = first.stored();
+  const sent = [];
+  const client = schema.createClient({
+    load: async () => persisted, reload: async () => persisted,
+    save: async () => { throw new Error('disk full'); },
+    send: async () => { sent.push(true); return {ok: true, json: async () => ({accepted: 1})}; }
+  });
+  await client.ready;
+  await assert.rejects(client.capture(record(), 'failed-write'));
+  await assert.rejects(client.flush(), /storage could not be saved|storage could not be read/);
+  assert.equal(sent.length, 0);
+  await assert.rejects(client.status(), /storage could not be saved|storage could not be read/);
+});
+
 test('comparison approaches and random series retain scientific provenance but drop explanations', () => {
   const value = schema.sanitizeRecord({ ...record(), researchSeries: schema.randomId(), shotOrdinal: 2, taste: { good: false },
     approaches: [{ algorithm: 'native-response', status: 'collecting', coordinateStatus: 'estimated_relative', settingUnit: 'micrometres', proposedSetting: 60, explanation: 'secret bean' }] });
