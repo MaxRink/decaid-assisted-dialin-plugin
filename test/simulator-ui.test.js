@@ -115,6 +115,7 @@ function uiFixture(catalog = { schemaVersion: 1, sources: [] }, persistentStorag
     URL,
     URLSearchParams,
     location: { href: "https://example.test/simulator/" },
+    navigator: { locks: { request(_name, _options, operation) { return operation(); } } },
     DECAID_RESEARCH_CONFIG: unavailable.researchConfig,
     document,
     window: null,
