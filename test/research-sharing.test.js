@@ -283,6 +283,24 @@ test('a failed persistence cannot be undone by a refresh of the old opted-in sta
   assert.match(status.error, /storage could not be saved/);
 });
 
+test('a failed reload leaves status visible but blocks writes and sends', async () => {
+  const first = setup(); await first.client.setSharing(true, 'https://collector.example.org/v1/events');
+  await first.client.capture(record(), 'shot');
+  let unreadable = true, writes = 0, sends = 0;
+  const client = schema.createClient({ load: async () => first.stored(),
+    reload: async () => { if (unreadable) throw new Error('storage unavailable'); return first.stored(); },
+    save: async () => { writes++; }, send: async () => { sends++; return receipt; } });
+  const status = await client.status();
+  assert.equal(status.sharing, false); assert.match(status.error, /could not be read/);
+  await assert.rejects(client.setSharing(false), /could not be read/);
+  await assert.rejects(client.flush(), /could not be read/);
+  assert.equal(writes, 0); assert.equal(sends, 0);
+  unreadable = false;
+  const recoveredRead = await client.status();
+  assert.equal(recoveredRead.sharing, false); assert.match(recoveredRead.error, /could not be read/);
+  await client.setSharing(false); assert.equal(writes, 1);
+});
+
 test('a pending opt-out cannot be undone by reload before a queued send', async () => {
   const shared = coordinated(); let sends = 0;
   const client = shared.make({ send: () => { sends++; return receipt; } });

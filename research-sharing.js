@@ -335,7 +335,7 @@ function createResearchSharing() {
         return status();
       });
     }
-    return { ready: ready.then(status), status: () => serial(status), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
+    return { ready: ready.then(status), status: () => serial(status).catch(error => { if (storageError) return status(); throw error; }), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };
   }
   return { schemaVersion: VERSION, policyVersion: POLICY, limits: { local: MAX_LOCAL, queue: MAX_QUEUE, batch: MAX_BATCH },
