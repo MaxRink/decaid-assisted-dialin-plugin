@@ -142,4 +142,10 @@ This implementation has been exercised with local HTTP integration tests. The de
 
 ## Private aggregate monitoring
 
+The maintained homelab collector endpoint is
+`https://dialin-collector.private-testumgebung.de/v1/events`. It is an
+explicit opt-in destination; the client does not enable sharing or upload data
+merely because this URL is documented. Keep the endpoint private to the
+minimized research schema and do not use it as a general application API.
+
 See [research metrics and Grafana deployment](RESEARCH_METRICS.md) for the optional private Prometheus listener, revision-aware retained-data distributions, bounded label budget and populated dashboard examples. No metrics route is exposed by the public collector/Caddy endpoint.

@@ -371,7 +371,11 @@ default and requires an explicit choice and a configured HTTPS collector. The
 website sends only when you press Send; the opted-in plugin automatically sends
 future observations and retries while running. Random observation keys allow corrections and retry deduplication;
 personal text, host shot IDs and permanent visitor identifiers are excluded.
-The collector is self-hosted; no live collector is operated by this repository.
+The collector is self-hosted. The maintained homelab deployment uses
+`https://dialin-collector.private-testumgebung.de/v1/events`; remote sharing
+still remains off until the operator explicitly enables it in the client.
+The endpoint accepts only the minimized numeric/category schema described
+above and does not expose a record-read API.
 See [data fields, controls and deployment](docs/RESEARCH_SHARING.md). Optional
 [private Prometheus metrics and Grafana dashboards](docs/RESEARCH_METRICS.md) show
 retained brew measurements, taste and algorithm comparisons. Corrections and
