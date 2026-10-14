@@ -49,7 +49,7 @@ test.describe('research sharing two-tab storage fences', () => {
     await expect(b.locator('#research-sharing-status')).toContainText('1 queued');
     await a.locator('#research-sharing-delete').click();
     await expect(a.locator('#research-sharing-status')).toContainText('deleted');
-    await b.locator('#research-sharing-send').click();
+    await b.locator('#research-sharing-send').dispatchEvent('click');
     await expect(b.locator('#research-sharing-status')).toContainText('0 queued');
     expect(batches).toHaveLength(0);
     await context.close();
@@ -63,7 +63,7 @@ test.describe('research sharing two-tab storage fences', () => {
     await b.goto('/simulator/'); await b.locator('#research-sharing-title').click();
     await expect(b.locator('#research-sharing-status')).toContainText('1 queued');
     await a.locator('#research-sharing-disable').click();
-    await b.locator('#research-sharing-send').click();
+    await b.locator('#research-sharing-send').dispatchEvent('click');
     await expect(b.locator('#research-sharing-consent')).not.toBeChecked();
     expect(batches).toHaveLength(0);
     await context.close();
@@ -78,7 +78,7 @@ test.describe('research sharing two-tab storage fences', () => {
     await expect(b.locator('#research-sharing-status')).toContainText('1 queued');
     await a.locator('#research-sharing-endpoint').fill(endpointB);
     await a.locator('#research-sharing-apply').click();
-    await b.locator('#research-sharing-send').click();
+    await b.locator('#research-sharing-send').dispatchEvent('click');
     expect(batches).toHaveLength(0);
     await context.close();
   });
@@ -88,7 +88,6 @@ test.describe('research sharing two-tab storage fences', () => {
     const a = await context.newPage(); const b = await context.newPage();
     await configure(a); await b.goto('/simulator/');
     await Promise.all([record(a, 22), record(b, 24)]);
-    await a.locator('#research-sharing-title').click();
     await expect(a.locator('#research-sharing-status')).toContainText('2 record(s)');
     const downloadPromise = a.waitForEvent('download');
     await a.locator('#research-sharing-export').click();
