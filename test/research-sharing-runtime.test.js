@@ -46,7 +46,7 @@ async function captured(f,count=1) {
   for(let i=0;i<30;i++){await tick();const result=await f.request();if(result.body.localCount===count)return result.body;}
   assert.fail('research capture did not settle');
 }
-const enable = f => f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/records',acknowledgeHostLimits:true});
+const enable = f => f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/events',acknowledgeHostLimits:true});
 test('local archive defaults on, remote off; export omits identities, notes and timestamps',async t=>{
   const f=fixture(t);assert.equal((await f.request()).body.sharing,false);
   f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);
@@ -57,7 +57,7 @@ test('local archive defaults on, remote off; export omits identities, notes and 
 });
 test('consent requires HTTPS and host-limits acknowledgment; no archive backfill',async t=>{
   const f=fixture(t);f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);
-  assert.equal((await f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/records'})).status,400);
+  assert.equal((await f.request('POST',{sharing:true,endpoint:'https://collector.example/v1/events'})).status,400);
   assert.equal((await f.request('POST',{sharing:true,endpoint:'http://collector.example',acknowledgeHostLimits:true})).status,400);
   assert.equal((await enable(f)).status,200);assert.equal((await f.request()).body.queuedCount,0);
   assert.equal((await f.request()).body.hostCapabilities.requestCancellation,false);
@@ -159,6 +159,7 @@ test('random series resets for changed bean, grinder or recipe; corrections and 
     f.plugin.onEvent({name:'shotStored',payload:{id:next.id}});await captured(f,i+1);
   }
   const records=(await f.request('GET',null,'sharing-export')).body.records;
+  const previousRevision=Math.max(...records.map(record=>Number(record.revision||0)));
   assert.match(records[0].researchSeries,/^[a-f0-9]{32}$/);
   assert.equal(records[0].researchSeries,records[1].researchSeries);
   for(let i=2;i<records.length;i++)assert.notEqual(records[i-1].researchSeries,records[i].researchSeries);
@@ -173,7 +174,7 @@ test('random series resets for changed bean, grinder or recipe; corrections and 
   await next.request('POST',{operation:'retry'});
   const amended=JSON.parse(next.posts[0].init.body).records[0];
   assert.equal(amended.researchSeries,records[0].researchSeries);
-  assert.equal(amended.observationId,records[0].observationId);assert.equal(amended.revision,2);
+  assert.equal(amended.observationId,records[0].observationId);assert.ok(amended.revision>previousRevision);
   assert.doesNotMatch(next.posts[0].init.body,/PRIVATE-/);
   await next.request('DELETE');assert.deepEqual(stored.get(KEY).series,{current:null,shots:[]});
 });

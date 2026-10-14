@@ -1052,8 +1052,10 @@ function createResearchAlgorithms() {
     } else if (a === "DdEff") {
       integer(s.initialDdDum, "initialDdDum");
       integer(s.calls, "calls");
-      if (s.calls < 0 || s.calls > 64)
-        throw new Error("calls must be between 0 and 64");
+      // The convenience ddEff batch helper intentionally caps callers at 64;
+      // retained engine state keeps the six/six/six cycle beyond that bound.
+      if (s.calls < 0)
+        throw new Error("calls must be non-negative");
     }
   }
   function adjust(algorithm, state, input) {
@@ -2175,8 +2177,8 @@ function createResearchSharing() {
         throw new Error("Invalid local research entry");
       return { key: localKey(value.key), revision: value.revision, record: validateRecord(value.record) };
     };
-    let state = fresh(), generation = 0, permitted = false, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
-    const ready = Promise.resolve().then(() => adapters.load()).then(value => {
+    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
+    const decode = value => {
       if (value == null) return;
       if (!object(value) || value.schemaVersion !== VERSION || value.policyVersion !== POLICY ||
           typeof value.sharing !== "boolean" || typeof value.localEnabled !== "boolean" || !Number.isSafeInteger(value.nextRevision) || value.nextRevision < 0 ||
@@ -2192,15 +2194,27 @@ function createResearchSharing() {
         if (!validId(item.observationId) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw new Error("Invalid observation ledger");
         return { key: localKey(item.key), fingerprint: item.fingerprint, observationId: item.observationId, revision: item.revision };
       });
-      state = { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
+      return { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
         endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
-      permitted = generation === 0 && state.sharing;
-      if (!permitted) { state.sharing = false; state.queue = []; state.fingerprints = []; }
-    }).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
-    const serial = operation => { const result = chain.then(() => ready).then(operation); chain = result.catch(() => {}); return result; };
-    async function save(next) {
-      try { await adapters.save(clone(next)); state = next; storageError = null; }
-      catch (_) { permitted = false; state.sharing = false; state.queue = []; generation++; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
+    };
+    const updatePermission = () => { permitted = state.sharing && pendingConsent === null && !storageError; };
+    const install = value => { state = decode(value) || fresh(); updatePermission(); };
+    const ready = Promise.resolve().then(() => adapters.load()).then(install).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
+    const refresh = async () => {
+      if (typeof adapters.reload !== "function") return;
+      try { install(await adapters.reload()); }
+      catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
+    };
+    const serial = operation => {
+      const result = chain.then(() => ready).then(() => {
+        const run = async () => { await refresh(); return operation(); };
+        return typeof adapters.withLock === "function" ? adapters.withLock(run) : run();
+      });
+      chain = result.catch(() => {}); return result;
+    };
+    async function save(next, resetError = false) {
+      try { await adapters.save(clone(next)); state = next; if (resetError) storageError = null; updatePermission(); }
+      catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
     }
     const status = () => ({ localEnabled: state.localEnabled, sharing: permitted && state.sharing && !storageError, endpoint: state.endpoint,
       localCount: state.records.length, queuedCount: permitted ? state.queue.length : 0, error: storageError, policyVersion: POLICY });
@@ -2209,11 +2223,12 @@ function createResearchSharing() {
       const targetEndpoint = enabled && target != null && target !== "" ? endpoint(target) : null;
       // Revoke immediately, before waiting for disk or an earlier network request.
       const requestGeneration = ++generation;
-      permitted = false; abort?.();
+      pendingConsent = requestGeneration; permitted = false; abort?.();
       return serial(async () => {
-        const current = requestGeneration === generation;
-        await save({ ...state, sharing: current && enabled, endpoint: current ? targetEndpoint : null, queue: [], fingerprints: [] });
-        permitted = current && requestGeneration === generation && enabled;
+        if (requestGeneration !== generation) return status();
+        await save({ ...state, sharing: enabled, endpoint: targetEndpoint, queue: [], fingerprints: [] }, true);
+        if (requestGeneration === generation) pendingConsent = null;
+        updatePermission();
         return status();
       });
     }
@@ -2223,16 +2238,29 @@ function createResearchSharing() {
       return serial(async () => {
         if (storageError) throw new Error(storageError);
         if (!state.localEnabled && !permitted) return { record: clone(record), ...status() };
-        const prior = key == null ? null : state.records.find(item => item.key === key) || state.queue.find(item => item.key === key);
         const digest = fingerprint(record);
+        const queued = key == null ? null : state.queue.find(item => item.key === key);
+        const known = key == null ? [] : state.records.filter(item => item.key === key).concat(queued ? [queued] : []);
         const ledger = key == null ? null : state.fingerprints.find(item => item.key === key);
-        if (prior && canonical(observationContent(prior.record)) === canonical(record) || ledger && ledger.fingerprint === digest)
+        // The archive can intentionally stop changing while transport state and
+        // its fingerprint ledger continue to advance (for example when local
+        // collection is switched off). Always carry identity/revision forward
+        // from the newest known observation, rather than preferring the archive.
+        const prior = known.reduce((latest, item) => !latest || item.record.revision > latest.record.revision ||
+          item.record.revision === latest.record.revision && item.revision > latest.revision ? item : latest, null);
+        const latestRevision = Math.max(prior?.record.revision || 0, ledger?.revision || 0);
+        const latestObservationId = ledger && ledger.revision >= (prior?.record.revision || 0) ? ledger.observationId : prior?.record.observationId;
+        // An archive retained while collection was off can predate a correction
+        // whose transport ledger was deleted or evicted.
+        const duplicate = permitted ? queued : prior;
+        if (duplicate && duplicate.record.revision === latestRevision && canonical(observationContent(duplicate.record)) === canonical(record) ||
+          ledger && ledger.revision === latestRevision && ledger.fingerprint === digest)
           return { record: clone(record), ...status() };
         const revision = state.nextRevision + 1;
         if (!Number.isSafeInteger(revision)) throw new Error("Local research revision limit reached; export and clear");
-        const observationId = prior?.record.observationId || ledger?.observationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
+        const observationId = latestObservationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
         if (!validId(observationId)) throw new Error("Random observation key must contain 32 lowercase hexadecimal characters");
-        const observationRevision = (prior?.record.revision || ledger?.revision || 0) + 1;
+        const observationRevision = Math.max(latestRevision, state.nextRevision) + 1;
         const item = { key: key == null ? "entry:" + revision : key, revision, record: { ...record, observationId, revision: observationRevision } };
         const replace = list => list.filter(prior => prior.key !== item.key).concat([item]);
         let queue = state.queue;
@@ -2253,23 +2281,29 @@ function createResearchSharing() {
             if (JSON.stringify(entries.concat([item]).map(entry => entry.record)).length > 60000) break;
             entries.push(item);
           }
-          return { generation, endpoint: state.endpoint, entries: clone(entries) };
+          const controller = typeof AbortController === "function" ? new AbortController() : null;
+          abort = () => controller?.abort();
+          // Start the request before releasing the storage lock. Awaiting it must
+          // not block another tab's deletion, opt-out, or new observation.
+          const response = adapters.send(state.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
+            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
+            body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: entries.map(item => item.record) }) });
+          return { generation, endpoint: state.endpoint, entries: clone(entries), response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
         });
         if (!batch) return { sent: 0, ...status() };
-        if (batch.generation !== generation || !permitted) return { sent: 0, ...status() };
-        const controller = typeof AbortController === "function" ? new AbortController() : null;
-        abort = () => controller?.abort();
         try {
-          const response = await adapters.send(batch.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
-            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
-            body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: batch.entries.map(item => item.record) }) });
+          const result = await batch.response;
+          if (result.error) throw result.error;
+          const response = result.value;
           if (!response || !response.ok || response.redirected) throw new Error("Research upload was not acknowledged");
           const receipt = await response.json();
           if (!receipt || receipt.accepted !== batch.entries.length) throw new Error("Invalid research upload acknowledgment");
           return await serial(async () => {
-            if (batch.generation !== generation || !permitted) return { sent: 0, ...status() };
-            const acknowledged = new Set(batch.entries.map(item => item.revision));
-            await save({ ...state, queue: state.queue.filter(item => !acknowledged.has(item.revision)) });
+            if (batch.generation !== generation || !permitted || state.endpoint !== batch.endpoint) return { sent: 0, ...status() };
+            const identity = item => item.record.observationId + ":" + item.record.revision + ":" + item.revision;
+            const acknowledged = new Set(batch.entries.map(identity));
+            const queue = state.queue.filter(item => !acknowledged.has(identity(item)));
+            if (queue.length !== state.queue.length) await save({ ...state, queue });
             return { sent: batch.entries.length, ...status() };
           });
         } finally { abort = null; }
@@ -2282,10 +2316,16 @@ function createResearchSharing() {
       return serial(async () => { await save({ ...state, localEnabled: enabled, fingerprints: enabled || permitted ? state.fingerprints : [] }); return status(); });
     }
     function clear() {
-      generation++; permitted = false; abort?.();
-      return serial(async () => { await save({ ...fresh(), localEnabled: state.localEnabled }); return status(); });
+      const requestGeneration = ++generation;
+      pendingConsent = requestGeneration; permitted = false; abort?.();
+      return serial(async () => {
+        await save({ ...fresh(), localEnabled: state.localEnabled }, true);
+        if (requestGeneration === generation) pendingConsent = null;
+        updatePermission();
+        return status();
+      });
     }
-    return { ready: ready.then(status), status: () => serial(status), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
+    return { ready: ready.then(status), status: () => serial(status).catch(error => { if (storageError) return status(); throw error; }), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };
   }
   return { schemaVersion: VERSION, policyVersion: POLICY, limits: { local: MAX_LOCAL, queue: MAX_QUEUE, batch: MAX_BATCH },
@@ -4409,7 +4449,7 @@ function createPlugin(host, services) {
 <details id="researchSharing"><summary>Research data choices</summary>
 <p>A local research archive is on by default; you can turn it off below. It keeps selected numeric brew measurements and fixed categories for future analysis. Remote sharing starts only after you enable it and confirm your own HTTPS collector. Exports exclude shot IDs, bean names, notes, device identities, raw traces and timestamps. Random research keys link corrections and shots from the same bean, grinder and recipe; private context comparisons stay on this device. Network requests still expose your address to the collector.</p>
 <label><input id="researchLocal" type="checkbox"> Keep the local research archive</label>
-<label>Your research collector HTTPS endpoint<input id="researchEndpoint" type="url" placeholder="https://your-collector.example/v1/records" autocomplete="off"></label>
+<label>Your research collector HTTPS endpoint<input id="researchEndpoint" type="url" placeholder="https://your-collector.example/v1/events" autocomplete="off"></label>
 <label><input id="researchHostLimits" type="checkbox"> I trust this collector and understand this host cannot prevent redirects or cancel an upload already sent.</label>
 <button id="researchEnable" type="button">Enable automatic remote sharing</button>
 <button id="researchDisable" type="button">Opt out and clear pending uploads</button>
@@ -4588,8 +4628,11 @@ const render=({endpoint:name,body})=>{
   if(name==='feedback')return body.saved?'Feedback saved for shot '+body.shotId+'.':(body.reason||body.error||'Feedback was not saved.');
   return body.provenance?body.provenance+'\\n\\n'+JSON.stringify(body,null,2):JSON.stringify(body,null,2);
 };
-const show=async(name,init,label)=>{const generation=++requestState.generation;out.textContent=label||'Loading...';try{const r=await fetch(endpoint(name),init);const body=await r.json();if(!r.ok){if(generation===requestState.generation)out.textContent=name==='feedback'?'Feedback was not saved. '+(body.error||'The request failed.')+' Reload the plugin if storage is unavailable, then retry.':body.error||'The request could not be completed.';return body;}if(generation===requestState.generation){out.textContent=render({endpoint:name,body});renderReferenceDetails(body.reviewedReferences);renderDialReference(body);if(name==='feedback'){adviceGeneration++;if(advice)advice.textContent='Feedback saved. Ask for the next setting using this updated taste assessment.';if(adviceResult)adviceResult.textContent='';}if(['suggestion','recommendation'].includes(name))renderBeginnerAdvice(body);if(name==='analysis'){latestAnalysis=body;renderTraceGraph(body);updateCompareClock();updateAdviceClock();const recipe=document.querySelector('#nativeRecipeContext');if(recipe)recipe.textContent='Saved dose '+(body.context?.dose??'unknown')+' g; target yield '+(body.context?.yield??'unknown')+' g. Actual control mode: '+(body.metrics?.trace?.controlMode||'unknown')+'. Profile references below do not alter this saved evidence.';}if(['recommendation','suggestion','analysis'].includes(name))showNativeWizardStep(3);}return body;}catch(e){e.generation=generation;fail('Could not load this information. Try again.',generation);throw e;}};
-const setShotId=id=>{const input=document.querySelector('#analysis input[name="shotId"]');const feedback=document.querySelector('#feedback input[name="shotId"]');if(input&&id)input.value=id;if(feedback&&id)feedback.value=id;};
+const feedbackFieldNames=['notes','taste','brewTimeSec','brewTimeClock','beanType','roastLevel','burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','dose','yield','overall','descriptors','acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin','beanScaleId','beanScaleRole','beanWeight','beanCapturedAt','beanSampleTimestamp'];
+const clearFeedbackFields=()=>{const form=document.querySelector('#feedback');if(!form)return;feedbackFieldNames.forEach(name=>{const field=form.elements?.namedItem?.(name)||form.querySelector?.('[name="'+name+'"]');if(field)field.value='';});const good=form.elements?.namedItem?.('manualStopConfirmed')||form.querySelector?.('[name="manualStopConfirmed"]');if(good)good.checked=false;const confirmed=form.elements?.namedItem?.('confirmBeanMeasurement')||form.querySelector?.('[name="confirmBeanMeasurement"]');if(confirmed)confirmed.checked=false;if(typeof beanTimeHints!=='undefined'){delete beanTimeHints.beanCapturedAt;delete beanTimeHints.beanSampleTimestamp;}};
+const hydrateFeedback=body=>{const form=document.querySelector('#feedback');if(!form)return;clearFeedbackFields();const saved=body?.feedback;selectedFeedbackBaseline=saved?JSON.parse(JSON.stringify(saved)):null;if(body?.shotId)selectedShotId=String(body.shotId);const put=(name,value)=>{const field=form.elements?.namedItem?.(name)||form.querySelector?.('[name=\"'+name+'\"]');if(field&&value!==undefined&&value!==null)field.value=String(value);};put('shotId',body?.shotId||selectedShotId);if(!saved)return;put('notes',saved.notes||'');put('taste',saved.taste||'');put('brewTimeSec',saved.brewTimeSec);put('brewTimeClock',saved.brewTimeClock||'pump');put('brewTemperatureC',saved.flavour?.brewTemperatureC);put('tastingTemperatureC',saved.flavour?.tastingTemperatureC);put('sinceBrewMin',saved.flavour?.sinceBrewMin);put('overall',saved.flavour?.overall||'');put('descriptors',Array.isArray(saved.flavour?.descriptors)?saved.flavour.descriptors.join(', '):'');['acidity','bitterness','sweetness','body','astringency'].forEach(key=>put(key,saved.flavour?.[key]));Object.entries(saved.confirmedContext||{}).forEach(([key,value])=>put(key,value));const stop=form.elements?.namedItem?.('manualStopConfirmed')||form.querySelector?.('[name=\"manualStopConfirmed\"]');if(stop)stop.checked=saved.manualStopConfirmed===true;const measured=saved.measuredBeanDose;if(measured){put('beanScaleId',measured.deviceId);put('beanScaleRole',measured.connectionRole||'auxiliary');put('beanWeight',measured.weightG);const captured=form.elements?.namedItem?.('beanCapturedAt')||form.querySelector?.('[name=\"beanCapturedAt\"]');const sample=form.elements?.namedItem?.('beanSampleTimestamp')||form.querySelector?.('[name=\"beanSampleTimestamp\"]');if(typeof prefillBeanTime==='function'){if(captured)prefillBeanTime('beanCapturedAt',captured,measured.capturedAt);if(sample&&measured.sampleTimestamp)prefillBeanTime('beanSampleTimestamp',sample,measured.sampleTimestamp);}else{put('beanCapturedAt',measured.capturedAt);put('beanSampleTimestamp',measured.sampleTimestamp);}const confirm=form.elements?.namedItem?.('confirmBeanMeasurement')||form.querySelector?.('[name=\"confirmBeanMeasurement\"]');if(confirm)confirm.checked=measured.userConfirmed===true;}};
+const show=async(name,init,label)=>{const generation=++requestState.generation;out.textContent=label||'Loading...';try{const r=await fetch(endpoint(name),init);const body=await r.json();if(!r.ok){if(generation===requestState.generation)out.textContent=name==='feedback'?'Feedback was not saved. '+(body.error||'The request failed.')+' Reload the plugin if storage is unavailable, then retry.':body.error||'The request could not be completed.';return body;}if(generation===requestState.generation){out.textContent=render({endpoint:name,body});renderReferenceDetails(body.reviewedReferences);renderDialReference(body);if(name==='feedback'){adviceGeneration++;if(advice)advice.textContent='Feedback saved. Ask for the next setting using this updated taste assessment.';if(adviceResult)adviceResult.textContent='';}if(['suggestion','recommendation'].includes(name))renderBeginnerAdvice(body);if(name==='analysis'){latestAnalysis=body;hydrateFeedback(body);renderTraceGraph(body);updateCompareClock();updateAdviceClock();const recipe=document.querySelector('#nativeRecipeContext');if(recipe)recipe.textContent='Saved dose '+(body.context?.dose??'unknown')+' g; target yield '+(body.context?.yield??'unknown')+' g. Actual control mode: '+(body.metrics?.trace?.controlMode||'unknown')+'. Profile references below do not alter this saved evidence.';}if(['recommendation','suggestion','analysis'].includes(name))showNativeWizardStep(3);}return body;}catch(e){e.generation=generation;fail('Could not load this information. Try again.',generation);throw e;}};
+let selectedShotId=null,selectedFeedbackBaseline=null,feedbackHydrationGeneration=0,feedbackReady=true,feedbackHydrationTarget=null,feedbackHydrationPromise=null;const setShotId=(id,load=true)=>{const input=document.querySelector('#analysis input[name="shotId"]');const feedback=document.querySelector('#feedback input[name="shotId"]');if(selectedShotId&&id&&selectedShotId!==id){clearFeedbackFields();selectedFeedbackBaseline=null;}selectedShotId=id||selectedShotId;if(input&&id)input.value=id;if(feedback&&id)feedback.value=id;if(load&&id){if(feedbackHydrationTarget===id&&feedbackHydrationPromise)return feedbackHydrationPromise;const token=++feedbackHydrationGeneration;feedbackHydrationTarget=id;const priorAnalysis=latestAnalysis;let ready=false;feedbackReady=false;const buttons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];buttons.forEach(button=>button.disabled=true);const loadPromise=show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:id})},'Loading saved feedback...').then(body=>{if(body?.error)throw new Error(body.error);if(selectedShotId!==id||latestAnalysis===priorAnalysis)throw new Error('The selected shot changed while loading. Retry the analysis.');ready=true;return body;}).catch(e=>{if(token===feedbackHydrationGeneration)fail('Could not load saved feedback. '+(e.message||'Try again.'));}).finally(()=>{if(token===feedbackHydrationGeneration){feedbackReady=ready;buttons.forEach(button=>button.disabled=!ready||feedbackBusy);}});feedbackHydrationPromise=loadPromise;return loadPromise;}};
 const refreshShots=async()=>{const generation=++requestState.generation;out.textContent='Loading recent shots...';try{const r=await fetch(endpoint('shots'));const body=await r.json();if(!r.ok)throw new Error('request failed');if(generation!==requestState.generation)return;const select=document.querySelector('#shotSelect');if(select&&typeof document.createElement==='function'){select.textContent='';(body.items||[]).forEach(shot=>{const option=document.createElement('option');option.value=String(shot.id);option.textContent=String(shot.id)+' — '+(shot.timestamp||'undated');select.appendChild(option);});if(body.items?.length)setShotId(String(body.items[0].id));}out.textContent='Loaded '+(body.items||[]).length+' recent shots. Choose one for analysis or feedback.';}catch(e){fail('Could not load recent shots. Try again.',generation);}};
 document.querySelector('#recommend').onclick=async()=>{try{await show('recommendation',undefined,'Loading recommendation...')}catch(e){failRequest(e,'Could not load recommendation. Try again.')}};
 document.querySelector('#suggestion').onclick=async()=>{try{await show('suggestion',undefined,'Calculating suggestion...')}catch(e){failRequest(e,'Could not calculate suggestion. Try again.')}};
@@ -4599,7 +4642,9 @@ const loadShotsButton=document.querySelector('#loadShots');
 if(loadShotsButton)loadShotsButton.onclick=refreshShots;
 const shotSelect=document.querySelector('#shotSelect');
 if(shotSelect)shotSelect.onchange=e=>setShotId(e.target.value);
-document.querySelector('#analysis').onsubmit=async e=>{e.preventDefault();try{await show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:new FormData(e.target).get('shotId')})},'Analysing saved brew...')}catch(e){failRequest(e,'Could not analyse the brew. Try again.')}};
+const feedbackShotInput=document.querySelector('#feedback input[name="shotId"]');
+if(feedbackShotInput){const selectTypedShot=e=>setShotId(e.target.value);feedbackShotInput.addEventListener('input',selectTypedShot);feedbackShotInput.addEventListener('change',selectTypedShot);}
+document.querySelector('#analysis').onsubmit=async e=>{e.preventDefault();const shotId=new FormData(e.target).get('shotId');const token=++feedbackHydrationGeneration;const priorAnalysis=latestAnalysis;let ready=false;feedbackReady=false;const buttons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];buttons.forEach(button=>button.disabled=true);try{selectedShotId=shotId||selectedShotId;const body=await show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId})},'Analysing saved brew...');if(body?.error)throw new Error(body.error);if(selectedShotId!==shotId||latestAnalysis===priorAnalysis)throw new Error('The selected shot changed while loading. Retry the analysis.');ready=true;}catch(e){if(token===feedbackHydrationGeneration)failRequest(e,'Could not analyse the brew. Try again.')}finally{if(token===feedbackHydrationGeneration){feedbackReady=ready;buttons.forEach(button=>button.disabled=!ready||feedbackBusy)}}};
 document.querySelector('#research').onsubmit=async e=>{e.preventDefault();let data;try{data=JSON.parse(new FormData(e.target).get('state'))}catch(e){fail('Research replay JSON is invalid.');return}try{await show('research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)},'Replaying software state...')}catch(e){failRequest(e,'Could not run research replay. Try again.')}};
 // Keep an untouched launch instant separate from its local calendar display:
 // a daylight-saving fold can display two different instants as the same wall time.
@@ -4618,8 +4663,8 @@ const beanTimeForFeedback=(key,value,date)=>beanTimeHints[key]?.local===value?be
   const edited=()=>{delete beanTimeHints[key];};
   input?.addEventListener('input',edited);input?.addEventListener('change',edited);
 });
-let feedbackBusy=false;const feedbackForm=document.querySelector('#feedback');const feedbackButtons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];const resetFeedbackBusy=()=>{feedbackBusy=false;feedbackButtons.forEach(button=>button.disabled=false);};feedbackForm.onsubmit=async e=>{e.preventDefault();if(feedbackBusy)return;feedbackBusy=true;feedbackButtons.forEach(button=>button.disabled=true);try{const f=new FormData(e.target);const context={};['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel'].forEach(k=>{const v=f.get(k);if(v)context[k]=v});['dose','yield'].forEach(k=>{const v=f.get(k);if(v!=='')context[k]=Number(v)});const raw=f.get('brewTimeSec');const flavour={};const descriptors=f.get('descriptors');if(descriptors.trim())flavour.descriptors=descriptors.split(',').map(v=>v.trim()).filter(Boolean);const overall=f.get('overall');if(overall)flavour.overall=overall;['acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin'].forEach(k=>{const v=f.get(k);if(v!=='')flavour[k]=Number(v)});const measurementConfirmed=f.get('confirmBeanMeasurement')==='on'||f.get('confirmBeanMeasurement')==='true';let measuredBeanDose=null;if(measurementConfirmed){const weight=Number(f.get('beanWeight'));const capturedAt=f.get('beanCapturedAt');const scaleId=f.get('beanScaleId');const capturedDate=capturedAt?new Date(capturedAt):null;const sampleValue=f.get('beanSampleTimestamp');const sampleDate=sampleValue?new Date(sampleValue):null;if(!scaleId||!Number.isFinite(weight)||weight<=0||!capturedDate||Number.isNaN(capturedDate.getTime())||(sampleDate&&!Number.isFinite(sampleDate.getTime()))){throw new Error('Confirm a positive bean weight, scale ID and valid capture time.');}measuredBeanDose={deviceId:scaleId,connectionRole:'auxiliary',purpose:'beans',weightG:weight,units:'g',capturedAt:beanTimeForFeedback('beanCapturedAt',capturedAt,capturedDate),sampleTimestamp:sampleDate?beanTimeForFeedback('beanSampleTimestamp',sampleValue,sampleDate):null,userConfirmed:true};}await show('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:f.get('shotId'),good:(e.submitter?.value||'true')==='true',notes:f.get('notes'),taste:f.get('taste')||null,flavour:Object.keys(flavour).length?flavour:null,brewTimeSec:raw===''?null:Number(raw),...(raw!==''?{brewTimeClock:f.get('brewTimeClock')||'pump'}:{}),manualStopConfirmed:f.get('manualStopConfirmed')==='on',confirmedContext:context,...(measuredBeanDose?{measuredBeanDose}: {})})},'Saving feedback...');}catch(e){if(e.message&&e.message.startsWith('Confirm a positive'))fail(e.message);else failRequest(e,'Could not save feedback. Try again.');}finally{resetFeedbackBusy();}};
-try{const query=new URLSearchParams(typeof location!=='undefined'&&location.search?location.search:'');const shotId=query.get('shotId');if(shotId)setShotId(shotId);const action=query.get('action');if(action==='analyze'&&shotId)show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:shotId})},'Analysing saved brew...').catch(e=>failRequest(e,'Could not analyse the brew. Try again.'));if(action==='feedback'){const feedbackShot=document.querySelector('#feedback input[name=\"shotId\"]');if(feedbackShot&&feedbackShot.focus)feedbackShot.focus();}const measurementFields={beanScaleId:query.get('beanScaleId'),beanScaleRole:query.get('beanScaleRole')||'auxiliary',beanWeight:query.get('beanWeight'),beanCapturedAt:query.get('beanCapturedAt'),beanSampleTimestamp:query.get('beanSampleTimestamp')};Object.keys(measurementFields).forEach(key=>{const input=document.querySelector('#feedback input[name=\"'+key+'\"]');if(input&&measurementFields[key]){if(key==='beanCapturedAt'||key==='beanSampleTimestamp')prefillBeanTime(key,input,measurementFields[key]);else input.value=measurementFields[key];}});const returnValue=query.get('returnTo')||query.get('return');const returnLink=document.querySelector('#returnLink');if(returnLink&&returnValue){const here=typeof location!=='undefined'?new URL(location.href):new URL('http://127.0.0.1/');const target=new URL(returnValue,here.href);if((target.protocol===here.protocol&&(target.protocol==='http:'||target.protocol==='https:'))&&!target.username&&!target.password&&target.hostname===here.hostname&&target.pathname.startsWith('/')){returnLink.href=target.href;returnLink.hidden=false;}}}catch(e){}
+let feedbackBusy=false;const feedbackForm=document.querySelector('#feedback');const feedbackButtons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];const resetFeedbackBusy=()=>{feedbackBusy=false;feedbackButtons.forEach(button=>button.disabled=!feedbackReady);};feedbackForm.onsubmit=async e=>{e.preventDefault();if(feedbackBusy||!feedbackReady)return;feedbackBusy=true;feedbackButtons.forEach(button=>button.disabled=true);try{const f=new FormData(e.target);const context={};['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel'].forEach(k=>{const v=f.get(k);if(v)context[k]=v});['dose','yield'].forEach(k=>{const v=f.get(k);if(v!=='')context[k]=Number(v)});const raw=f.get('brewTimeSec');const flavour={};const descriptors=f.get('descriptors');if(descriptors.trim())flavour.descriptors=descriptors.split(',').map(v=>v.trim()).filter(Boolean);const overall=f.get('overall');if(overall)flavour.overall=overall;['acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin'].forEach(k=>{const v=f.get(k);if(v!=='')flavour[k]=Number(v)});const measurementConfirmed=f.get('confirmBeanMeasurement')==='on'||f.get('confirmBeanMeasurement')==='true';let measuredBeanDose=null;if(measurementConfirmed){const weight=Number(f.get('beanWeight'));const capturedAt=f.get('beanCapturedAt');const scaleId=f.get('beanScaleId');const capturedDate=capturedAt?new Date(capturedAt):null;const sampleValue=f.get('beanSampleTimestamp');const sampleDate=sampleValue?new Date(sampleValue):null;if(!scaleId||!Number.isFinite(weight)||weight<=0||!capturedDate||Number.isNaN(capturedDate.getTime())||(sampleDate&&!Number.isFinite(sampleDate.getTime()))){throw new Error('Confirm a positive bean weight, scale ID and valid capture time.');}measuredBeanDose={deviceId:scaleId,connectionRole:'auxiliary',purpose:'beans',weightG:weight,units:'g',capturedAt:beanTimeForFeedback('beanCapturedAt',capturedAt,capturedDate),sampleTimestamp:sampleDate?beanTimeForFeedback('beanSampleTimestamp',sampleValue,sampleDate):null,userConfirmed:true};}const baseline=selectedFeedbackBaseline||{}, baselineFlavour=baseline.flavour&&typeof baseline.flavour==='object'?baseline.flavour:{}, editableFlavour=new Set(['acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin','overall','descriptors']), preservedFlavour=Object.fromEntries(Object.entries(baselineFlavour).filter(([key])=>!editableFlavour.has(key))), baselineContext=baseline.confirmedContext&&typeof baseline.confirmedContext==='object'?baseline.confirmedContext:{}, editableContext=new Set(['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel','dose','yield']), preservedContext=Object.fromEntries(Object.entries(baselineContext).filter(([key])=>!editableContext.has(key))), payload={...baseline,shotId:f.get('shotId'),good:(e.submitter?.value||'true')==='true',notes:f.get('notes'),taste:f.get('taste')||null,flavour:Object.keys({...preservedFlavour,...flavour}).length?{...preservedFlavour,...flavour}:null,brewTimeSec:raw===''?null:Number(raw),...(raw!==''?{brewTimeClock:f.get('brewTimeClock')||'pump'}:{}),manualStopConfirmed:f.get('manualStopConfirmed')==='on',confirmedContext:{...preservedContext,...context}};if(raw==='')delete payload.brewTimeClock;delete payload.measuredBeanDose;if(measuredBeanDose)payload.measuredBeanDose=measuredBeanDose;await show('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)},'Saving feedback...');}catch(e){if(e.message&&e.message.startsWith('Confirm a positive'))fail(e.message);else failRequest(e,'Could not save feedback. Try again.');}finally{resetFeedbackBusy();}};
+try{const query=new URLSearchParams(typeof location!=='undefined'&&location.search?location.search:'');const shotId=query.get('shotId');const action=query.get('action');const initialHydration=shotId?setShotId(shotId,true):null;const launchToken=feedbackHydrationGeneration;const applyLaunchMeasurement=()=>{if(shotId&&(selectedShotId!==shotId||launchToken!==feedbackHydrationGeneration))return;const measurementFields={beanScaleId:query.get('beanScaleId'),beanScaleRole:query.get('beanScaleRole')||'auxiliary',beanWeight:query.get('beanWeight'),beanCapturedAt:query.get('beanCapturedAt'),beanSampleTimestamp:query.get('beanSampleTimestamp')};const hasLaunchMeasurement=['beanScaleId','beanWeight','beanCapturedAt','beanSampleTimestamp'].some(key=>measurementFields[key]!==null&&measurementFields[key]!=='');if(hasLaunchMeasurement){['beanScaleId','beanScaleRole','beanWeight','beanCapturedAt','beanSampleTimestamp'].forEach(key=>{const input=document.querySelector('#feedback input[name=\"'+key+'\"]');if(input)input.value='';});const confirmed=document.querySelector('#feedback input[name=\"confirmBeanMeasurement\"]');if(confirmed)confirmed.checked=false;if(typeof beanTimeHints!=='undefined'){delete beanTimeHints.beanCapturedAt;delete beanTimeHints.beanSampleTimestamp;}}Object.keys(measurementFields).forEach(key=>{const input=document.querySelector('#feedback input[name="'+key+'"]');if(input&&measurementFields[key]){if(key==='beanCapturedAt'||key==='beanSampleTimestamp')prefillBeanTime(key,input,measurementFields[key]);else input.value=measurementFields[key];}});const confirm=document.querySelector('#feedback input[name="confirmBeanMeasurement"]');if(confirm&&hasLaunchMeasurement)confirm.checked=false;};let analysisLoad=initialHydration;if(action==='analyze'&&shotId){analysisLoad=initialHydration;}if(action==='feedback'){const feedbackShot=document.querySelector('#feedback input[name="shotId"]');if(feedbackShot&&feedbackShot.focus)feedbackShot.focus();analysisLoad=initialHydration;}if(analysisLoad)analysisLoad.then(body=>{if(body)applyLaunchMeasurement();});else applyLaunchMeasurement();const returnValue=query.get('returnTo')||query.get('return');const returnLink=document.querySelector('#returnLink');if(returnLink&&returnValue){const here=typeof location!=='undefined'?new URL(location.href):new URL('http://127.0.0.1/');const target=new URL(returnValue,here.href);if((target.protocol===here.protocol&&(target.protocol==='http:'||target.protocol==='https:'))&&!target.username&&!target.password&&target.hostname===here.hostname&&target.pathname.startsWith('/')){returnLink.href=target.href;returnLink.hidden=false;}}}catch(e){}
 // Final UI guards: the simple view starts collapsed, and a failed/new analysis
 // cannot leave a previous shot's graph or comparison eligible for reuse.
 if(typeof document.querySelectorAll==='function')document.querySelectorAll('.expert-panel').forEach(panel=>{panel.hidden=true;});

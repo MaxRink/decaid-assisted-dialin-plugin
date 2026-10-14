@@ -70,6 +70,8 @@ Also available: `status()`, `append(record)`, `sanitizeRecord(record)`, strict `
 
 Storage adapters must acknowledge durable success or reject. Consent policy/schema mismatches and corrupt persisted state fail closed. `setSharing` clears the queue and transport ledger on each call; integration controls should invoke it only for a real consent/endpoint change. A changed endpoint requires a new explicit choice. It never starts sending by itself. A valid destination uses HTTPS, no credentials, query, or fragment; there is no built-in destination.
 
+The website simulator coordinates its browser tabs with an exclusive Web Lock and reloads the persisted state immediately before every storage operation. A storage event only refreshes the visible controls; it is not the safety boundary. This prevents a stale tab from sending or restoring a queue after another tab opted out or deleted it, while preserving captures made by concurrent tabs. Browsers without Web Locks fail closed for research archiving and sharing; the controls are disabled and existing stored records remain untouched until a supported browser is used.
+
 Browser fetch options request omitted credentials, rejected redirects, no referrer, and no cache. The current Decaid native fetch bridge forwards only method, URL, headers and body; it does not enforce browser-only options or expose redirect history. The native integration must disclose that limitation and require its acknowledgment. Neither the factory nor this collector provides authentication, an account, cookies, or fingerprinting.
 
 ## Deploy on your own server

@@ -10,6 +10,20 @@ function setup(extra = {}) {
     send: async (url, init) => { sent.push({ url, init }); return { ok: true, json: async () => ({ accepted: JSON.parse(init.body).records.length }) }; }, ...extra });
   return { client, sent, stored: () => stored };
 }
+function coordinated() {
+  let stored = null, lock = Promise.resolve();
+  const withLock = operation => {
+    const result = lock.then(operation);
+    lock = result.catch(() => {});
+    return result;
+  };
+  return { stored: () => structuredClone(stored), withLock,
+    make: (extra = {}) => schema.createClient({ load: async () => structuredClone(stored), reload: async () => structuredClone(stored),
+      save: async value => { stored = structuredClone(value); }, withLock,
+      send: async (_url, init) => ({ ok: true, json: async () => ({ accepted: JSON.parse(init.body).records.length }) }), ...extra }) };
+}
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+const receipt = { ok: true, json: async () => ({ accepted: 1 }) };
 
 test('factory is standalone without module, URL, browser or Node dependencies', () => {
   const isolated = vm.runInNewContext('(' + createResearchSharing.toString() + ')()');
@@ -175,6 +189,246 @@ test('random observation identity survives amendments and sent-state reload with
   const amended = JSON.parse(second.sent[0].init.body).records[0];
   assert.equal(amended.observationId, original.observationId); assert.equal(amended.revision, 2);
   assert.equal(JSON.stringify(amended).includes('private/device'), false);
+});
+
+test('amendments keep the newest revision when the private archive is older than transport state', async () => {
+  const { client, sent } = setup(); await client.ready;
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  const key = 'shot-with-private-archive';
+  await client.capture(record(27), key); await client.flush();
+  const original = JSON.parse(sent[0].init.body).records[0];
+  await client.setLocalCollection(false);
+  await client.capture(record(28), key); await client.capture(record(29), key);
+  await client.flush();
+  const corrected = JSON.parse(sent[1].init.body).records[0];
+  assert.equal(corrected.observationId, original.observationId);
+  assert.equal(corrected.revision, 3);
+  assert.equal(corrected.measurements.pumpTimeSec, 29);
+  await client.capture(record(27), key); await client.flush();
+  const reverted = JSON.parse(sent[2].init.body).records[0];
+  assert.equal(reverted.observationId, original.observationId);
+  assert.equal(reverted.revision, 4);
+});
+
+for (const reset of ['consent', 'ledger eviction']) {
+  test('corrections and reverts survive ' + reset + ' with an older retained archive', async () => {
+    const first = setup(); let client = first.client;
+    await client.setSharing(true, 'https://collector.example.org/v1/events');
+    await client.capture(record(20), 'shot'); await client.flush();
+    const original = JSON.parse(first.sent[0].init.body).records[0];
+    await client.setLocalCollection(false);
+    await client.capture(record(21), 'shot'); await client.flush();
+    await client.capture(record(22), 'shot'); await client.flush();
+    if (reset === 'consent') {
+      await client.setSharing(false); await client.setSharing(true, 'https://collector.example.org/v1/events');
+    } else {
+      for (let n = 0; n < schema.limits.local; n++) {
+        await client.capture(record(30), 'other:' + n);
+        await client.flush();
+      }
+    }
+    assert.equal(first.stored().fingerprints.some(item => item.key === 'shot'), false);
+    const restarted = setup({ load: async () => first.stored() }); client = restarted.client;
+    await client.capture(record(20), 'shot'); await client.flush();
+    const reverted = JSON.parse(restarted.sent[0].init.body).records[0];
+    assert.equal(reverted.observationId, original.observationId);
+    assert.ok(reverted.revision > 3, 'reverting to the archived value is a new correction');
+    await client.capture(record(23), 'shot'); await client.flush();
+    const corrected = JSON.parse(restarted.sent[1].init.body).records[0];
+    assert.equal(corrected.observationId, original.observationId);
+    assert.ok(corrected.revision > reverted.revision);
+    assert.equal(corrected.measurements.pumpTimeSec, 23);
+  });
+}
+
+test('coordinated browser clients reload before saving and cannot send after another tab deletes state', async () => {
+  let stored = null; let lock = Promise.resolve(); const sent = [];
+  const withLock = operation => {
+    const previous = lock; let release;
+    lock = new Promise(resolve => { release = resolve; });
+    return previous.then(operation).finally(release);
+  };
+  const make = () => schema.createClient({
+    load: async () => stored, reload: async () => stored,
+    save: async value => { stored = structuredClone(value); }, withLock,
+    send: async (url, init) => { sent.push({url, init}); return {ok: true, json: async () => ({accepted: 1})}; }
+  });
+  const first = make(), second = make(); await Promise.all([first.ready, second.ready]);
+  await first.setSharing(true, 'https://collector.example.org/v1/events');
+  await first.capture(record(), 'tab-a');
+  await second.status(); // Simulate the stale tab observing the shared queue.
+  await first.clear();
+  await second.flush();
+  assert.equal(sent.length, 0);
+  assert.equal((await second.status()).sharing, false);
+  assert.equal((await second.status()).queuedCount, 0);
+});
+
+test('a failed persistence cannot be undone by a refresh of the old opted-in state', async () => {
+  const first = setup(); await first.client.ready;
+  await first.client.setSharing(true, 'https://collector.example.org/v1/events');
+  const persisted = first.stored();
+  const sent = [];
+  const client = schema.createClient({
+    load: async () => persisted, reload: async () => persisted,
+    save: async () => { throw new Error('disk full'); },
+    send: async () => { sent.push(true); return {ok: true, json: async () => ({accepted: 1})}; }
+  });
+  await client.ready;
+  await assert.rejects(client.capture(record(), 'failed-write'));
+  assert.equal((await client.flush()).sent, 0);
+  assert.equal(sent.length, 0);
+  const status = await client.status();
+  assert.equal(status.sharing, false);
+  assert.match(status.error, /storage could not be saved/);
+});
+
+test('a failed reload leaves status visible but blocks writes and sends', async () => {
+  const first = setup(); await first.client.setSharing(true, 'https://collector.example.org/v1/events');
+  await first.client.capture(record(), 'shot');
+  let unreadable = true, writes = 0, sends = 0;
+  const client = schema.createClient({ load: async () => first.stored(),
+    reload: async () => { if (unreadable) throw new Error('storage unavailable'); return first.stored(); },
+    save: async () => { writes++; }, send: async () => { sends++; return receipt; } });
+  const status = await client.status();
+  assert.equal(status.sharing, false); assert.match(status.error, /could not be read/);
+  await assert.rejects(client.setSharing(false), /could not be read/);
+  await assert.rejects(client.flush(), /could not be read/);
+  assert.equal(writes, 0); assert.equal(sends, 0);
+  unreadable = false;
+  const recoveredRead = await client.status();
+  assert.equal(recoveredRead.sharing, false); assert.match(recoveredRead.error, /could not be read/);
+  await client.setSharing(false); assert.equal(writes, 1);
+});
+
+test('a pending opt-out cannot be undone by reload before a queued send', async () => {
+  const shared = coordinated(); let sends = 0;
+  const client = shared.make({ send: () => { sends++; return receipt; } });
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(), 'shot');
+  await Promise.all([client.flush(), client.setSharing(false)]);
+  assert.equal(sends, 0); assert.equal(shared.stored().sharing, false);
+});
+
+test('a failed capture save cannot supersede an opt-out already waiting for storage', async () => {
+  let stored = null, fail = false;
+  const started = deferred(), release = deferred();
+  const client = schema.createClient({ load: async () => stored, save: async value => {
+    if (fail) { fail = false; started.resolve(); await release.promise; throw new Error('disk full'); }
+    stored = structuredClone(value);
+  } });
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(), 'shot');
+  fail = true;
+  const capture = client.capture(record(28), 'shot'); await started.promise;
+  const disabling = client.setSharing(false); release.resolve();
+  await assert.rejects(capture, /could not be saved/);
+  const status = await disabling;
+  assert.equal(stored.sharing, false); assert.deepEqual(stored.queue, []);
+  assert.equal(status.error, null); assert.equal(status.sharing, false);
+});
+
+test('ordinary local-only saves do not prevent observing another tab enabling sharing', async () => {
+  const shared = coordinated(), first = shared.make(), second = shared.make();
+  await first.capture(record(), 'local-only');
+  await second.setSharing(true, 'https://collector.example.org/v1/events');
+  await second.capture(record(28), 'second');
+  assert.equal((await first.status()).sharing, true);
+  await first.capture(record(29), 'first');
+  assert.equal(shared.stored().sharing, true);
+  assert.deepEqual(shared.stored().queue.map(item => item.key), ['second', 'first']);
+});
+
+test('concurrent tabs preserve each other\'s captures', async () => {
+  const shared = coordinated(), first = shared.make(), second = shared.make();
+  await first.setSharing(true, 'https://collector.example.org/v1/events');
+  await Promise.all([first.capture(record(), 'first'), second.capture(record(28), 'second')]);
+  assert.deepEqual(shared.stored().queue.map(item => item.key).sort(), ['first', 'second']);
+  assert.deepEqual(shared.stored().queue.map(item => item.revision).sort(), [1, 2]);
+});
+
+test('request starts under the storage lock, before a deletion at lock release', { timeout: 2000 }, async () => {
+  const shared = coordinated(), upload = deferred(), events = [];
+  const second = shared.make(); let afterRelease = null;
+  const first = shared.make({
+    withLock: async operation => {
+      const value = await shared.withLock(operation);
+      const action = afterRelease; afterRelease = null;
+      if (action) await action();
+      return value;
+    },
+    send: () => { events.push('send'); assert.equal(shared.stored().sharing, true); return upload.promise; }
+  });
+  await first.setSharing(true, 'https://collector.example.org/v1/events');
+  await first.capture(record(), 'shot');
+  const deleted = deferred();
+  afterRelease = async () => { await second.clear(); events.push('delete'); deleted.resolve(); };
+  const sending = first.flush(); await deleted.promise;
+  assert.deepEqual(events, ['send', 'delete']);
+  assert.equal(shared.stored().sharing, false); assert.deepEqual(shared.stored().records, []);
+  upload.resolve(receipt);
+  assert.equal((await sending).sent, 0);
+  assert.deepEqual(shared.stored().queue, []);
+});
+
+test('another tab can clear a stalled upload and a late receipt preserves reused revisions', { timeout: 2000 }, async () => {
+  const shared = coordinated(), upload = deferred(), started = deferred();
+  const first = shared.make({ send: () => { started.resolve(); return upload.promise; } }), second = shared.make();
+  await first.setSharing(true, 'https://collector.example.org/v1/events');
+  await first.capture(record(), 'shot');
+  const old = shared.stored().queue[0];
+  const sending = first.flush(); await started.promise;
+  await second.clear();
+  await second.setSharing(true, 'https://collector.example.org/v1/events');
+  await second.capture(record(28), 'shot');
+  const current = shared.stored().queue[0];
+  assert.equal(current.revision, old.revision);
+  assert.equal(current.record.revision, old.record.revision);
+  assert.notEqual(current.record.observationId, old.record.observationId);
+  upload.resolve(receipt); await sending;
+  assert.deepEqual(shared.stored().queue, [current]);
+});
+
+test('another tab can revoke or change endpoint during a stalled upload', { timeout: 2000 }, async () => {
+  for (const target of [null, 'https://replacement.example.org/v1/events']) {
+    const shared = coordinated(), upload = deferred(), started = deferred();
+    const first = shared.make({ send: () => { started.resolve(); return upload.promise; } }), second = shared.make();
+    await first.setSharing(true, 'https://collector.example.org/v1/events');
+    await first.capture(record(), 'shot');
+    const sending = first.flush(); await started.promise;
+    await second.setSharing(target !== null, target);
+    if (target) await second.capture(record(29), 'shot');
+    const beforeReceipt = shared.stored();
+    upload.resolve(receipt); assert.equal((await sending).sent, 0);
+    assert.deepEqual(shared.stored(), beforeReceipt);
+  }
+});
+
+test('capture and receipt persistence always share one local serial queue', { timeout: 2000 }, async () => {
+  let stored = null, delay = false;
+  const pending = [], upload = deferred(), started = deferred(), sent = [];
+  const client = schema.createClient({ load: async () => stored,
+    save: value => {
+      if (!delay) { stored = structuredClone(value); return; }
+      return new Promise(resolve => pending.push(() => { stored = structuredClone(value); resolve(); }));
+    },
+    send: (_url, init) => { sent.push(JSON.parse(init.body)); started.resolve(); return upload.promise; }
+  });
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(), 'shot'); delay = true;
+  const correction = client.capture(record(28), 'shot');
+  await new Promise(setImmediate); assert.equal(pending.length, 1);
+  const sending = client.flush(); await new Promise(setImmediate);
+  assert.equal(sent.length, 0, 'send waits for capture storage acknowledgment');
+  pending.shift()(); await correction; await started.promise;
+  assert.equal(sent[0].records[0].measurements.pumpTimeSec, 28);
+  const newer = client.capture(record(29), 'shot');
+  await new Promise(setImmediate); assert.equal(pending.length, 1);
+  upload.resolve(receipt); await new Promise(setImmediate);
+  assert.equal(pending.length, 1, 'receipt cannot overlap an unacknowledged capture write');
+  pending.shift()(); await newer; await sending;
+  assert.equal(stored.queue.length, 1);
+  assert.equal(stored.queue[0].record.measurements.pumpTimeSec, 29);
 });
 
 test('comparison approaches and random series retain scientific provenance but drop explanations', () => {

@@ -34,6 +34,12 @@
   const RESEARCH_ENDPOINT_KEY = "decaid.assisted-dialin.research-endpoint.v1";
   let researchFactory = null, researchClient = null, researchEndpoint = null;
   const researchSession = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const RESEARCH_LOCK = "decaid.assisted-dialin.research-state";
+  const researchWithLock = operation => {
+    const locks = typeof navigator !== "undefined" ? navigator.locks : null;
+    if (!locks || typeof locks.request !== "function") throw new Error("Research archiving requires browser Web Locks.");
+    return locks.request(RESEARCH_LOCK, {mode: "exclusive"}, operation);
+  };
 
   async function renderResearchSharing(message) {
     if (!researchClient) return;
@@ -81,6 +87,11 @@
     if (!$("research-sharing-consent")) return;
     $("research-sharing-consent").disabled = true;
     if (typeof window.createResearchSharing !== "function") { text($("research-sharing-status"), "Research archiving is unavailable. Your dial-in tools still work."); return; }
+    if (typeof navigator.locks?.request !== "function") {
+      for (const id of ["research-local-enabled", "research-sharing-disable", "research-sharing-delete", "research-sharing-send", "research-sharing-export", "research-sharing-apply"]) $(id).disabled = true;
+      text($("research-sharing-status"), "Research archiving is unavailable in this browser. Remote sharing is off. Saved records are unchanged; use a browser with Web Locks support to access them.");
+      return;
+    }
     researchFactory = window.createResearchSharing();
     try {
       const saved = storage()?.getItem(RESEARCH_ENDPOINT_KEY);
@@ -91,6 +102,8 @@
     researchClient = researchFactory.createClient({
       load: async () => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); return JSON.parse(store.getItem(RESEARCH_KEY) || "null"); },
       save: async state => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); store.setItem(RESEARCH_KEY, JSON.stringify(state)); },
+      reload: async () => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); return JSON.parse(store.getItem(RESEARCH_KEY) || "null"); },
+      withLock: researchWithLock,
       send: (url, init) => fetch(url, init)
     });
     researchClient.ready.then(async state => {
@@ -114,6 +127,15 @@
       const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(archive, null, 2)], {type: "application/json"}));
       link.download = "dial-in-research.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
     }, "Research file saved locally. Nothing was sent to a collector."));
+    window.addEventListener("storage", event => {
+      if (![RESEARCH_KEY, RESEARCH_ENDPOINT_KEY].includes(event.key)) return;
+      if (event.key === RESEARCH_ENDPOINT_KEY) {
+        try { researchEndpoint = event.newValue ? researchFactory.validateEndpoint(event.newValue) : null; } catch (_) { researchEndpoint = null; }
+      }
+      // The shared client reloads under the Web Lock before every operation;
+      // this event only refreshes visible controls promptly in another tab.
+      researchAction(() => Promise.resolve());
+    });
   }
 
   const slug = (value) => String(value || "grinder").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "grinder";
@@ -125,10 +147,12 @@
   }
   function validProfile(value) {
     if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.id !== "string" || !/^[a-z0-9][a-z0-9._-]{2,127}$/.test(value.id) || typeof value.name !== "string" || !value.name.trim() || value.name.length > 128 || typeof value.model !== "string" || !value.model.trim() || value.model.length > 256 || typeof value.burrIdentity !== "string" || !value.burrIdentity.trim() || value.burrIdentity.length > 256 || typeof value.calibrationEpoch !== "string" || !value.calibrationEpoch.trim() || value.calibrationEpoch.length > 256) return false;
-    if (value.nativeSetup != null) { const setup = value.nativeSetup; if (!setup || typeof setup !== "object" || Array.isArray(setup) || typeof setup.burrIdentity !== "string" || typeof setup.calibrationEpoch !== "string" || (setup.settingUnit != null && (typeof setup.settingUnit !== "string" || !setup.settingUnit.trim() || setup.settingUnit.length > 64)) || ![-1, 1].includes(setup.numericFinerDelta) || [setup.min, setup.max].some(bound => bound != null && (typeof bound !== "number" || !Number.isFinite(bound)))) return false; }
+    if (value.nativeSetup != null) { const setup = value.nativeSetup; if (!setup || typeof setup !== "object" || Array.isArray(setup) || typeof setup.burrIdentity !== "string" || !setup.burrIdentity.trim() || setup.burrIdentity.length > 256 || typeof setup.calibrationEpoch !== "string" || !setup.calibrationEpoch.trim() || setup.calibrationEpoch.length > 256 || (setup.settingUnit != null && (typeof setup.settingUnit !== "string" || !setup.settingUnit.trim() || setup.settingUnit.length > 64)) || ![-1, 1].includes(setup.numericFinerDelta) || [setup.min, setup.max].some(bound => bound != null && (typeof bound !== "number" || !Number.isFinite(bound)))) return false; }
     return (value.zero == null || (typeof value.zero === "number" && Number.isFinite(value.zero) && Math.abs(value.zero) <= 2147483647)) && (value.stepSize == null || (typeof value.stepSize === "number" && Number.isFinite(value.stepSize) && value.stepSize > 0 && value.stepSize <= 2147483647)) && (value.anchors == null || (typeof value.anchors === "object" && !Array.isArray(value.anchors))) && (value.source == null || (typeof value.source === "string" && value.source.length <= 256));
   }
-  function persistProfiles() { const store = storage(); if (!store) return; try { store.setItem(INSTANCE_KEY, JSON.stringify(grinderInstances)); store.setItem(ACTIVE_INSTANCE_KEY, activeInstanceId || ""); } catch (_) { setNotice("Your browser could not save grinder profiles; this experiment still works in memory.", true); } }
+  let profilesStorageWritable = true;
+  let profilesRecoveryNotice = false;
+  function persistProfiles() { const store = storage(); if (!store || !profilesStorageWritable) return; try { store.setItem(INSTANCE_KEY, JSON.stringify(grinderInstances)); store.setItem(ACTIVE_INSTANCE_KEY, activeInstanceId || ""); } catch (_) { setNotice("Your browser could not save grinder profiles; this experiment still works in memory.", true); } }
   function activeProfile() { return grinderInstances.find(profile => profile.id === activeInstanceId) || grinderInstances[0] || null; }
   function profileCalibration(profile) { return profile && profile.anchors ? { ...profile.anchors, grinderId: profile.id, model: profile.model, burrIdentity: profile.burrIdentity, calibrationEpoch: profile.calibrationEpoch } : null; }
   function setActiveProfile(id, announce) {
@@ -137,9 +161,11 @@
     clearSimpleSetup(); reset(true); renderDialPanel(); renderInstanceManager(); applyNativeDefaults(); if (announce) setNotice("Switched to " + profile.name + ". Start a fresh shot for this grinder.");
   }
   function ensureProfiles() {
-    const store = storage(); let loaded = null;
-    try { loaded = store && JSON.parse(store.getItem(INSTANCE_KEY) || "null"); } catch (_) { loaded = null; }
-    if (Array.isArray(loaded) && loaded.length && loaded.length <= 100 && loaded.every(validProfile) && new Set(loaded.map(item => item.id)).size === loaded.length) grinderInstances = loaded;
+    const store = storage(); let loaded = null, loadFailed = false;
+    try { loaded = store && JSON.parse(store.getItem(INSTANCE_KEY) || "null"); } catch (_) { loadFailed = true; }
+    const validLoaded = Array.isArray(loaded) && loaded.length && loaded.length <= 100 && loaded.every(validProfile) && new Set(loaded.map(item => item.id)).size === loaded.length;
+    if (validLoaded) grinderInstances = loaded;
+    else if (loadFailed || loaded != null) { profilesStorageWritable = false; profilesRecoveryNotice = true; setNotice("Saved grinder profiles are malformed; they were preserved and not overwritten. Repair or clear them before saving new profiles.", true); }
     if (!grinderInstances.length) grinderInstances = [profileFromTemplate({ model: "DF64 Gen 2", zero: 0 }, 0), profileFromTemplate({ model: "DF54", zero: 0 }, 1), profileFromTemplate({ model: "E64 WS", zero: 0 }, 2)];
     let preferred = null; try { preferred = store && store.getItem(ACTIVE_INSTANCE_KEY); } catch (_) {}
     activeInstanceId = grinderInstances.some(item => item.id === preferred) ? preferred : grinderInstances[0].id;
@@ -155,9 +181,9 @@
     const stepField = document.createElement("label"); text(stepField, "Owner step size (native units)"); const stepInput = document.createElement("input"); stepInput.type = "number"; stepInput.min = "0.000001"; stepInput.step = "any"; stepInput.value = profile?.stepSize ?? ""; stepInput.setAttribute("aria-label", "owner step size"); stepField.append(stepInput); profileFields.append(zeroField, stepField); holder.append(profileFields);
     const actions = document.createElement("div"); actions.className = "actions"; const buttons = {};
     [["add-grinder", "Add individual grinder"], ["rename-grinder", "Rename"], ["save-grinder", "Save current calibration"], ["remove-grinder", "Remove"]].forEach(([id, label]) => { const button = document.createElement("button"); button.id = id; button.type = "button"; text(button, label); buttons[id] = button; if (id === "save-grinder" || id === "remove-grinder") button.className = "expert-only"; actions.append(button); }); holder.append(actions);
-    buttons["add-grinder"].addEventListener("click", () => { const model = $("grinder").value || "Other known grinder"; const profile = { id: profileId(model, "custom-" + Date.now().toString(36) + "-" + grinderInstances.length), name: model + " · my grinder " + (grinderInstances.length + 1), model, burrIdentity: $("burrs").value || "stock burrs", calibrationEpoch: $("calibration").value || "epoch 1", zero: 0, stepSize: null, anchors: null, source: "owner-created; calibration required" }; grinderInstances.push(profile); setActiveProfile(profile.id, true); });
+    buttons["add-grinder"].addEventListener("click", () => { if (grinderInstances.length >= 100) { setNotice("A maximum of 100 individual grinder profiles is supported.", true); return; } const model = $("grinder").value || "Other known grinder"; const profile = { id: profileId(model, "custom-" + Date.now().toString(36) + "-" + grinderInstances.length), name: model + " · my grinder " + (grinderInstances.length + 1), model, burrIdentity: $("burrs").value || "stock burrs", calibrationEpoch: $("calibration").value || "epoch 1", zero: 0, stepSize: null, anchors: null, source: "owner-created; calibration required" }; if (!validProfile(profile)) { setNotice("The new grinder profile is invalid; nothing was saved.", true); return; } grinderInstances.push(profile); setActiveProfile(profile.id, true); });
     buttons["rename-grinder"].addEventListener("click", () => { const profile = activeProfile(); if (!profile) return; const name = window.prompt ? window.prompt("Name this individual grinder", profile.name) : profile.name; if (typeof name === "string" && name.trim() && name.length <= 128) { profile.name = name.trim(); persistProfiles(); renderInstanceManager(); setNotice("Individual grinder renamed."); } else if (name != null) setNotice("A grinder name is required and must be at most 128 characters.", true); });
-    buttons["save-grinder"].addEventListener("click", () => { const profile = activeProfile(); if (!profile) return; const zero = Number(zeroInput.value); const step = stepInput.value === "" ? null : Number(stepInput.value); if (!Number.isFinite(zero) || Math.abs(zero) > 2147483647 || (step != null && (!Number.isFinite(step) || step <= 0 || step > 2147483647))) { setNotice("Owner zero must be finite; step size must be positive when supplied.", true); return; } profile.model = $("grinder").value; profile.burrIdentity = $("burrs").value; profile.calibrationEpoch = $("calibration").value; profile.zero = zero; profile.stepSize = step; profile.anchors = dialCalibration ? { ...dialCalibration } : null; profile.source = "owner-updated; calibrate this physical grinder"; persistProfiles(); renderInstanceManager(); renderDialPanel(); setNotice("Saved this grinder's identity and calibration anchors."); });
+    buttons["save-grinder"].addEventListener("click", () => { const profile = activeProfile(); if (!profile) return; const zero = Number(zeroInput.value); const step = stepInput.value === "" ? null : Number(stepInput.value); const candidate = { ...profile, model: $("grinder").value, burrIdentity: $("burrs").value, calibrationEpoch: $("calibration").value, zero, stepSize: step, anchors: dialCalibration ? { ...dialCalibration } : null, source: "owner-updated; calibrate this physical grinder" }; if (!Number.isFinite(zero) || Math.abs(zero) > 2147483647 || (step != null && (!Number.isFinite(step) || step <= 0 || step > 2147483647)) || !validProfile(candidate)) { setNotice("Owner zero must be finite, and burr identity, calibration epoch and step size must be valid.", true); return; } Object.assign(profile, candidate); persistProfiles(); renderInstanceManager(); renderDialPanel(); setNotice("Saved this grinder's identity and calibration anchors."); });
     buttons["remove-grinder"].addEventListener("click", () => { if (grinderInstances.length <= 1) { setNotice("Keep at least one individual grinder profile.", true); return; } grinderInstances = grinderInstances.filter(profile => profile.id !== activeInstanceId); activeInstanceId = grinderInstances[0].id; setActiveProfile(activeInstanceId, true); });
   }
   const safeHttps = (value) => { try { const url = new URL(value, window.location.href); return url.protocol === "https:" && !url.username && !url.password ? url.href : null; } catch (_) { return null; } };
@@ -479,8 +505,8 @@
   }
   function watchContextChanges() {
     ["bean", "roaster", "species", "roast", "calibration", "grinder", "burrs", "dose", "yield", "target", "tolerance", "start"].forEach((id) => $(id).addEventListener("change", () => {
-      if (id === "grinder") { clearSimpleSetup(); const match = grinderInstances.find(profile => profile.model === $("grinder").value); if (match) setActiveProfile(match.id, false); else { const profile = profileFromTemplate({model: $("grinder").value}, grinderInstances.length); grinderInstances.push(profile); setActiveProfile(profile.id, false); } return; }
-      if (["calibration", "burrs"].includes(id)) { clearSimpleSetup(); const profile = activeProfile(); if (profile) { profile.burrIdentity = $("burrs").value; profile.calibrationEpoch = $("calibration").value; profile.anchors = null; persistProfiles(); } dialCalibration = null; }
+      if (id === "grinder") { clearSimpleSetup(); const match = grinderInstances.find(profile => profile.model === $("grinder").value); if (match) setActiveProfile(match.id, false); else if (grinderInstances.length >= 100) { setNotice("A maximum of 100 individual grinder profiles is supported.", true); $("grinder").value = activeProfile()?.model || ""; } else { const profile = profileFromTemplate({model: $("grinder").value}, grinderInstances.length); if (!validProfile(profile)) { setNotice("The selected grinder profile is invalid; nothing was saved.", true); return; } grinderInstances.push(profile); setActiveProfile(profile.id, false); } return; }
+      if (["calibration", "burrs"].includes(id)) { clearSimpleSetup(); const profile = activeProfile(); if (profile) { const candidate = { ...profile, burrIdentity: $("burrs").value, calibrationEpoch: $("calibration").value, anchors: null }; if (!validProfile(candidate)) { setNotice("Burr identity and calibration epoch must be non-empty and bounded.", true); $("burrs").value = profile.burrIdentity; $("calibration").value = profile.calibrationEpoch; return; } Object.assign(profile, candidate); persistProfiles(); } dialCalibration = null; }
       if (["bean", "roaster", "species", "roast", "dose", "yield", "burrs", "calibration"].includes(id)) { $("simple-clock-confirmed").checked = false; $("simple-pressure-confirmed").checked = false; }
       reset(true); renderDialPanel(); applyNativeDefaults(); setNotice(viewMode === "simple" ? "Your setup changed. Old shots stay in history; only matching shots can be compared." : "Setup changed, so old shot history and dial calibration were reset to keep context honest.");
     }));
@@ -531,11 +557,19 @@
     const reader = new FileReader(); reader.onload = () => { if (generation !== traceGeneration) return; try { const parsed = JSON.parse(String(reader.result)), shot = parsed.shot || parsed; if (!shot || typeof shot !== "object" || Array.isArray(shot) || !Array.isArray(shot.measurements) || shot.measurements.length > 20000 || !Number.isFinite(Date.parse(shot.timestamp))) throw new Error("Use a full saved shot with a valid timestamp and at most 20,000 measurements."); const metrics = window.createBrewMetrics().analyze(shot, null); if (!metrics.trace?.points?.length) throw new Error("The shot has no valid timestamped trace. Existing trace retained."); const feedback = parsed.shot && parsed.feedback || {}; if (feedback.taste != null && !["balanced","sour","bitter","astringent","weak","channeling"].includes(feedback.taste)) throw new Error("Invalid saved taste feedback."); if (feedback.manualStopConfirmed != null && typeof feedback.manualStopConfirmed !== "boolean") throw new Error("Invalid manual-stop confirmation: expected a boolean."); const flavour = feedback.flavour || {}; if (flavour.overall && !["under-extracted","over-extracted","balanced","uncertain"].includes(flavour.overall)) throw new Error("Invalid overall feedback."); if (flavour.tastingTemperatureC != null && (!Number.isFinite(flavour.tastingTemperatureC) || flavour.tastingTemperatureC < 0 || flavour.tastingTemperatureC > 150)) throw new Error("Invalid tasting temperature."); if (flavour.sinceBrewMin != null && (!Number.isFinite(flavour.sinceBrewMin) || flavour.sinceBrewMin < 0 || flavour.sinceBrewMin > 10080)) throw new Error("Invalid tasting delay."); if (feedback.brewTimeSec != null && (!Number.isFinite(feedback.brewTimeSec) || feedback.brewTimeSec <= 0 || feedback.brewTimeSec > 600 || !["pump","pouring","recording"].includes(feedback.brewTimeClock || "pump"))) throw new Error("Invalid saved timing feedback."); importedShot = shot; importedMetrics = metrics; importedFeedback = feedback; if ($("manual-stop-confirmed")) $("manual-stop-confirmed").checked = feedback.manualStopConfirmed === true; $("assist-taste").value = feedback.taste || ""; if ($("assist-overall")) $("assist-overall").value = flavour.overall || ""; if ($("taste-temperature")) $("taste-temperature").value = flavour.tastingTemperatureC ?? ""; if ($("taste-minutes")) $("taste-minutes").value = flavour.sinceBrewMin ?? ""; uiTools.renderTrace($("actual-shot-trace"), metrics); text($("actual-shot-details"), JSON.stringify(metrics, null, 2)); text($("shot-trace-status"), "Imported " + (shot.id || "unnamed saved shot") + ": " + shot.measurements.length + " records. Actual saved profile steps remain authoritative."); useImportedClock(); if (feedback.brewTimeSec != null) { $("actual-shot-clock").value = feedback.brewTimeClock || "pump"; $("actual-shot-time").value = String(feedback.brewTimeSec); } invalidateAssistant(); setNotice("Real saved-shot measurements analysed. Synthetic pass history was not rewritten."); } catch (error) { setNotice(error.message, true); } }; reader.onerror = () => setNotice("Could not read this saved shot. Existing trace retained.", true); reader.readAsText(file);
   }
   function currentImportedFeedback() {
-    const flavour = {}; const overall = $("assist-overall")?.value; if (overall) flavour.overall = overall; const temperature = $("taste-temperature")?.value, minutes = $("taste-minutes")?.value;
-    if (temperature !== undefined && temperature !== "") flavour.tastingTemperatureC = Number(temperature);
-    if (minutes !== undefined && minutes !== "") flavour.sinceBrewMin = Number(minutes);
+    const feedback = JSON.parse(JSON.stringify(importedFeedback || {}));
+    const flavour = { ...(feedback.flavour || {}) }; const overall = $("assist-overall")?.value; if (overall) flavour.overall = overall; else delete flavour.overall; const temperature = $("taste-temperature")?.value, minutes = $("taste-minutes")?.value;
+    if (temperature !== undefined && temperature !== "") flavour.tastingTemperatureC = Number(temperature); else delete flavour.tastingTemperatureC;
+    if (minutes !== undefined && minutes !== "") flavour.sinceBrewMin = Number(minutes); else delete flavour.sinceBrewMin;
+    feedback.flavour = Object.keys(flavour).length ? flavour : null;
     const actual = $("actual-shot-time")?.value;
-    return {shotId: importedShot.id || "imported-shot", good: false, manualStopConfirmed: $("manual-stop-confirmed")?.checked === true, taste: $("assist-taste").value || null, flavour: Object.keys(flavour).length ? flavour : null, ...(actual ? {brewTimeSec: Number(actual), brewTimeClock: $("actual-shot-clock").value} : {})};
+    feedback.shotId = importedShot.id || "imported-shot";
+    feedback.good = feedback.good === true;
+    feedback.manualStopConfirmed = $("manual-stop-confirmed")?.checked === true;
+    feedback.taste = $("assist-taste").value || null;
+    if (actual) { feedback.brewTimeSec = Number(actual); feedback.brewTimeClock = $("actual-shot-clock").value; }
+    else { delete feedback.brewTimeSec; delete feedback.brewTimeClock; }
+    return feedback;
   }
   async function runImportedAssistant(generation) {
     const shot = JSON.parse(JSON.stringify(importedShot)), feedback = currentImportedFeedback(), c = config(); shot.id = feedback.shotId;
@@ -882,8 +916,9 @@
   function saveNativeSetup() {
     const profile = activeProfile(), step = simpleNumber("simple-step"), sign = Number($("simple-finer")?.value);
     if (simplePractice || !profile || profile.model !== config().grinder || !$("simple-confirm-dial")?.checked || !(step > 0) || ![-1, 1].includes(sign)) return;
-    profile.stepSize = step;
-    profile.nativeSetup = {settingUnit: simpleUnit(), burrIdentity: config().burrs, calibrationEpoch: config().calibration, numericFinerDelta: sign, min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")};
+    const candidate = {...profile, stepSize: step, nativeSetup: {settingUnit: simpleUnit(), burrIdentity: config().burrs, calibrationEpoch: config().calibration, numericFinerDelta: sign, min: simpleNumber("simple-bound-min"), max: simpleNumber("simple-bound-max")}};
+    if (!validProfile(candidate)) { setNotice("The owner dial setup is invalid or exceeds the supported range; nothing was saved.", true); return; }
+    Object.assign(profile, candidate);
     persistProfiles();
   }
   function nativeScope() {
@@ -1113,7 +1148,7 @@
     try { lightTheme = storage()?.getItem("decaid.assisted-dialin.theme") === "light"; } catch (_) {}
     document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode");
     $("theme").addEventListener("click", () => { lightTheme = !lightTheme; document.body.classList.toggle("light", lightTheme); text($("theme"), lightTheme ? "Dark mode" : "Light mode"); try { storage()?.setItem("decaid.assisted-dialin.theme", lightTheme ? "light" : "dark"); } catch (_) {} });
-    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
+    $("catalog-search").addEventListener("input", () => { referencePage = 1; renderCatalog(); }); $("coffee-catalog-search")?.addEventListener("input", () => { coffeeCatalogPage = 1; renderCoffeeCatalog(); }); ensureProfiles(); render(); loadCatalog(); loadCoffeeCatalog(); loadDialProfiles(); if (!profilesRecoveryNotice) setNotice(viewMode === "simple" ? "Choose your coffee and grinder, then continue to the recipe for your first shot." : "Ready. The first shot uses your starting setting and bean-aware fictional plant.");
     $("assist-overall")?.addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.overall = $("assist-overall").value; renderTable(); } });
     $("assist-taste").addEventListener("change", () => { invalidateAssistant(); const latest = rows.filter(row => row.actual !== "" && Number(row.actual) > 0).at(-1); if (latest) { latest.taste = $("assist-taste").value || "none"; renderTable(); } });
     $("helper").addEventListener("change", renderHelperFields); $("helper-run").addEventListener("click", runHelper); $("assist").addEventListener("click", runAssistant); renderHelperFields(); watchContextChanges(); initializeSimple(); initializeResearchSharing(); initializeMechanical(); initializeNativeRestoration();

@@ -187,8 +187,8 @@ function createResearchSharing() {
         throw new Error("Invalid local research entry");
       return { key: localKey(value.key), revision: value.revision, record: validateRecord(value.record) };
     };
-    let state = fresh(), generation = 0, permitted = false, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
-    const ready = Promise.resolve().then(() => adapters.load()).then(value => {
+    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
+    const decode = value => {
       if (value == null) return;
       if (!object(value) || value.schemaVersion !== VERSION || value.policyVersion !== POLICY ||
           typeof value.sharing !== "boolean" || typeof value.localEnabled !== "boolean" || !Number.isSafeInteger(value.nextRevision) || value.nextRevision < 0 ||
@@ -204,15 +204,27 @@ function createResearchSharing() {
         if (!validId(item.observationId) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw new Error("Invalid observation ledger");
         return { key: localKey(item.key), fingerprint: item.fingerprint, observationId: item.observationId, revision: item.revision };
       });
-      state = { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
+      return { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
         endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
-      permitted = generation === 0 && state.sharing;
-      if (!permitted) { state.sharing = false; state.queue = []; state.fingerprints = []; }
-    }).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
-    const serial = operation => { const result = chain.then(() => ready).then(operation); chain = result.catch(() => {}); return result; };
-    async function save(next) {
-      try { await adapters.save(clone(next)); state = next; storageError = null; }
-      catch (_) { permitted = false; state.sharing = false; state.queue = []; generation++; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
+    };
+    const updatePermission = () => { permitted = state.sharing && pendingConsent === null && !storageError; };
+    const install = value => { state = decode(value) || fresh(); updatePermission(); };
+    const ready = Promise.resolve().then(() => adapters.load()).then(install).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
+    const refresh = async () => {
+      if (typeof adapters.reload !== "function") return;
+      try { install(await adapters.reload()); }
+      catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
+    };
+    const serial = operation => {
+      const result = chain.then(() => ready).then(() => {
+        const run = async () => { await refresh(); return operation(); };
+        return typeof adapters.withLock === "function" ? adapters.withLock(run) : run();
+      });
+      chain = result.catch(() => {}); return result;
+    };
+    async function save(next, resetError = false) {
+      try { await adapters.save(clone(next)); state = next; if (resetError) storageError = null; updatePermission(); }
+      catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
     }
     const status = () => ({ localEnabled: state.localEnabled, sharing: permitted && state.sharing && !storageError, endpoint: state.endpoint,
       localCount: state.records.length, queuedCount: permitted ? state.queue.length : 0, error: storageError, policyVersion: POLICY });
@@ -221,11 +233,12 @@ function createResearchSharing() {
       const targetEndpoint = enabled && target != null && target !== "" ? endpoint(target) : null;
       // Revoke immediately, before waiting for disk or an earlier network request.
       const requestGeneration = ++generation;
-      permitted = false; abort?.();
+      pendingConsent = requestGeneration; permitted = false; abort?.();
       return serial(async () => {
-        const current = requestGeneration === generation;
-        await save({ ...state, sharing: current && enabled, endpoint: current ? targetEndpoint : null, queue: [], fingerprints: [] });
-        permitted = current && requestGeneration === generation && enabled;
+        if (requestGeneration !== generation) return status();
+        await save({ ...state, sharing: enabled, endpoint: targetEndpoint, queue: [], fingerprints: [] }, true);
+        if (requestGeneration === generation) pendingConsent = null;
+        updatePermission();
         return status();
       });
     }
@@ -235,16 +248,29 @@ function createResearchSharing() {
       return serial(async () => {
         if (storageError) throw new Error(storageError);
         if (!state.localEnabled && !permitted) return { record: clone(record), ...status() };
-        const prior = key == null ? null : state.records.find(item => item.key === key) || state.queue.find(item => item.key === key);
         const digest = fingerprint(record);
+        const queued = key == null ? null : state.queue.find(item => item.key === key);
+        const known = key == null ? [] : state.records.filter(item => item.key === key).concat(queued ? [queued] : []);
         const ledger = key == null ? null : state.fingerprints.find(item => item.key === key);
-        if (prior && canonical(observationContent(prior.record)) === canonical(record) || ledger && ledger.fingerprint === digest)
+        // The archive can intentionally stop changing while transport state and
+        // its fingerprint ledger continue to advance (for example when local
+        // collection is switched off). Always carry identity/revision forward
+        // from the newest known observation, rather than preferring the archive.
+        const prior = known.reduce((latest, item) => !latest || item.record.revision > latest.record.revision ||
+          item.record.revision === latest.record.revision && item.revision > latest.revision ? item : latest, null);
+        const latestRevision = Math.max(prior?.record.revision || 0, ledger?.revision || 0);
+        const latestObservationId = ledger && ledger.revision >= (prior?.record.revision || 0) ? ledger.observationId : prior?.record.observationId;
+        // An archive retained while collection was off can predate a correction
+        // whose transport ledger was deleted or evicted.
+        const duplicate = permitted ? queued : prior;
+        if (duplicate && duplicate.record.revision === latestRevision && canonical(observationContent(duplicate.record)) === canonical(record) ||
+          ledger && ledger.revision === latestRevision && ledger.fingerprint === digest)
           return { record: clone(record), ...status() };
         const revision = state.nextRevision + 1;
         if (!Number.isSafeInteger(revision)) throw new Error("Local research revision limit reached; export and clear");
-        const observationId = prior?.record.observationId || ledger?.observationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
+        const observationId = latestObservationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
         if (!validId(observationId)) throw new Error("Random observation key must contain 32 lowercase hexadecimal characters");
-        const observationRevision = (prior?.record.revision || ledger?.revision || 0) + 1;
+        const observationRevision = Math.max(latestRevision, state.nextRevision) + 1;
         const item = { key: key == null ? "entry:" + revision : key, revision, record: { ...record, observationId, revision: observationRevision } };
         const replace = list => list.filter(prior => prior.key !== item.key).concat([item]);
         let queue = state.queue;
@@ -265,23 +291,29 @@ function createResearchSharing() {
             if (JSON.stringify(entries.concat([item]).map(entry => entry.record)).length > 60000) break;
             entries.push(item);
           }
-          return { generation, endpoint: state.endpoint, entries: clone(entries) };
+          const controller = typeof AbortController === "function" ? new AbortController() : null;
+          abort = () => controller?.abort();
+          // Start the request before releasing the storage lock. Awaiting it must
+          // not block another tab's deletion, opt-out, or new observation.
+          const response = adapters.send(state.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
+            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
+            body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: entries.map(item => item.record) }) });
+          return { generation, endpoint: state.endpoint, entries: clone(entries), response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
         });
         if (!batch) return { sent: 0, ...status() };
-        if (batch.generation !== generation || !permitted) return { sent: 0, ...status() };
-        const controller = typeof AbortController === "function" ? new AbortController() : null;
-        abort = () => controller?.abort();
         try {
-          const response = await adapters.send(batch.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
-            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
-            body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: batch.entries.map(item => item.record) }) });
+          const result = await batch.response;
+          if (result.error) throw result.error;
+          const response = result.value;
           if (!response || !response.ok || response.redirected) throw new Error("Research upload was not acknowledged");
           const receipt = await response.json();
           if (!receipt || receipt.accepted !== batch.entries.length) throw new Error("Invalid research upload acknowledgment");
           return await serial(async () => {
-            if (batch.generation !== generation || !permitted) return { sent: 0, ...status() };
-            const acknowledged = new Set(batch.entries.map(item => item.revision));
-            await save({ ...state, queue: state.queue.filter(item => !acknowledged.has(item.revision)) });
+            if (batch.generation !== generation || !permitted || state.endpoint !== batch.endpoint) return { sent: 0, ...status() };
+            const identity = item => item.record.observationId + ":" + item.record.revision + ":" + item.revision;
+            const acknowledged = new Set(batch.entries.map(identity));
+            const queue = state.queue.filter(item => !acknowledged.has(identity(item)));
+            if (queue.length !== state.queue.length) await save({ ...state, queue });
             return { sent: batch.entries.length, ...status() };
           });
         } finally { abort = null; }
@@ -294,10 +326,16 @@ function createResearchSharing() {
       return serial(async () => { await save({ ...state, localEnabled: enabled, fingerprints: enabled || permitted ? state.fingerprints : [] }); return status(); });
     }
     function clear() {
-      generation++; permitted = false; abort?.();
-      return serial(async () => { await save({ ...fresh(), localEnabled: state.localEnabled }); return status(); });
+      const requestGeneration = ++generation;
+      pendingConsent = requestGeneration; permitted = false; abort?.();
+      return serial(async () => {
+        await save({ ...fresh(), localEnabled: state.localEnabled }, true);
+        if (requestGeneration === generation) pendingConsent = null;
+        updatePermission();
+        return status();
+      });
     }
-    return { ready: ready.then(status), status: () => serial(status), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
+    return { ready: ready.then(status), status: () => serial(status).catch(error => { if (storageError) return status(); throw error; }), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };
   }
   return { schemaVersion: VERSION, policyVersion: POLICY, limits: { local: MAX_LOCAL, queue: MAX_QUEUE, batch: MAX_BATCH },

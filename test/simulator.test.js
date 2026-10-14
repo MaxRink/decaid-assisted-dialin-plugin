@@ -36,6 +36,21 @@ test("runs all shipped GBS algorithms, keeps scope, and exposes ignored bean/tas
   }
 });
 
+test("keeps the documented 100-shot envelope when DdEff exhausts its bounded sequence", () => {
+  const result = engine.run(scenario({
+    shots: Array.from({ length: 100 }, (_, index) => ({
+      actualBrewTimeMs: 28000 + (index % 3),
+      beanType: "arabica",
+      roastLevel: "light",
+    })),
+  }));
+  const ddEff = result.algorithms.find((item) => item.algorithm === "DdEff");
+  assert.equal(ddEff.shots.length, 100);
+  assert.equal(ddEff.shots.filter((shot) => shot.status !== "unavailable").length, 100);
+  assert.deepEqual(ddEff.shots.slice(0, 18).map((shot) => shot.output.returnedDdDum), [1000, 1000, 1000, 1000, 1000, 1000, 800, 800, 800, 800, 800, 800, 1200, 1200, 1200, 1200, 1200, 1200]);
+  assert.equal(result.algorithms.find((item) => item.algorithm === "GbS1").shots.length, 100);
+});
+
 test("preserves raw shipped output while recording physical bounds and scope resets", () => {
   const result = engine.run(scenario({
     bounds: { minDdDum: 900, maxDdDum: 1100 },
