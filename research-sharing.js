@@ -188,7 +188,7 @@ function createResearchSharing() {
       return { key: localKey(value.key), revision: value.revision, record: validateRecord(value.record) };
     };
     let state = fresh(), generation = 0, permitted = false, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
-    const ready = Promise.resolve().then(() => adapters.load()).then(value => {
+    const decode = value => {
       if (value == null) return;
       if (!object(value) || value.schemaVersion !== VERSION || value.policyVersion !== POLICY ||
           typeof value.sharing !== "boolean" || typeof value.localEnabled !== "boolean" || !Number.isSafeInteger(value.nextRevision) || value.nextRevision < 0 ||
@@ -204,12 +204,28 @@ function createResearchSharing() {
         if (!validId(item.observationId) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw new Error("Invalid observation ledger");
         return { key: localKey(item.key), fingerprint: item.fingerprint, observationId: item.observationId, revision: item.revision };
       });
-      state = { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
+      return { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
         endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
-      permitted = generation === 0 && state.sharing;
+    };
+    const install = (value, initial = false) => {
+      const decoded = decode(value) || fresh();
+      state = decoded;
+      permitted = state.sharing && (!initial || generation === 0);
       if (!permitted) { state.sharing = false; state.queue = []; state.fingerprints = []; }
-    }).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
-    const serial = operation => { const result = chain.then(() => ready).then(operation); chain = result.catch(() => {}); return result; };
+    };
+    const ready = Promise.resolve().then(() => adapters.load()).then(value => install(value, true)).catch(() => { state = fresh(); permitted = false; storageError = "Research storage could not be read; sharing is disabled"; });
+    const refresh = async () => {
+      if (typeof adapters.reload !== "function") return;
+      try { install(await adapters.reload()); storageError = null; }
+      catch (_) { permitted = false; state.sharing = false; state.queue = []; generation++; abort?.(); storageError = "Research storage could not be read; sharing is disabled"; throw new Error(storageError); }
+    };
+    const serial = operation => {
+      const result = chain.then(() => ready).then(async () => {
+        const run = async () => { await refresh(); return operation(); };
+        return typeof adapters.withLock === "function" ? adapters.withLock(run) : run();
+      });
+      chain = result.catch(() => {}); return result;
+    };
     async function save(next) {
       try { await adapters.save(clone(next)); state = next; storageError = null; }
       catch (_) { permitted = false; state.sharing = false; state.queue = []; generation++; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
@@ -235,16 +251,25 @@ function createResearchSharing() {
       return serial(async () => {
         if (storageError) throw new Error(storageError);
         if (!state.localEnabled && !permitted) return { record: clone(record), ...status() };
-        const prior = key == null ? null : state.records.find(item => item.key === key) || state.queue.find(item => item.key === key);
         const digest = fingerprint(record);
+        const known = key == null ? [] : state.records.filter(item => item.key === key).concat(state.queue.filter(item => item.key === key));
         const ledger = key == null ? null : state.fingerprints.find(item => item.key === key);
-        if (prior && canonical(observationContent(prior.record)) === canonical(record) || ledger && ledger.fingerprint === digest)
+        // The archive can intentionally stop changing while transport state and
+        // its fingerprint ledger continue to advance (for example when local
+        // collection is switched off). Always carry identity/revision forward
+        // from the newest known observation, rather than preferring the archive.
+        const prior = known.reduce((latest, item) => !latest || item.record.revision > latest.record.revision ||
+          item.record.revision === latest.record.revision && item.revision > latest.revision ? item : latest, null);
+        const latestRevision = Math.max(prior?.record.revision || 0, ledger?.revision || 0);
+        const latestObservationId = ledger && ledger.revision >= (prior?.record.revision || 0) ? ledger.observationId : prior?.record.observationId;
+        if (prior && prior.record.revision === latestRevision && canonical(observationContent(prior.record)) === canonical(record) ||
+          ledger && ledger.revision === latestRevision && ledger.fingerprint === digest)
           return { record: clone(record), ...status() };
         const revision = state.nextRevision + 1;
         if (!Number.isSafeInteger(revision)) throw new Error("Local research revision limit reached; export and clear");
-        const observationId = prior?.record.observationId || ledger?.observationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
+        const observationId = latestObservationId || (typeof adapters.randomId === "function" ? adapters.randomId() : randomId());
         if (!validId(observationId)) throw new Error("Random observation key must contain 32 lowercase hexadecimal characters");
-        const observationRevision = (prior?.record.revision || ledger?.revision || 0) + 1;
+        const observationRevision = latestRevision + 1;
         const item = { key: key == null ? "entry:" + revision : key, revision, record: { ...record, observationId, revision: observationRevision } };
         const replace = list => list.filter(prior => prior.key !== item.key).concat([item]);
         let queue = state.queue;

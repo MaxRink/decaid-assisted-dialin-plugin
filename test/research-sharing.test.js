@@ -177,6 +177,48 @@ test('random observation identity survives amendments and sent-state reload with
   assert.equal(JSON.stringify(amended).includes('private/device'), false);
 });
 
+test('amendments keep the newest revision when the private archive is older than transport state', async () => {
+  const { client, sent } = setup(); await client.ready;
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  const key = 'shot-with-private-archive';
+  await client.capture(record(27), key); await client.flush();
+  const original = JSON.parse(sent[0].init.body).records[0];
+  await client.setLocalCollection(false);
+  await client.capture(record(28), key); await client.capture(record(29), key);
+  await client.flush();
+  const corrected = JSON.parse(sent[1].init.body).records[0];
+  assert.equal(corrected.observationId, original.observationId);
+  assert.equal(corrected.revision, 3);
+  assert.equal(corrected.measurements.pumpTimeSec, 29);
+  await client.capture(record(27), key); await client.flush();
+  const reverted = JSON.parse(sent[2].init.body).records[0];
+  assert.equal(reverted.observationId, original.observationId);
+  assert.equal(reverted.revision, 4);
+});
+
+test('coordinated browser clients reload before saving and cannot send after another tab deletes state', async () => {
+  let stored = null; let lock = Promise.resolve(); const sent = [];
+  const withLock = operation => {
+    const previous = lock; let release;
+    lock = new Promise(resolve => { release = resolve; });
+    return previous.then(operation).finally(release);
+  };
+  const make = () => schema.createClient({
+    load: async () => stored, reload: async () => stored,
+    save: async value => { stored = structuredClone(value); }, withLock,
+    send: async (url, init) => { sent.push({url, init}); return {ok: true, json: async () => ({accepted: 1})}; }
+  });
+  const first = make(), second = make(); await Promise.all([first.ready, second.ready]);
+  await first.setSharing(true, 'https://collector.example.org/v1/events');
+  await first.capture(record(), 'tab-a');
+  await second.status(); // Simulate the stale tab observing the shared queue.
+  await first.clear();
+  await second.flush();
+  assert.equal(sent.length, 0);
+  assert.equal((await second.status()).sharing, false);
+  assert.equal((await second.status()).queuedCount, 0);
+});
+
 test('comparison approaches and random series retain scientific provenance but drop explanations', () => {
   const value = schema.sanitizeRecord({ ...record(), researchSeries: schema.randomId(), shotOrdinal: 2, taste: { good: false },
     approaches: [{ algorithm: 'native-response', status: 'collecting', coordinateStatus: 'estimated_relative', settingUnit: 'micrometres', proposedSetting: 60, explanation: 'secret bean' }] });

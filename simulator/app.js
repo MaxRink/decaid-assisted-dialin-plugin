@@ -34,6 +34,11 @@
   const RESEARCH_ENDPOINT_KEY = "decaid.assisted-dialin.research-endpoint.v1";
   let researchFactory = null, researchClient = null, researchEndpoint = null;
   const researchSession = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const RESEARCH_LOCK = "decaid.assisted-dialin.research-state";
+  const researchWithLock = operation => {
+    const locks = typeof navigator !== "undefined" ? navigator.locks : null;
+    return locks && typeof locks.request === "function" ? locks.request(RESEARCH_LOCK, {mode: "exclusive"}, operation) : operation();
+  };
 
   async function renderResearchSharing(message) {
     if (!researchClient) return;
@@ -91,6 +96,8 @@
     researchClient = researchFactory.createClient({
       load: async () => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); return JSON.parse(store.getItem(RESEARCH_KEY) || "null"); },
       save: async state => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); store.setItem(RESEARCH_KEY, JSON.stringify(state)); },
+      reload: async () => { const store = storage(); if (!store) throw new Error("Browser storage is unavailable."); return JSON.parse(store.getItem(RESEARCH_KEY) || "null"); },
+      withLock: researchWithLock,
       send: (url, init) => fetch(url, init)
     });
     researchClient.ready.then(async state => {
@@ -114,6 +121,15 @@
       const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(archive, null, 2)], {type: "application/json"}));
       link.download = "dial-in-research.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
     }, "Research file saved locally. Nothing was sent to a collector."));
+    window.addEventListener("storage", event => {
+      if (![RESEARCH_KEY, RESEARCH_ENDPOINT_KEY].includes(event.key)) return;
+      if (event.key === RESEARCH_ENDPOINT_KEY) {
+        try { researchEndpoint = event.newValue ? researchFactory.validateEndpoint(event.newValue) : null; } catch (_) { researchEndpoint = null; }
+      }
+      // The shared client reloads under the Web Lock before every operation;
+      // this event only refreshes visible controls promptly in another tab.
+      researchAction(() => Promise.resolve(), "Research settings changed in another tab; current storage was reloaded.");
+    });
   }
 
   const slug = (value) => String(value || "grinder").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "grinder";
