@@ -4630,7 +4630,7 @@ if(loadShotsButton)loadShotsButton.onclick=refreshShots;
 const shotSelect=document.querySelector('#shotSelect');
 if(shotSelect)shotSelect.onchange=e=>setShotId(e.target.value);
 const feedbackShotInput=document.querySelector('#feedback input[name="shotId"]');
-if(feedbackShotInput)feedbackShotInput.addEventListener('change',e=>setShotId(e.target.value));
+if(feedbackShotInput){const selectTypedShot=e=>setShotId(e.target.value);feedbackShotInput.addEventListener('input',selectTypedShot);feedbackShotInput.addEventListener('change',selectTypedShot);}
 document.querySelector('#analysis').onsubmit=async e=>{e.preventDefault();try{const shotId=new FormData(e.target).get('shotId');setShotId(shotId,false);await show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId})},'Analysing saved brew...')}catch(e){failRequest(e,'Could not analyse the brew. Try again.')}};
 document.querySelector('#research').onsubmit=async e=>{e.preventDefault();let data;try{data=JSON.parse(new FormData(e.target).get('state'))}catch(e){fail('Research replay JSON is invalid.');return}try{await show('research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)},'Replaying software state...')}catch(e){failRequest(e,'Could not run research replay. Try again.')}};
 // Keep an untouched launch instant separate from its local calendar display:
