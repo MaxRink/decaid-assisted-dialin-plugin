@@ -47,7 +47,7 @@ test('configured research collector sends only on explicit consent and Send; opt
   await expect(page.locator('#research-sharing-status')).toContainText('0 queued');
   expect(batches).toHaveLength(1); expect(batches[0].records).toHaveLength(1); expect(batches[0].records[0].measurements.pumpTimeSec).toBe(24);
   await shot(page, 25); await expect(page.locator('#research-sharing-status')).toContainText('1 queued');
-  await page.locator('#research-sharing-disable').click(); await page.reload();
+  await page.locator('#research-sharing-disable').click(); await expect(page.locator('#research-sharing-status')).toContainText('Remote sharing off'); await page.reload();
   await page.locator('#research-sharing-title').click();
   await expect(page.locator('#research-sharing-consent')).not.toBeChecked();
   await expect(page.locator('#research-sharing-status')).toContainText('0 queued');
