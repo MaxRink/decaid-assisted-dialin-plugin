@@ -33,7 +33,7 @@ test('dropdown and typed shot ownership hydrate before save', async ({page}) => 
   await page.locator('#shotSelect').selectOption('shot-2');
   await expect(page.locator('#feedback [name=notes]')).toHaveValue('saved shot-2');
   await page.locator('#feedback [name=notes]').fill('dropdown edit'); await save(page);
-  await page.reload(); await analyse(page, 'shot-2'); await expect(page.locator('#feedback [name=notes]')).toHaveValue('dropdown edit');
+  await page.reload(); const saved = await analyse(page, 'shot-2'); await expect(page.locator('#feedback [name=notes]')).toHaveValue('dropdown edit'); expect(saved.feedback.measuredBeanDose.weightG).toBe(18.2); expect(saved.feedback.confirmedContext.grinderRpm).toBe(900);
   await page.locator('#feedback [name=shotId]').fill('shot-1');
   await expect(page.locator('#feedback [name=notes]')).toHaveValue('saved shot-1');
 });
@@ -47,6 +47,23 @@ test('feedback launch applies a fresh measurement only after hydration and keeps
   await expect(page.locator('#feedback [name=confirmBeanMeasurement]')).not.toBeChecked();
 });
 
+
+
+test('failed feedback launch keeps saved record and save gated', async ({page}) => {
+  await page.route('**' + PREFIX + '/analysis', route => route.fulfill({status:503, contentType:'application/json', body:JSON.stringify({error:'Injected launch failure'})}));
+  await page.goto(UI + '?action=feedback&shotId=shot-1'); await page.locator('nav button[data-native-step="3"]').click();
+  await expect(page.locator('#result')).toContainText('Injected launch failure');
+  await expect(page.locator('#feedback button[value=true]')).toBeDisabled();
+});
+
+test('delayed launch cannot apply its measurement to a later selected shot', async ({page}) => {
+  let release; const blocked = new Promise(resolve => { release = resolve; });
+  await page.route('**' + PREFIX + '/analysis', async route => { if (route.request().postDataJSON().shotId === 'shot-1') await blocked; await route.continue(); });
+  await page.goto(UI + '?' + new URLSearchParams({action:'feedback', shotId:'shot-1', beanScaleId:'launch-scale', beanWeight:'19.1', beanCapturedAt:'2026-10-25T01:40:22.222Z'}));
+  await page.locator('nav button[data-native-step="3"]').click(); await page.locator('#feedback [name=shotId]').fill('shot-2'); await page.locator('#feedback [name=shotId]').press('Tab');
+  await expect(page.locator('#feedback [name=notes]')).toHaveValue('saved shot-2'); release();
+  await expect(page.locator('#feedback [name=beanScaleId]')).toHaveValue('old-scale'); await expect(page.locator('#feedback [name=confirmBeanMeasurement]')).toBeChecked();
+});
 test('failed or pending hydration gates save controls', async ({page}) => {
   await page.goto(UI); await analyse(page, 'shot-1'); await page.locator('#loadShots').click();
   await page.locator('#shotSelect option[value="shot-2"]').waitFor({state:'attached'});
