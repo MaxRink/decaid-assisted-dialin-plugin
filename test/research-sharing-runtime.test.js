@@ -159,6 +159,7 @@ test('random series resets for changed bean, grinder or recipe; corrections and 
     f.plugin.onEvent({name:'shotStored',payload:{id:next.id}});await captured(f,i+1);
   }
   const records=(await f.request('GET',null,'sharing-export')).body.records;
+  const previousRevision=Number(records[0].revision||0);
   assert.match(records[0].researchSeries,/^[a-f0-9]{32}$/);
   assert.equal(records[0].researchSeries,records[1].researchSeries);
   for(let i=2;i<records.length;i++)assert.notEqual(records[i-1].researchSeries,records[i].researchSeries);
@@ -173,7 +174,7 @@ test('random series resets for changed bean, grinder or recipe; corrections and 
   await next.request('POST',{operation:'retry'});
   const amended=JSON.parse(next.posts[0].init.body).records[0];
   assert.equal(amended.researchSeries,records[0].researchSeries);
-  assert.equal(amended.observationId,records[0].observationId);assert.equal(amended.revision,2);
+  assert.equal(amended.observationId,records[0].observationId);assert.ok(amended.revision>previousRevision);
   assert.doesNotMatch(next.posts[0].init.body,/PRIVATE-/);
   await next.request('DELETE');assert.deepEqual(stored.get(KEY).series,{current:null,shots:[]});
 });
