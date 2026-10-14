@@ -22,7 +22,7 @@ test('local research export filters personal text and replaces an amended shot w
   expect(archive.records).toHaveLength(1); expect(archive.records[0].measurements.pumpTimeSec).toBe(24);
   expect(raw).not.toMatch(/PRIVATE|beanId|grinderId|native-shot|calibrationEpoch|timestamp/);
   expect(posts).toBe(0);
-  await page.locator('#research-local-enabled').uncheck(); await page.reload();
+  await page.locator('#research-local-enabled').uncheck(); await expect(page.locator('#research-sharing-status')).toContainText('Local archive off'); await page.reload();
   await page.locator('#research-sharing-title').click();
   await expect(page.locator('#research-local-enabled')).not.toBeChecked();
   await page.locator('#research-sharing-delete').click();
