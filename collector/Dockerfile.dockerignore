@@ -3,4 +3,7 @@
 !collector/
 !collector/server.js
 !collector/metrics.js
+!collector/telemetry.js
 !collector/Dockerfile
+!package.json
+!package-lock.json
