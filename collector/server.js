@@ -7,7 +7,7 @@ const { randomUUID } = require("node:crypto");
 const { createResearchSharing } = require("../research-sharing.js");
 const schema = createResearchSharing();
 const { createResearchMetrics } = require("./metrics.js");
-const { startHttpSpan } = require("./telemetry.js");
+const { startHttpSpan, shutdownTelemetry } = require("./telemetry.js");
 const FILE = /^research-([a-f0-9]{32})\.json$/;
 
 async function createCollector(options = {}) {
@@ -223,7 +223,31 @@ if (require.main === module) {
           !["127.0.0.1", "::1", "0.0.0.0"].includes(metricsBind)) throw new Error("Invalid private metrics listener configuration");
       server.metricsServer.listen(metricsPort, metricsBind);
     }
-    server.listen(port, bind, () => process.stdout.write("Research collector listening on configured port " + port + "\n"));
+    let stopping;
+    const closeListener = listener => new Promise(resolve => {
+      if (!listener || !listener.listening) return resolve();
+      let timer;
+      const finish = () => { if (timer) clearTimeout(timer); resolve(); };
+      listener.close(finish);
+      listener.closeIdleConnections?.();
+      // Let active requests finish. The request timeout bounds body reads;
+      // this second bound prevents a stuck exporter or client from holding
+      // process shutdown forever while retaining an emergency close path.
+      timer = setTimeout(() => {
+        listener.closeAllConnections?.();
+        resolve();
+      }, 15000);
+      timer.unref?.();
+    });
+    const stop = () => {
+      if (!stopping) stopping = Promise.all([closeListener(server), closeListener(server.metricsServer)])
+        .then(() => shutdownTelemetry());
+      return stopping;
+    };
+    const onSignal = () => stop().then(() => { process.exitCode = 0; });
+    process.once("SIGTERM", onSignal);
+    process.once("SIGINT", onSignal);
+    server.listen(port, bind, () => process.stdout.write("Research collector listening on configured port " + server.address().port + "\n"));
   }).catch(error => { process.stderr.write(error.message + "\n"); process.exitCode = 1; });
 }
 module.exports = { createCollector };

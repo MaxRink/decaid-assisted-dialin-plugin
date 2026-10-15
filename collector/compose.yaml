@@ -4,6 +4,9 @@ services:
       context: ..
       dockerfile: collector/Dockerfile
     restart: unless-stopped
+    # Allow active requests to drain (15s bound) and OTLP shutdown (5s bound)
+    # before the runtime's forced-stop deadline.
+    stop_grace_period: 25s
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
