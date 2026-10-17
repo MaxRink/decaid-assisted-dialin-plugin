@@ -35,7 +35,7 @@ jobs:
           python-version: '3.13'
       - run: python scripts/build-simulator.py
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: .site
       - name: Deploy
