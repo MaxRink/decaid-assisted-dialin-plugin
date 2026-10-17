@@ -48,6 +48,7 @@ jobs:
       - run: npm ci
       - run: node --check plugin.js
       - run: npm test
+      - run: npm run test:telemetry
       - run: python3 scripts/embed-reference-data.py --check
       - run: python3 scripts/embed-research-sharing.py --check
       - run: python3 scripts/embed-grinder-mechanics.py --check
