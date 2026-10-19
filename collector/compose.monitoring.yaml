@@ -20,7 +20,7 @@ services:
     logging:
       driver: "none"
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.4
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${RESEARCH_GRAFANA_PASSWORD:?Set a strong Grafana administrator password}
