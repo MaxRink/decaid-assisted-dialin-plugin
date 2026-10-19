@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-evidence-${{ github.sha }}
@@ -57,7 +57,7 @@ jobs:
       - run: python3 scripts/build-simulator.py
       - run: npm run package
       - run: python3 -m unittest discover -s test -p package_plugin_test.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.node == '24.x'
         with:
           name: decaid-assisted-dialin-plugin-${{ github.sha }}
@@ -82,7 +82,7 @@ jobs:
         env:
           MPLCONFIGDIR: ${{ runner.temp }}/matplotlib
         run: python scripts/plot-algorithms.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: algorithm-graphs-${{ github.sha }}
           path: docs/algorithm-plots/
@@ -210,7 +210,7 @@ jobs:
           timeout: 5m
       - name: Retain deployment image vulnerability reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: collector-security-${{ github.sha }}
           path: collector-security-results/*.json
