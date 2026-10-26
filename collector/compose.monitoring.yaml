@@ -5,7 +5,7 @@ services:
       RESEARCH_METRICS_PORT: 8788
       RESEARCH_METRICS_BIND_HOST: 0.0.0.0
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
