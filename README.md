@@ -308,7 +308,7 @@ these browser checks complement the pinned QuickJS host tests. CI retains
 browser reports and failure traces. Neither fixture proves physical grinder
 performance.
 
-The host contract is pinned to Decaid commit `bafa9b3f2b90e65334e990b0b9601a9965cf979b` in CI.
+The CI host contract tracks upstream Decaid `main` (verified against `df177b75` on 2026-10-31).
 
 ## Attribution
 
