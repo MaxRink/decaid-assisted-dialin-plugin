@@ -6,5 +6,5 @@ RUN go mod download
 COPY main.go ./
 RUN go build -mod=readonly -trimpath -ldflags="-s -w" -o /out/caddy .
 
-FROM caddy:2.11.7-alpine
+FROM caddy:2.11.8-alpine
 COPY --from=builder /out/caddy /usr/bin/caddy
