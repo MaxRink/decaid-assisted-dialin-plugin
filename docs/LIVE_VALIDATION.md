@@ -39,3 +39,12 @@ metadata assumptions this plugin's comparison and abstention rules depend on.
 
 The full read-only report, including the sanitized database evidence, is in
 `mahlkoenig-e64ws-local-research/docs/LIVE_VALIDATION_2026-11-18.md`.
+
+## E64 token / password note
+
+The E64 used for this sample later received an Owner password. A normal
+`POST /rest_api/login` then returns a token, and `login.php` no longer
+auto-logs in. For a no-password unit, the documented FW-01 SELECT-only login
+construction remains a gated workaround; use it only on an owner-controlled
+device. This plugin does not consume the E64 WSS token, but the same E64-side
+data is now reachable through either a password or the gated workaround.
