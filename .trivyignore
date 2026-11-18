@@ -1,0 +1,6 @@
+# go-jose/v3 has no fixed release for CVE-2026-116587
+# (GHSA-mgcc-cww5-fp2q). It is pulled into the Caddy binary through
+# caddytls -> smallstep authority. This deployment uses ACME automatic HTTPS
+# only; the internal PKI/JWK provisioning endpoints are not exposed.
+# Remove this exception when Caddy drops the v3 dependency.
+CVE-2026-116587
