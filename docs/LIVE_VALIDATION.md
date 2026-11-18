@@ -13,6 +13,8 @@ metadata assumptions this plugin's comparison and abstention rules depend on.
   timestamp (`2026-11-18T11:03:53Z`).
 - Every row had `recipe_gbs_enabled = 0` and `grind_duration_noload = 0`.
 - Raw `grind_ddd` values were 854–998.
+- A read-only `RequestDriverState` later returned `ddValueDum = 854`, matching
+  the newest `grind_log` row.
 - `event_log`: 3 rows (`FactoryReset`, `LogIn`, `PasswordChange`); all three
   timestamps were empty.
 - `settings`: 27 rows, `Version = 31`; `System.SetupWizard.State = Completed`.
