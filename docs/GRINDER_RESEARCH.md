@@ -88,6 +88,15 @@ are not public enough to reuse as algorithms:
   setup and an initial grinding-degree suggestion. It does not publish a
   grinder-independent dial calibration or establish that E64 WS, E65 or E80
   uses a particular research GBS version.
+
+> **Live E64 database note (2026-11-18).** A read-only database export from a
+> used E64 WS contained 8 `grind_log` rows; 7 had an empty `grind_date_time`
+> and every row had `recipe_gbs_enabled=0`. The raw DD values were 854–998.
+> This supports the plugin's timestamp-integrity abstention and its refusal to
+> infer GBS history from absent metadata. It is one device sample, not a
+> population claim. See [LIVE_VALIDATION.md](LIVE_VALIDATION.md) and
+> `mahlkoenig-e64ws-local-research/docs/LIVE_VALIDATION_2026-11-18.md`.
+
 - **Fiorenzato ADAPT:** the manufacturer says its wired grinder/flow-meter
   system learns a recipe and displays a grind adjustment suggestion after three
   extractions miss the recipe. This supports a design of delayed, evidence
