@@ -1,4 +1,5 @@
 FROM node:26-alpine
+RUN apk upgrade --no-cache
 WORKDIR /app
 COPY research-sharing.js ./research-sharing.js
 COPY collector/server.js collector/metrics.js ./collector/
