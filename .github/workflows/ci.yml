@@ -115,7 +115,7 @@ jobs:
         working-directory: decaid-host
         run: |
           mkdir -p assets/bundled_skins
-          printf '["stub-skin"]\n' > assets/bundled_skins/manifest.json
+          printf '[]\n' > assets/bundled_skins/manifest.json
           : > assets/bundled_skins/stub-skin.zip
       - name: Build package and stage archives
         run: |
