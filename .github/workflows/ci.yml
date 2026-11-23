@@ -15,7 +15,7 @@ jobs:
     name: Playwright browser and novice journeys
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
@@ -44,7 +44,7 @@ jobs:
       matrix:
         node: [22.x, 24.x, 26.x]
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
@@ -72,7 +72,7 @@ jobs:
     name: Algorithm replay and graph data
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
@@ -117,11 +117,11 @@ jobs:
           echo "::warning title=E64 simulator tests skipped::$message"
           echo "### E64 simulator tests skipped" >> "$GITHUB_STEP_SUMMARY"
           echo "$message" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_RESEARCH_KEY == 'true'
       - name: Check out the private simulator
         if: env.HAS_RESEARCH_KEY == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MaxRink/mahlkoenig-e64ws-local-research
           ssh-key: ${{ secrets.RESEARCH_REPO_SSH_KEY }}
@@ -129,7 +129,7 @@ jobs:
           persist-credentials: false
       - name: Check out the E64 plugin (0.5.0)
         if: env.HAS_RESEARCH_KEY == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MaxRink/decaid-e64ws-plugin
           ref: fb72fdfcfa82086f88d212c889addf3af8533253
@@ -137,7 +137,7 @@ jobs:
           persist-credentials: false
       - name: Check out the Decaid fork with host certificate pinning
         if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MaxRink/decaid
           ref: a0dede246cd5a65601bf24bc79b77d5778b78fc6
@@ -202,8 +202,8 @@ jobs:
     name: Upstream Decaid main QuickJS and API/storage contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: decentespresso/decaid
           ref: main
@@ -273,7 +273,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
