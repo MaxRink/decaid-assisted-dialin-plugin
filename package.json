@@ -1,13 +1,15 @@
 {
   "name": "decaid-assisted-dialin-plugin",
-  "version": "0.6.0",
+  "version": "0.6.3",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:telemetry": "node --test test/collector-telemetry.e2e.cjs",
     "package": "python3 scripts/package-plugin.py",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:sim:e2e": "playwright test e2e/e64-sim.spec.js --project=chromium --project=mobile",
+    "test:sim:host": "sh scripts/run-sim-host-test.sh"
   },
   "license": "GPL-3.0-or-later",
   "devDependencies": {

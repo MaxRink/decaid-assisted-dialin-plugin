@@ -211,7 +211,7 @@
       log() {},
       storage(event) {
         if (event.type === "read") queueMicrotask(() => instance && instance.onEvent({ name: "storageRead", payload: { key: event.key, value: store[event.key] || null } }));
-        if (event.type === "write") { store[event.key] = clone(event.data); queueMicrotask(() => instance && instance.onEvent({ name: "storageWrite", payload: { key: event.key } })); }
+        if (event.type === "write") { store[event.key] = clone(event.data); queueMicrotask(() => instance && instance.onEvent({ name: "storageWrite", payload: clone(event.data) })); }
       },
     };
     const response = (value, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => clone(value) });

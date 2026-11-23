@@ -18,7 +18,7 @@ function fixture(stored = null, settings = { GrinderId: "host-device", GrinderMo
       if (command.type === "write") {
         if (failWrites) throw new Error("storage offline");
         storage.set(command.key, command.data);
-        setTimeout(() => plugin.onEvent({ name: "storageWrite", payload: { key: command.key, value: command.data } }), 0);
+        setTimeout(() => plugin.onEvent({ name: "storageWrite", payload: command.data }), 0);
       }
     },
     log(message) { console.log(message); },
@@ -123,4 +123,75 @@ test("selected individual grinder is persisted and restored with the profile sto
   await new Promise((resolve) => setTimeout(resolve, 2));
   const readback = JSON.parse((await second.plugin.handleHttpRequest({ endpoint: "settings", method: "GET" })).body);
   assert.equal(readback.GrinderProfileId, "df64-kitchen");
+});
+
+test("a feedback write ack never acknowledges a pending grinder profile write", async () => {
+  // Decaid acknowledges a write with the written data only (no key).
+  const writes = [];
+  let plugin;
+  const host = {
+    storage(command) {
+      if (command.type === "read")
+        setTimeout(() => plugin.onEvent({ name: "storageRead", payload: { key: command.key, value: null } }), 0);
+      else writes.push(command);
+    },
+    log() {},
+  };
+  const context = vm.createContext({ console, setTimeout, clearTimeout, Date, JSON, Math, Promise, fetch: async () => { throw new Error("offline"); } });
+  vm.runInContext(`${source}\nthis.createPlugin = createPlugin;`, context);
+  plugin = context.createPlugin(host);
+  plugin.onLoad({});
+  const ack = (key) => plugin.onEvent({ name: "storageWrite", payload: writes.find((command) => command.key === key).data });
+  const settled = (promise) => { const state = { done: false }; promise.then((value) => { state.done = true; state.value = value; }); return state; };
+  const feedback = settled(plugin.handleHttpRequest({ endpoint: "feedback", method: "POST", body: { shotId: "shot-1", good: true } }));
+  const grinder = settled(plugin.handleHttpRequest({ endpoint: "grinders", method: "POST", body: { operation: "upsert", profile: profile("df64-kitchen", 10) } }));
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(writes.map((command) => command.key).sort(), ["feedback.v1", "grinderProfiles.v1"]);
+  ack("feedback.v1");
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(feedback.done, true);
+  assert.equal(feedback.value.status, 200);
+  assert.equal(grinder.done, false, "grinder profile was acknowledged before its own write");
+  ack("grinderProfiles.v1");
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(grinder.value.status, 200);
+});
+
+test("DELETE never creates or replaces a grinder profile", async () => {
+  const { plugin } = fixture();
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  const created = await plugin.handleHttpRequest({ endpoint: "grinders", method: "DELETE", body: { profile: profile("df64-kitchen", 10) } });
+  assert.equal(created.status, 400);
+  assert.equal(JSON.parse((await plugin.handleHttpRequest({ endpoint: "grinders", method: "GET" })).body).profiles.length, 0);
+  await plugin.handleHttpRequest({ endpoint: "grinders", method: "POST", body: { operation: "upsert", profile: profile("df64-kitchen", 10) } });
+  const deleted = await plugin.handleHttpRequest({ endpoint: "grinders", method: "DELETE", body: { id: "df64-kitchen" } });
+  assert.equal(deleted.status, 200, deleted.body);
+  assert.equal(JSON.parse((await plugin.handleHttpRequest({ endpoint: "grinders", method: "GET" })).body).profiles.length, 0);
+});
+
+test("an unusable individual profile keeps its own calibration error when DialCalibration is also set", async () => {
+  const stored = { schemaVersion: 1, profiles: { "wrong-host": { ...profile("wrong-host", 10), hostGrinderId: "another-host" } } };
+  const { plugin } = fixture(stored, { GrinderId: "host-device", GrinderModel: "DF64 Gen 1", GrinderProfileId: "wrong-host",
+    DialCalibration: JSON.stringify({ dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 300, dialB: 90, ddDumB: 1200 }) });
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  const body = JSON.parse((await plugin.handleHttpRequest({ endpoint: "suggestion", method: "GET" })).body);
+  assert.match(body.dialReference.calibrationError, /individual/);
+  assert.doesNotMatch(body.dialReference.calibrationError, /DialCalibration/);
+});
+
+test("a grinder chosen on the plugin page survives reload until the host setting changes", async () => {
+  const hostSettings = (id) => ({ GrinderId: "host-device", GrinderModel: "DF64 Gen 1", GrinderProfileId: id });
+  const first = fixture(null, hostSettings("host-choice"));
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  for (const id of ["host-choice", "page-choice", "newer-host"])
+    assert.equal((await first.plugin.handleHttpRequest({ endpoint: "grinders", method: "POST", body: { operation: "upsert", profile: profile(id, 10) } })).status, 200);
+  assert.equal((await first.plugin.handleHttpRequest({ endpoint: "settings", method: "POST", body: { GrinderProfileId: "page-choice" } })).status, 200);
+  const stored = first.storage.get("grinderProfiles.v1");
+  const selectedAfterReload = async (settings) => {
+    const next = fixture(JSON.parse(JSON.stringify(stored)), settings);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    return JSON.parse((await next.plugin.handleHttpRequest({ endpoint: "settings", method: "GET" })).body).GrinderProfileId;
+  };
+  assert.equal(await selectedAfterReload(hostSettings("host-choice")), "page-choice");
+  assert.equal(await selectedAfterReload(hostSettings("newer-host")), "newer-host", "a later host setting change wins");
 });

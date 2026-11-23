@@ -42,14 +42,24 @@ async function setSupplement(page, algorithm, fields) {
 
 test.beforeEach(async ({ page, request, baseURL }) => {
   await request.post('/__test/reset');
-  // Native host API uses the actual Decaid loopback port. Relay it to the
-  // isolated real-handler fixture; no response bodies are fabricated here.
-  await page.route('http://127.0.0.1:8080/**', async route => {
-    const url = new URL(route.request().url());
-    const response = await route.fetch({ url: new URL(url.pathname + url.search, baseURL).href });
-    await route.fulfill({ response, headers: {...response.headers(), 'access-control-allow-origin': baseURL, 'access-control-allow-credentials': 'true', 'access-control-allow-methods': 'GET, POST, PUT, PATCH, OPTIONS', 'access-control-allow-headers': 'content-type'} });
-  });
+  // The served page must call the host API on its own origin (the fixture);
+  // a request to the viewer's loopback port would fail on another device.
+  await page.route('http://127.0.0.1:8080/**', route => route.abort());
   await page.goto(UI);
+});
+
+test('host-shaped storage acks let the plugin persist research choices', async ({ request }) => {
+  // Decaid echoes the written data; the research store matches its write token.
+  const response = await request.post(PREFIX + '/sharing', {data: {operation: 'local', enabled: false}});
+  expect(response.status()).toBe(200);
+  expect((await response.json()).localEnabled).toBe(false);
+});
+
+test('cross-site writes are refused while the served page can still save', async ({ page, request }) => {
+  const refused = await request.post(PREFIX + '/feedback', {data: {shotId: 'shot-1', good: true}, headers: {Origin: 'https://other-site.example'}});
+  expect(refused.status()).toBe(403);
+  const saved = await page.evaluate(async prefix => (await fetch(prefix + '/feedback', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({shotId: 'shot-1', good: true})})).status, PREFIX);
+  expect(saved).toBe(200);
 });
 
 test('live grinder display uses the published snapshot DTO and surfaces unavailable state', async ({ page, request }) => {

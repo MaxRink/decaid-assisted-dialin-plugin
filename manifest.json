@@ -3,7 +3,7 @@
   "name": "Assisted dial-in",
   "author": "Maximilian Rink and Decaid contributors",
   "description": "Local assisted dial-in with bean context, post-brew flavour, brew metrics and recovered algorithm replay.",
-  "version": "0.6.0",
+  "version": "0.6.3",
   "apiVersion": 1,
   "permissions": [
     "log",
@@ -21,7 +21,7 @@
     "GrinderProfileId": {
       "type": "string",
       "label": "Individual grinder profile ID",
-      "description": "Optional stable owner-created local profile ID. It scopes owner calibration to one physical grinder; it is separate from the host's device grinderId."
+      "description": "Optional stable owner-created local profile ID. It scopes owner calibration to one physical grinder; it is separate from the host's device grinderId. A profile chosen later on the plugin page takes precedence until this setting is changed."
     },
     "GrinderModel": {
       "type": "string",
@@ -61,7 +61,7 @@
     "CurrentSetting": {
       "type": "string",
       "label": "Current grinder setting",
-      "description": "Recorded current setting used for suggestions; it is never written to a grinder."
+      "description": "Manual current setting used for suggestions when the current workflow has none and no connected E64-family grinder reports a live setting observation. It is never written to a grinder."
     },
     "SettingUnit": {
       "type": "string",
@@ -80,7 +80,8 @@
       "description": "Required owner-selected time target for this recipe and the selected clock. No universal time target is assumed."
     },
     "TargetTimeClock": {
-      "type": "string",
+      "type": "enum",
+      "values": ["pump", "pouring", "recording"],
       "default": "pump",
       "label": "Target time clock",
       "description": "pump: preinfusion plus pouring; pouring: main pouring only; recording: includes recorded preheat and settling. Evidence must use this same clock."
@@ -123,12 +124,12 @@
     },
     "BeanType": {
       "type": "string",
-      "label": "BeanType",
+      "label": "Bean type",
       "description": "Explicit current BeanType; historical shots require saved context or per-shot operator confirmation."
     },
     "RoastLevel": {
       "type": "string",
-      "label": "RoastLevel",
+      "label": "Roast level",
       "description": "Explicit current RoastLevel; historical shots require saved context or per-shot operator confirmation."
     }
   },

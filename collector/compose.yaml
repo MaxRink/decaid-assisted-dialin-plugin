@@ -17,6 +17,8 @@ services:
       RESEARCH_MAX_STORAGE_BYTES: ${RESEARCH_MAX_STORAGE_BYTES:-268435456}
       RESEARCH_REQUESTS_PER_MINUTE: ${RESEARCH_REQUESTS_PER_MINUTE:-60}
       RESEARCH_MAX_CONNECTIONS: ${RESEARCH_MAX_CONNECTIONS:-128}
+      # Only the proxy below may state a client address (X-Forwarded-For).
+      RESEARCH_TRUSTED_PROXIES: 172.30.87.2
     volumes:
       - research_data:/var/lib/research
     networks: [ingestion]
@@ -40,13 +42,21 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks: [ingestion, public]
+    networks:
+      ingestion:
+        ipv4_address: 172.30.87.2
+      public: {}
     depends_on: [collector]
     logging:
       driver: "none"
 networks:
   ingestion:
     internal: true
+    ipam:
+      config:
+        - subnet: 172.30.87.0/24
+          # Dynamic addresses stay above .128 so the proxy's fixed .2 is free.
+          ip_range: 172.30.87.128/25
   public: {}
 volumes:
   research_data: {}

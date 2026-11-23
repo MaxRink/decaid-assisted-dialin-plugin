@@ -26,6 +26,10 @@ function createResearchSharing() {
   };
   const flag = (out, key, value) => { if (typeof value === "boolean") out[key] = value; };
   const validId = value => typeof value === "string" && /^[a-f0-9]{32}$/.test(value);
+  // Collector-issued installation token: binds this client's observations so
+  // another client cannot overwrite them. Kept per collector, never in records.
+  const validToken = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  const MAX_TOKENS = 8;
   function randomId() {
     if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
       const bytes = new Uint8Array(16); crypto.getRandomValues(bytes);
@@ -177,7 +181,7 @@ function createResearchSharing() {
     if (!adapters || typeof adapters.load !== "function" || typeof adapters.save !== "function")
       throw new Error("Acknowledged local load/save adapters required");
     const fresh = () => ({ schemaVersion: VERSION, policyVersion: POLICY, localEnabled: true, sharing: false, endpoint: null,
-      nextRevision: 0, records: [], queue: [], fingerprints: [] });
+      nextRevision: 0, records: [], queue: [], fingerprints: [], collectorTokens: [] });
     const localKey = key => {
       if (typeof key !== "string" || !key.length || key.length > 256) throw new Error("Invalid local research key");
       return key;
@@ -204,8 +208,13 @@ function createResearchSharing() {
         if (!validId(item.observationId) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw new Error("Invalid observation ledger");
         return { key: localKey(item.key), fingerprint: item.fingerprint, observationId: item.observationId, revision: item.revision };
       });
+      // Optional: storage written before collector enrolment has no tokens.
+      const tokens = value.collectorTokens == null ? [] : value.collectorTokens;
+      if (!Array.isArray(tokens) || tokens.length > MAX_TOKENS || tokens.some(item => !object(item) || !validToken(item.token)))
+        throw new Error("Invalid research collector tokens");
+      const collectorTokens = tokens.map(item => ({ endpoint: endpoint(item.endpoint), token: item.token }));
       return { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
-        endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
+        endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints, collectorTokens };
     };
     const updatePermission = () => { permitted = state.sharing && pendingConsent === null && !storageError; };
     const install = value => { state = decode(value) || fresh(); updatePermission(); };
@@ -280,12 +289,40 @@ function createResearchSharing() {
         return { record: clone(record), ...status() };
       });
     }
+    const tokenFor = target => state.collectorTokens.find(item => item.endpoint === target)?.token;
+    const POST_OPTIONS = { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store" };
+    // Ask the collector for an installation token before the first upload.
+    async function enrol() {
+      // Already enrolled: skip the lock entirely (the upload re-checks under it).
+      if (state.endpoint && tokenFor(state.endpoint)) return;
+      const request = await serial(() => {
+        if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint || tokenFor(state.endpoint)) return null;
+        if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
+        const response = adapters.send(state.endpoint, { ...POST_OPTIONS, headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, enrol: true }) });
+        return { generation, endpoint: state.endpoint, response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
+      });
+      if (!request) return;
+      const result = await request.response;
+      if (result.error) throw result.error;
+      if (!result.value || !result.value.ok || result.value.redirected) throw new Error("Research collector enrolment failed");
+      const receipt = await result.value.json();
+      if (!receipt || !validToken(receipt.token)) throw new Error("Invalid research collector enrolment");
+      await serial(async () => {
+        if (request.generation !== generation || state.endpoint !== request.endpoint || tokenFor(request.endpoint)) return;
+        await save({ ...state, collectorTokens: state.collectorTokens.filter(item => item.endpoint !== request.endpoint)
+          .concat([{ endpoint: request.endpoint, token: receipt.token }]).slice(-MAX_TOKENS) });
+      });
+    }
     async function flush() {
       if (inflight) return inflight;
       const operation = async () => {
+        await enrol();
         const batch = await serial(() => {
           if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint) return null;
           if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
+          const token = tokenFor(state.endpoint);
+          if (!token) return null;
           const entries = [];
           for (const item of state.queue.slice(0, MAX_BATCH)) {
             if (JSON.stringify(entries.concat([item]).map(entry => entry.record)).length > 60000) break;
@@ -295,8 +332,8 @@ function createResearchSharing() {
           abort = () => controller?.abort();
           // Start the request before releasing the storage lock. Awaiting it must
           // not block another tab's deletion, opt-out, or new observation.
-          const response = adapters.send(state.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
-            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
+          const response = adapters.send(state.endpoint, { ...POST_OPTIONS,
+            headers: { "Content-Type": "application/json", "X-Research-Token": token }, signal: controller?.signal,
             body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: entries.map(item => item.record) }) });
           return { generation, endpoint: state.endpoint, entries: clone(entries), response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
         });

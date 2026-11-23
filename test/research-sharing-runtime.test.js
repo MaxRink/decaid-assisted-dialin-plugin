@@ -14,6 +14,7 @@ const shot = {id: 'PRIVATE-SHOT', timestamp: '2026-10-12T09:11:22.000Z', notes: 
     grinderSetting: '50', targetDoseWeight: 18, targetYield: 36, extras: {grinderSettingUnit: 'micrometres'}},
     profile: {title: 'PRIVATE-PROFILE', steps: [{pump: 'pressure', pressure: 9}]}},
   measurements: timedMeasurements('2026-10-12T09:11:22.000Z', 25), annotations: {actualDoseWeight: 18}};
+const enrolment = reply({token: 'e'.repeat(64)});
 function fixture(t, {stored = new Map(), send = async (_, init) => reply({accepted: JSON.parse(init.body).records.length}), delayWrite = false, delayRead = false, readShot = async () => reply(clone(shot))} = {}) {
   let plugin;
   const posts = [], writes = [], pendingWrites = [], pendingReads = [];
@@ -31,13 +32,16 @@ function fixture(t, {stored = new Map(), send = async (_, init) => reply({accept
     }
   }}, {fetch: async (url, init) => {
     if (url.startsWith('http://127.0.0.1:8080/api/v1/shots/')) return readShot(url);
+    // Enrolment is answered here; posts records only uploads.
+    if (url.startsWith('https://') && JSON.parse(init.body).enrol === true) return enrolment;
     if (url.startsWith('https://')) { posts.push({url,init:clone(init)}); return send(url,init); }
     throw new Error('unexpected fetch ' + url);
   }});
   plugin.onLoad({});
   t.after(() => plugin.onUnload());
   const request = async (method = 'GET',body,endpoint = 'sharing') => {
-    const response = await plugin.handleHttpRequest({endpoint,method,body});
+    // The plugin page: same-origin browser requests carry Origin.
+    const response = await plugin.handleHttpRequest({endpoint,method,body,headers:{origin:'http://127.0.0.1:8080',host:'127.0.0.1:8080'}});
     return {status:response.status,body:JSON.parse(response.body)};
   };
   return {plugin,posts,writes,pendingWrites,pendingReads,stored,request};
@@ -74,7 +78,7 @@ test('duplicate events coalesce and corrected feedback replaces the pending reco
   assert.equal(f.posts.length,1);
   const batch=JSON.parse(f.posts[0].init.body);assert.equal(batch.records.length,1);assert.equal(batch.records[0].taste.intent,'balanced');
   assert.equal(batch.records[0].taste.good,true);
-  assert.deepEqual(Object.keys(f.posts[0].init.headers),['Content-Type']);assert.doesNotMatch(f.posts[0].init.body,/PRIVATE-|timestamp/);
+  assert.deepEqual(Object.keys(f.posts[0].init.headers),['Content-Type','X-Research-Token']);assert.equal(f.posts[0].init.headers['X-Research-Token'],'e'.repeat(64));assert.doesNotMatch(f.posts[0].init.body,/PRIVATE-|timestamp/);
 });
 test('offline queue survives reload; opting out clears queue but keeps local records',async t=>{
   const stored=new Map();const f=fixture(t,{stored,send:async()=>{throw new Error('offline');}});await enable(f);
@@ -196,4 +200,18 @@ test('archive preserves supported grinder coordinates and available dose, flow a
     assert.equal(record.measurements.meanPressureBar,9);assert.equal(record.measurements.meanMachineFlowMlPerSec,2);
     assert.equal(record.measurements.meanMixTemperatureC,93);assert.equal(record.measurements.meanGroupTemperatureC,91);
   }
+});
+test('only the plugin page can enable sharing, choose a collector or delete research data',async t=>{
+  const f=fixture(t);
+  const direct=async(method,body,headers)=>{const r=await f.plugin.handleHttpRequest({endpoint:'sharing',method,body,headers});return {status:r.status,body:JSON.parse(r.body)};};
+  const consent={sharing:true,endpoint:'https://collector.example/v1/events',acknowledgeHostLimits:true};
+  for (const headers of [undefined,{host:'192.168.1.5:8080'},{origin:'https://other-site.example',host:'192.168.1.5:8080'}]) {
+    const enabled=await direct('POST',consent,headers);assert.equal(enabled.status,403);assert.ok(['plugin_page_required','cross_site_request'].includes(enabled.body.code));
+    assert.equal((await direct('DELETE',null,headers)).status,403);
+  }
+  assert.equal((await f.request()).body.sharing,false);assert.equal((await f.request()).body.endpoint,null);
+  // Opting out stays possible from any client; the page itself can enable.
+  assert.equal((await direct('POST',{sharing:false})).status,200);
+  assert.equal((await direct('POST',consent,{origin:'http://192.168.1.5:8080',host:'192.168.1.5:8080'})).status,200);
+  assert.equal((await f.request()).body.sharing,true);
 });

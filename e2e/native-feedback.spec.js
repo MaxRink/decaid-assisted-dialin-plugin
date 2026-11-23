@@ -17,11 +17,9 @@ async function save(page) {
 }
 test.beforeEach(async ({page, request, baseURL}) => {
   await request.post('/__test/reset');
-  await page.route('http://127.0.0.1:8080/**', async route => {
-    const url = new URL(route.request().url());
-    const response = await route.fetch({url: new URL(url.pathname + url.search, baseURL).href});
-    await route.fulfill({response, headers: {...response.headers(), 'access-control-allow-origin': baseURL, 'access-control-allow-credentials': 'true', 'access-control-allow-methods': 'GET, POST, PUT, PATCH, OPTIONS', 'access-control-allow-headers': 'content-type'}});
-  });
+  // The served page must call the host API on its own origin (the fixture);
+  // a request to the viewer's loopback port would fail on another device.
+  await page.route('http://127.0.0.1:8080/**', route => route.abort());
   const saved = id => ({shotId: id, good: true, notes: 'saved '+id, taste: 'sour', flavour: {overall: 'under-extracted', servingTemperatureC: 54, descriptors: ['citrus']}, confirmedContext: {grinderRpm: 900}, measuredBeanDose: {deviceId: 'old-scale', connectionRole: 'auxiliary', purpose: 'beans', weightG: 18.2, units: 'g', capturedAt: '2026-10-25T01:30:22.222Z', sampleTimestamp: '2026-10-25T01:30:20.000Z', userConfirmed: true}});
   await request.post(PREFIX + '/feedback', {data: saved('shot-1')});
   await request.post(PREFIX + '/feedback', {data: saved('shot-2')});

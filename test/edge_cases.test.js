@@ -41,6 +41,9 @@ function load({shots = [], stored = null, workflow, settings = {
     log: (message) => logs.push(message),
     storage: (command) => {
       if (command.type === 'read') reads.push(command);
+      // Decaid answers every read; only the feedback store is controlled by these tests.
+      if (command.type === 'read' && command.key !== 'feedback.v1')
+        queueMicrotask(() => plugin.onEvent({name: 'storageRead', payload: {key: command.key, value: null}}));
       if (command.type === 'write') writes.push(command);
     },
   };
@@ -209,9 +212,13 @@ test('shot update invalidates an in-flight history result before caching', async
   h.plugin.onEvent({name: 'shotUpdated', payload: {id: 'old'}});
   resolveFetch(response({items: [shot('old', '2.0')], total: 1}));
   assert.equal((await pending).status, 503);
-  assert.equal(h.fetchCalls.length, 1);
+  // The current workflow is read first so history can be filtered by its bean batch and grinder.
+  assert.deepEqual(h.fetchCalls.map((url) => new URL(url).pathname), ['/api/v1/workflow', '/api/v1/shots']);
   await call(h.plugin, 'recommendation', 'GET');
-  assert.equal(h.fetchCalls.length, 3);
+  // Shot events may also trigger a research capture read of the full shot.
+  const history = h.fetchCalls.filter((url) => new URL(url).pathname === '/api/v1/shots');
+  assert.equal(history.length, 2);
+  assert.match(history[1], /beanBatchId=batch-a&grinderId=e64/);
 });
 
 
@@ -253,13 +260,24 @@ test('workflow network, malformed JSON and wrong schema failures cannot use sett
   }
 });
 
-test('malformed feedback entries are not replaced by a new empty store', async () => {
-  for (const value of [[], {old: null}, {old: {good: 'yes'}}]) {
+test('a malformed feedback store is not replaced by a new empty store', async () => {
+  const h = load();
+  h.resolveRead([]);
+  const result = await call(h.plugin, 'feedback', 'POST', {shotId: 'new', good: true});
+  assert.equal(result.status, 503);
+  assert.equal(h.writes.length, 0);
+});
+
+test('malformed feedback entries are skipped and logged; valid entries survive the next save', async () => {
+  for (const value of [{old: null, kept: {good: true}}, {old: {good: 'yes'}, kept: {good: true}}]) {
     const h = load();
     h.resolveRead(value);
-    const result = await call(h.plugin, 'feedback', 'POST', {shotId: 'new', good: true});
-    assert.equal(result.status, 503);
-    assert.equal(h.writes.length, 0);
+    const pending = call(h.plugin, 'feedback', 'POST', {shotId: 'new', good: true});
+    for (let i = 0; i < 10 && !h.writes.length; i++) await flush();
+    h.ackWrite();
+    assert.equal((await pending).status, 200);
+    assert.deepEqual(Object.keys(h.writes[0].data).sort(), ['kept', 'new']);
+    assert.ok(h.logs.some((message) => /skipped 1 invalid stored feedback/.test(message)));
   }
 });
 

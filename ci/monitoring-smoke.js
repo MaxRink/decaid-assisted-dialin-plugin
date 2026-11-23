@@ -24,7 +24,10 @@ async function query(expr) { const response = await fetch(prom + '/api/v1/query?
     taste: { intent: index < 4 ? 'too_sour' : index > 8 ? 'too_bitter' : 'balanced', good: index >= 4 && index <= 8, tastingTemperatureC: 55 + index },
     approaches: algorithms.map((algorithm, position) => ({ algorithm, status: position > 7 ? 'computed' : 'suggestion', direction: position % 2 ? 'finer' : 'coarser', coordinateStatus: position < 2 ? 'native' : 'estimated_relative', settingUnit: index % 2 ? 'dial-marks' : 'micrometres', proposedSetting: (index % 2 ? 12 : 60) + (position % 2 ? -1 : 1) }))
   }));
-  const response = await fetch(collector + '/v1/events', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({schemaVersion:1,policyVersion:1,records}) });
+  const enrolled = await fetch(collector + '/v1/events', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({schemaVersion:1,policyVersion:1,enrol:true}) });
+  assert.equal(enrolled.status, 201);
+  const { token } = await enrolled.json();
+  const response = await fetch(collector + '/v1/events', { method: 'POST', headers: {'Content-Type':'application/json','X-Research-Token':token}, body: JSON.stringify({schemaVersion:1,policyVersion:1,records}) });
   assert.equal(response.status, 201);
   await waitFor(async () => (await query('decaid_research_retained_records')).some(item => Number(item.value[1]) === 12), 'scraped fictional observations');
   const imported = await (await fetch(grafana + '/api/dashboards/uid/decaid-research', {headers:{authorization}})).json();

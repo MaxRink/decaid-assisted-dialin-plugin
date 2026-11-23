@@ -31,7 +31,9 @@ test('local research export filters personal text and replaces an amended shot w
 test('configured research collector sends only on explicit consent and Send; opt-out clears queue', async ({page}) => {
   const batches = [];
   await page.route('https://collector.example/v1/events', async route => {
-    const request = route.request(), body = request.postDataJSON(); batches.push(body);
+    const request = route.request(), body = request.postDataJSON();
+    if (body.enrol === true) return route.fulfill({status:201, contentType:'application/json', body:JSON.stringify({token:'a'.repeat(64)})});
+    expect(request.headers()['x-research-token']).toBe('a'.repeat(64)); batches.push(body);
     await route.fulfill({status:200, contentType:'application/json', body:JSON.stringify({accepted:body.records.length})});
   });
   await page.goto('/simulator/'); await page.locator('#view-mode').selectOption('expert');

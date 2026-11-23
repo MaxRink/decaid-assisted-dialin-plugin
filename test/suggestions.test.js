@@ -608,3 +608,34 @@ test("a matching operator clock cannot make unknown or flow-only controllers eli
     assert.match(body.reason, steps.length ? /profile control cannot support/ : /Complete current setup/);
   }
 });
+
+test("blank TargetTimeClock defaults to pump and clock names are case-insensitive", async () => {
+  for (const [setting, expected] of [["", "pump"], ["  ", "pump"], ["Pump", "pump"], [" POURING ", "pouring"]]) {
+    const entry = shot("clock-setting", 60_000, 20);
+    const { plugin } = await load({ shots: [entry], settings: { TargetTimeClock: setting } });
+    await mark(plugin, entry.id);
+    const { body } = await suggest(plugin);
+    assert.equal(body.status, "suggestion", JSON.stringify(setting) + " " + body.reason);
+    assert.equal(body.targetTimeClock, expected);
+  }
+});
+
+test("equal dial bounds disable bounds; valid bounds are enforced; inverted bounds abstain", async () => {
+  const cases = [
+    [{ MinSetting: 0, MaxSetting: 0 }, (body) => { assert.equal(body.status, "suggestion"); assert.equal(body.proposedSetting, 9.5); assert.ok(body.warnings.some((w) => /bounds are not configured/.test(w))); }],
+    [{ MinSetting: 5, MaxSetting: 5 }, (body) => { assert.equal(body.status, "suggestion"); assert.equal(body.proposedSetting, 9.5); }],
+    [{ MinSetting: 0, MaxSetting: 90 }, (body) => { assert.equal(body.status, "suggestion"); assert.equal(body.proposedSetting, 9.5); }],
+    [{ MinSetting: 9.8, MaxSetting: 90 }, (body) => { assert.equal(body.status, "abstain"); assert.match(body.reason, /leave the confirmed dial bounds/); }],
+    [{ MinSetting: 90, MaxSetting: 0 }, (body) => { assert.equal(body.status, "abstain"); assert.match(body.reason, /greater than MaxSetting/); }],
+  ];
+  for (const [bounds, check] of cases) {
+    // Established (three shots) and provisional (one shot) paths share the rule.
+    for (const shots of [cohort(), cohort().slice(0, 1)]) {
+      const { plugin } = await load({ shots, settings: bounds });
+      for (const entry of shots) await mark(plugin, entry.id, "sour");
+      const { body } = await suggest(plugin);
+      check(body);
+      if (body.status === "suggestion") assert.equal(body.stage === "provisional", shots.length === 1);
+    }
+  }
+});

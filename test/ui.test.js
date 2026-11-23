@@ -267,6 +267,25 @@ test("live grinder observation is available from the equipment step", async () =
   assert.match(ui.grinderObservationStatus.textContent, /live read-only/);
 });
 
+test("the live grinder status links the grinder plugin's diagnostics surface only on the Decaid origin", async () => {
+  for (const [href, linked] of [["/api/v1/plugins/mahlkoenig-e64.reaplugin/e64-diagnostics?deviceId=d", true], ["https://example.com/x", false]]) {
+    const ui = await uiFixture(async (url) => String(url).endsWith("grinder-observation")
+      ? response({ status: "available", setting: "630 ddValueDum", unit: "opaque", provenance: "live", surfaces: [{ role: "diagnostics", label: "E64 diagnostics", href }] })
+      : response({}));
+    await ui.grinderObservation.click();
+    const link = ui.grinderObservationStatus.children.find((child) => child.id === "grinderDiagnosticsLink");
+    assert.equal(Boolean(link), linked, href);
+    if (linked) { assert.equal(link.href, href); assert.equal(link.textContent, "E64 diagnostics"); }
+  }
+});
+
+test("a suggestion that used the live grinder setting says so", async () => {
+  const ui = await uiFixture(async () => response({ status: "abstain", reason: "More feedback is needed", currentSettingSource: "live-grinder-observation",
+    liveGrinderObservation: { setting: "630 ddValueDum", observedAt: "2026-11-23T10:00:00.000Z" } }));
+  await ui.suggestion.onclick();
+  assert.match(ui.output.textContent, /read live from the connected grinder: 630 ddValueDum at 2026-11-23T10:00:00.000Z/);
+});
+
 test("native grinder manager uses host IDs, saves anchors, selects and reads back the setting", async () => {
   const hostGrinders = [{ id: "host-df64-gen1", model: "DF64 Gen 1", burrs: "Stock" }];
   let selected = "";
@@ -629,6 +648,26 @@ test("return navigation rejects hostile schemes, hosts and credentials", async (
       },
     );
     assert.equal(ui.returnLink.hidden, true);
+  }
+});
+
+test("a skin-local return path resolves on the skin server port from webui status", async () => {
+  const cases = [
+    ["/skin/history", { serving: true, port: 3000 }, "http://localhost:3000/skin/history"],
+    ["/skin/history", { serving: false, port: 3000 }, null],
+    ["/\\evil.example/x", { serving: true, port: 3000 }, null],
+    ["//evil.example/x", { serving: true, port: 3000 }, null],
+  ];
+  for (const [target, status, expected] of cases) {
+    const ui = await uiFixture(
+      async (url) => (String(url).endsWith("/api/v1/webui/server/status") ? response(status) : response({ status: "abstain" })),
+      { location: { pathname: "/api/v1/plugins/assisted-dialin.reaplugin/ui", search: `?return=${encodeURIComponent(target)}`,
+        href: "http://localhost:8080/api/v1/plugins/assisted-dialin.reaplugin/ui", origin: "http://localhost:8080" } },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    if (expected) { assert.equal(ui.returnLink.hidden, false, target); assert.equal(ui.returnLink.href, expected); }
+    else assert.equal(ui.returnLink.hidden, true, target);
   }
 });
 

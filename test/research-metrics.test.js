@@ -36,7 +36,7 @@ async function fixture(t, options = {}) {
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await fs.rm(directory, { recursive: true, force: true }); });
   const url = 'http://127.0.0.1:' + server.address().port;
   const metricsUrl = 'http://127.0.0.1:' + server.metricsServer.address().port;
-  return { directory, server, url, metricsUrl, post: records => fetch(url + '/v1/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(batch(records)) }),
+  return { directory, server, url, metricsUrl, post: records => fetch(url + '/v1/events', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Research-Token': 'c'.repeat(64) }, body: JSON.stringify(batch(records)) }),
     scrape: async () => { const response = await fetch(metricsUrl + '/metrics'); assert.equal(response.status, 200); assert.match(response.headers.get('content-type'), /version=0.0.4/); return parse(await response.text()); } };
 }
 

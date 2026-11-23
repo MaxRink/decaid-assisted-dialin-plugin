@@ -30,7 +30,7 @@ void main(List<String> args) {
       }) ||
       !endpoints.every((entry) => entry['type'] == 'http')) {
     throw StateError(
-      'assisted dial-in manifest is incompatible with the pinned Decaid host',
+      'assisted dial-in manifest is incompatible with the checked-out Decaid host',
     );
   }
   stdout.writeln(

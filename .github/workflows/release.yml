@@ -11,7 +11,7 @@ jobs:
   version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: python3 scripts/package-plugin.py --tag "$GITHUB_REF_NAME"
 
   checks:
@@ -24,8 +24,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: decaid-assisted-dialin-plugin-${{ github.sha }}
           path: dist
@@ -50,7 +50,7 @@ jobs:
           pathlib.Path('release-notes.md').write_text(
               f'Install the single ZIP below through Decaid’s plugin installer, or use this repository URL.\n\n'
               f'The tag matches manifest version {version}. Complete CI passed, including browser journeys, '
-              f'algorithm replay and the pinned Decaid host package/runtime contract.\n\n'
+              f'algorithm replay and the upstream Decaid main host package/runtime contract.\n\n'
               f'The plugin does not control grinder hardware. Research is stored locally by default; remote uploads require consent. Physical grinder calibration and efficacy remain unvalidated; '
               f'upstream Streamline integration and observed grinder snapshots remain separate dependencies.\n\n'
               f'SHA-256 ({archives[0].name}): `{digest}`\n'

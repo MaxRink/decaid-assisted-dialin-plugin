@@ -29,11 +29,15 @@ async function record(page, time = 22) {
 async function routeCollector(context, batches) {
   await context.route('https://collector.example/**', async route => {
     const request = route.request();
+    // Collector enrolment issues an installation token before the first upload.
+    if (request.postDataJSON()?.enrol === true) return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ token: 'a'.repeat(64) }) });
     if (request.method() === 'POST') batches.push({ endpoint: request.url(), body: request.postDataJSON() });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ accepted: request.postDataJSON().records.length }) });
   });
   await context.route('https://other-collector.example/**', async route => {
     const request = route.request();
+    // Collector enrolment issues an installation token before the first upload.
+    if (request.postDataJSON()?.enrol === true) return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ token: 'a'.repeat(64) }) });
     if (request.method() === 'POST') batches.push({ endpoint: request.url(), body: request.postDataJSON() });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ accepted: request.postDataJSON().records.length }) });
   });

@@ -77,7 +77,7 @@ const savedShot = (unit = 'deci-micrometre') => ({
     scale: { timestamp: new Date(Date.parse('2026-10-11T08:00:00.000Z') + seconds * 1000).toISOString(), weight: Math.max(0, seconds - 4) * 1.4 },
   })),
 });
-async function integratedPage({ shot = savedShot(), coreFetch } = {}) {
+async function integratedPage({ shot = savedShot(), coreFetch, href = 'http://127.0.0.1:8080/plugins/assisted/ui' } = {}) {
   let plugin;
   const requests = [];
   const host = {
@@ -102,12 +102,16 @@ async function integratedPage({ shot = savedShot(), coreFetch } = {}) {
   const dom = documentFor(page.body);
   const frontend = {
     ...dom, URL, URLSearchParams, setTimeout, clearTimeout,
-    location: { pathname: '/plugins/assisted/ui', href: 'http://127.0.0.1:8080/plugins/assisted/ui', search: '' },
+    location: { pathname: '/plugins/assisted/ui', href, search: '' },
     FormData: class { constructor(form) { this.form = form; } get(key) { return this.form.fields?.[key] ?? ''; } },
     fetch: async (url, init = {}) => {
-      if (String(url).includes('/api/v1/')) return core(url, init);
+      // Like a browser, resolve relative host API URLs against the served page.
+      if (String(url).includes('/api/v1/')) return core(new URL(url, href).href, init);
       const endpoint = String(url).split('/').at(-1);
-      const result = await plugin.handleHttpRequest({ endpoint, method: init.method || 'GET', body: init.body });
+      // Browsers send Origin on same-origin POST/DELETE; plugin owner decisions require it.
+      const served = new URL(href), method = init.method || 'GET';
+      const headers = method === 'GET' ? { host: served.host } : { origin: served.origin, host: served.host };
+      const result = await plugin.handleHttpRequest({ endpoint, method, headers, body: init.body });
       requests.push({ endpoint, input: init.body ? JSON.parse(init.body) : null, status: result.status, body: JSON.parse(result.body) });
       return response(JSON.parse(result.body), result.status);
     },
@@ -278,4 +282,21 @@ test('analysis rendered inside an initially hidden wizard step keeps phone graph
     const width = Number(plot.getAttribute('viewBox').split(' ')[2]);
     assert.ok(width <= 375 && width >= 300, 'hidden-step charts must use available phone width');
   }
+});
+
+test('host API calls from the served page stay on the origin that served it', async () => {
+  const origins = [];
+  const page = await integratedPage({ href: 'http://192.168.1.20:8080/api/v1/plugins/assisted-dialin.reaplugin/ui', coreFetch: async (url, init = {}) => {
+    if (!new URL(url).pathname.startsWith('/api/v1/beans')) return null;
+    origins.push(new URL(url).origin);
+    if (init.method === 'POST') return response({ ...JSON.parse(init.body), id: 'bean-1' }, 201);
+    if (new URL(url).pathname === '/api/v1/beans') return response([]);
+    return response({ id: 'bean-1', name: 'x', extras: {} });
+  } });
+  const { card, button } = await loadCatalogCard(page, product => product.beanEligible === true);
+  await button.click();
+  const decaf = descendants(card).find(node => node.tagName === 'SELECT'); if (decaf) decaf.value = 'no';
+  await button.click();
+  assert.ok(origins.length > 0, 'bean import must reach the host API');
+  assert.deepEqual([...new Set(origins)], ['http://192.168.1.20:8080'], 'a page opened from another device must not call its own loopback');
 });

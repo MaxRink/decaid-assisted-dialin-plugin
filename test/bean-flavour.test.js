@@ -288,7 +288,7 @@ test("rejects malformed flavour values, unknown keys and oversized descriptors",
   }
 });
 
-test("invalid persisted flavour fails closed on reload", async () => {
+test("an invalid persisted flavour entry is skipped on reload, not served", async () => {
   const entry = shot("corrupt-flavour");
   const stored = {
     [entry.id]: {
@@ -303,7 +303,8 @@ test("invalid persisted flavour fails closed on reload", async () => {
     method: "POST",
     body: { shotId: entry.id },
   });
-  assert.equal(result.status, 503);
+  assert.equal(result.status, 200);
+  assert.equal(JSON.parse(result.body).feedback, null);
 });
 
 test("derives flavour guidance conservatively", async () => {
@@ -319,7 +320,7 @@ test("derives flavour guidance conservatively", async () => {
   for (const [flavour, expected, seconds] of cases.flatMap(([flavour, expected]) =>
     (expected ? [30] : [20, 30, 40]).map(seconds => [flavour, expected, seconds]))) {
     const entries = [0, 1, 2].map((index) =>
-      shot(`guidance-${JSON.stringify(flavour)}-${index}`, { seconds }),
+      shot(`guidance-${Object.entries(flavour).flat().join("-")}-${seconds}-${index}`, { seconds }),
     );
     const { plugin } = await load({ shots: entries });
     for (const entry of entries) {

@@ -21,9 +21,26 @@ as truncated and cannot claim a complete search.
 Open the `ui` endpoint through the Decaid plugin API. HTTP endpoints return
 JSON except `ui`, which returns an accessible HTML page. Feedback is stored in
 the plugin's namespaced storage and survives plugin reloads. Writes are
-acknowledged before feedback is used; timeouts and malformed storage fail
-closed until reload, and the UI surfaces retryable errors. No machine,
-workflow, profile or grinder command is sent.
+acknowledged before feedback is used; write timeouts and an unreadable feedback
+store fail closed until reload, and the UI surfaces retryable errors. A single
+damaged stored entry is skipped and logged rather than disabling all feedback;
+it is dropped on the next save. Feedback is keyed by a host-style shot ID
+(letters, digits and `._:@+~-`, up to 256 characters, starting with a letter or
+digit). At most 500 shots keep feedback; saving feedback for a new shot beyond
+that drops the least recently updated entry (recommendations only scan the 250
+most recent shots). No machine, workflow, profile or grinder command is sent.
+
+State-changing requests (POST, PUT, PATCH, DELETE) whose browser `Origin` names
+a different host than the one serving the plugin are refused with 403; ports are
+ignored, so a skin on the same device still works, and clients that send no
+`Origin` are unaffected. Enabling remote research sharing, choosing its
+collector and deleting research data additionally require the plugin page
+itself (see [research sharing](docs/RESEARCH_SHARING.md)).
+
+An individual grinder profile chosen on the plugin page (`POST settings`) is
+remembered across reloads and takes precedence over the host's
+`GrinderProfileId` setting until that host setting is changed; a later change
+of the host setting wins.
 
 ## Install and use
 
@@ -42,7 +59,10 @@ plugin through the existing Extensions settings or its `ui` URL.
 
 Streamline can pass a selected `shotId`, `action=analyze|feedback`, and a
 same-hostname, same-protocol `returnTo` URL. Legacy `return` is also accepted;
-`returnTo` takes precedence. Credential-bearing and other-host links are hidden.
+`returnTo` takes precedence. Following Decaid's plugin-page convention, a
+skin-local path such as `/skin/history` resolves on the skin server, whose port
+the page reads from `GET /api/v1/webui/server/status`; no link is shown when the
+skin server is not serving. Credential-bearing and other-host links are hidden.
 It fetches and analyses the saved shot; current catalog data never silently fills
 historical context.
 
@@ -73,13 +93,37 @@ This plugin uses the host API at loopback port 8080. Custom API ports and
 physical hardware remain unvalidated. Browser checks use synthetic local records;
 the real QuickJS fixtures verify the host/API/storage boundary.
 Missing historic bean/grinder/calibration information cannot be reconstructed by
-entering today's settings. RPM or observed configuration is not added to shots.
+entering today's settings. RPM or observed configuration is not added to saved shots.
 The plugin also exposes `GET /api/v1/plugins/assisted-dialin.reaplugin/grinder-observation`.
-When the host advertises the read-only grinder setting observation and reports a
-healthy sensor, this returns the current opaque display value with provenance.
-It is live device state only: `ddValueDum` is not a micron unit, is never
-converted, and is never copied into historical shots or used for automatic
-control. Unsupported, stale or failed observations are surfaced as unavailable.
+When the host advertises the read-only grinder setting observation (Decaid's
+`GET /api/v1/grinder/info` and `/state`), this returns the current display value
+with provenance, its host timestamp, grinder state, an observed RPM when the
+driver declares one, and the grinder plugin's host-built diagnostics links
+(shown on the plugin page). The value stays an opaque string; only the E64
+driver's `<n> ddValueDum` form is also read as the dD research coordinate
+(deci-micrometres) this plugin already uses. It is never a control command.
+Unsupported, stale or failed observations are surfaced as unavailable.
+
+The live dD is used in exactly two places, both labelled:
+
+- **Current setting.** Precedence is the current workflow's recorded setting,
+  then the live observation, then the manual `CurrentSetting` plugin setting.
+  The live value is used only for an E64-family grinder model (E64 WS, E65S
+  GbW) and only when the setting unit is a dD unit (kept as is) or
+  micrometres (dD ÷ 10). Suggestions report `currentSettingSource` and the
+  observation they used.
+- **Shots recorded while it was live.** When Decaid reports a newly stored shot
+  (`shotStored`), the plugin stores the dD observed at that moment, at most 500
+  shots, in plugin storage (`grinderObservations.v1`). This needs an observation at most 2 minutes old,
+  a shot at most 15 minutes old (imports of older shots are ignored) and an
+  E64-family grinder. Decaid does not keep observations with shots, so this
+  record fills a missing historical setting only, labelled
+  `grinderSettingSource: "recorded-live-observation"`; the shot's own value and
+  operator confirmations always win.
+
+Recommendations and suggestions ask Decaid for history filtered by the current
+bean batch and grinder record (`GET /api/v1/shots?beanBatchId=&grinderId=`), so
+the bounded 250-shot scan covers comparable shots only.
 
 ## Rich suggestions
 
@@ -113,9 +157,11 @@ actionable taste choice or the operator’s overall assessment.
 
 Numeric proposals require `CurrentSetting`, `SettingUnit`, a positive
 `StepSize`, and an owner-confirmed `NumericFinerDelta` of `-1` or `+1`.
-`MinSetting` and `MaxSetting` are applied only when they differ and are valid.
-Provisional numeric suggestions additionally require explicit ordered bounds;
-without them, the first-shot result can offer a direction but withholds a number.
+`MinSetting` and `MaxSetting` are applied only when they differ: equal values,
+including the 0/0 default, disable bounds and the proposal carries a warning to
+check your grinder's range. A minimum above the maximum abstains, and a step
+that would leave configured bounds abstains. Established and provisional
+suggestions follow the same rule.
 The result remains an operator-confirmation prompt and never becomes a device
 command. `confirmedContext` is an explicit per-shot historical confirmation. It only fills fields missing from that saved shot, after fetching and checking the full record; any conflict is rejected. Current plugin settings never fill historical fields.
 
@@ -307,6 +353,23 @@ server runs the actual plugin handlers with synthetic host records and storage;
 these browser checks complement the pinned QuickJS host tests. CI retains
 browser reports and failure traces. Neither fixture proves physical grinder
 performance.
+
+`npm run test:sim:host` and `npm run test:sim:e2e` use the E64 WS simulator from
+the private research repository (`E64_SIM_ROOT`, default
+`../mahlkoenig-e64ws-local-research`) and the E64 plugin (`E64_PLUGIN_ROOT`,
+default `../decaid-e64ws-plugin`); the host test also needs a Decaid checkout
+(`DECAID_ROOT`, default `$E64_SIM_ROOT/decaid`) whose host supports certificate
+pinning (`tlsPinSha256`). The host test runs the simulator, the unmodified E64
+plugin and this plugin in Decaid's real QuickJS host with the real grinder
+controller and `/api/v1/grinder` handler. The E64 plugin connects over WSS with a
+pinned, freshly generated self-signed certificate and mints its token through the
+simulator's REST login. A second scenario replays the sanitized 2026-11-19 grind
+capture from the research repository (Idle → Grind → GbwPostGrind → Idle) and
+checks the live grinding state and the dial recorded with a shot stored after it.
+The browser test shows a simulator-sourced dial on the served page. Both fail when the simulator is
+missing unless `E64_SIM_OPTIONAL=1`. Nothing from the private repository is
+copied here. CI runs them in the `e64-simulator` job with a read-only deploy key
+and reports clearly when that key is unavailable.
 
 The CI host contract tracks upstream Decaid `main` (verified against `df177b75` on 2026-10-31).
 

@@ -27,6 +27,9 @@ function newSession() {
     if (state.config.delayPath === pathname) await new Promise(resolve => setTimeout(resolve, state.config.delayMs || 250));
     if (state.config.failPath === pathname) return json({error: 'Injected host failure'}, state.config.status || 503);
     if (pathname === '/api/v1/workflow') return json(state.workflow);
+    // With the E64 simulator bridge, grinder data originates from the simulator via the E64 plugin.
+    if (state.sim && pathname === '/api/v1/grinder/info') return json(state.sim.e64.info());
+    if (state.sim && pathname === '/api/v1/grinder/state') return state.sim.e64.snapshot() ? json(state.sim.e64.snapshot()) : json({error: 'No grinder snapshot'}, 503);
     if (pathname === '/api/v1/grinder/info') return json((state.config.grinderObservation || state.grinderObservation).info);
     if (pathname === '/api/v1/grinder/state') return json((state.config.grinderObservation || state.grinderObservation).snapshot);
     if (pathname === '/api/v1/shots') return json({items: state.shots.map(({id,timestamp,workflow}) => ({id,timestamp,workflow})), total: state.shots.length});
@@ -51,7 +54,8 @@ function reload(state) {
     if (command.type === 'write') {
       if (state.config.storageFail) return;
       state.storage[command.key] = clone(command.data);
-      setImmediate(() => plugin.onEvent({name: 'storageWrite', payload: {key: command.key}}));
+      // Decaid acknowledges with the written data, not the key.
+      setImmediate(() => plugin.onEvent({name: 'storageWrite', payload: clone(command.data)}));
     }
   }};
   const context = {console, Date, JSON, Math, Number, Object, Set, Promise, URL, URLSearchParams, setTimeout, clearTimeout, fetch: state.fetch};
@@ -69,15 +73,28 @@ const server = http.createServer(async (req, res) => {
     let id = cookie, state = sessions.get(id);
     let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 5 * 1024 * 1024) throw new Error('Fixture request too large'); }
     const body = raw ? JSON.parse(raw) : undefined;
-    if (url.pathname === '/__test/reset' || !state && url.pathname.startsWith('/api/')) { id = randomUUID(); state = newSession(); sessions.set(id,state); res.setHeader('Set-Cookie', `dialin-test=${id}; Path=/; HttpOnly; SameSite=Lax`); }
+    if (url.pathname === '/__test/reset' || !state && url.pathname.startsWith('/api/')) { state?.sim?.stop(); id = randomUUID(); state = newSession(); sessions.set(id,state); res.setHeader('Set-Cookie', `dialin-test=${id}; Path=/; HttpOnly; SameSite=Lax`); }
     const send = (body, status = 200) => { res.writeHead(status, {'Content-Type': 'application/json'}); res.end(JSON.stringify(body)); };
     if (url.pathname === '/__test/reset') return send({id});
     if (url.pathname === '/__test/config') { Object.assign(state.config, body); if (body.shots) state.shots = body.shots; if (body.workflow) state.workflow = body.workflow; return send({ok: true}); }
     if (url.pathname === '/__test/reload') { reload(state); return send({ok: true}); }
+    if (url.pathname === '/__test/event') { state.plugin.onEvent({name: body.name, payload: body.payload}); return send({ok: true}); }
+    if (url.pathname === '/__test/sim') {
+      if (body.action === 'start') {
+        if (!state.sim) {
+          try { state.sim = await require('./e64-sim-bridge.js').startE64SimBridge(); }
+          catch (error) { return send({error: error.message, code: error.code || 'E64_SIM_FAILED'}, error.code === 'E64_SIM_MISSING' ? 424 : 500); }
+        }
+        return send({ok: true, snapshot: state.sim.e64.snapshot()});
+      }
+      if (!state.sim) return send({error: 'simulator not started'}, 409);
+      if (Number.isInteger(body.dd)) { await state.sim.setDd(body.dd); return send({ok: true, snapshot: state.sim.e64.snapshot()}); }
+      return send({error: 'unsupported simulator request'}, 400);
+    }
     if (url.pathname === '/__test/state') return send({beans: state.beans, grinders: state.grinders, storage: state.storage, requests: state.requests, workflow: state.workflow, shots: state.shots});
     if (url.pathname.startsWith('/api/v1/plugins/assisted-dialin.reaplugin/')) {
       const endpoint = url.pathname.split('/').at(-1);
-      const reply = await state.plugin.handleHttpRequest({endpoint, method: req.method, query: Object.fromEntries(url.searchParams), body});
+      const reply = await state.plugin.handleHttpRequest({endpoint, method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams), body});
       res.writeHead(reply.status, {'Content-Type': endpoint === 'ui' ? 'text/html; charset=utf-8' : 'application/json'}); return res.end(reply.body);
     }
     if (url.pathname.startsWith('/api/')) { const reply = await state.fetch(url.href, {method: req.method, ...(raw ? {body: raw} : {})}); return send(await reply.json(), reply.status); }
@@ -87,5 +104,5 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { res.writeHead(500, {'Content-Type': 'application/json'}); res.end(JSON.stringify({error: error.message})); }
 });
 server.listen(Number(process.env.DIALIN_TEST_PORT || 9017), '127.0.0.1');
-process.on('SIGTERM', () => { for (const state of sessions.values()) state.plugin.onUnload(); server.close(() => process.exit(0)); });
+process.on('SIGTERM', () => { for (const state of sessions.values()) { state.plugin.onUnload(); state.sim?.stop(); } server.close(() => process.exit(0)); });
 module.exports = {savedShot};

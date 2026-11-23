@@ -2016,6 +2016,10 @@ function createResearchSharing() {
   };
   const flag = (out, key, value) => { if (typeof value === "boolean") out[key] = value; };
   const validId = value => typeof value === "string" && /^[a-f0-9]{32}$/.test(value);
+  // Collector-issued installation token: binds this client's observations so
+  // another client cannot overwrite them. Kept per collector, never in records.
+  const validToken = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  const MAX_TOKENS = 8;
   function randomId() {
     if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
       const bytes = new Uint8Array(16); crypto.getRandomValues(bytes);
@@ -2167,7 +2171,7 @@ function createResearchSharing() {
     if (!adapters || typeof adapters.load !== "function" || typeof adapters.save !== "function")
       throw new Error("Acknowledged local load/save adapters required");
     const fresh = () => ({ schemaVersion: VERSION, policyVersion: POLICY, localEnabled: true, sharing: false, endpoint: null,
-      nextRevision: 0, records: [], queue: [], fingerprints: [] });
+      nextRevision: 0, records: [], queue: [], fingerprints: [], collectorTokens: [] });
     const localKey = key => {
       if (typeof key !== "string" || !key.length || key.length > 256) throw new Error("Invalid local research key");
       return key;
@@ -2194,8 +2198,13 @@ function createResearchSharing() {
         if (!validId(item.observationId) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw new Error("Invalid observation ledger");
         return { key: localKey(item.key), fingerprint: item.fingerprint, observationId: item.observationId, revision: item.revision };
       });
+      // Optional: storage written before collector enrolment has no tokens.
+      const tokens = value.collectorTokens == null ? [] : value.collectorTokens;
+      if (!Array.isArray(tokens) || tokens.length > MAX_TOKENS || tokens.some(item => !object(item) || !validToken(item.token)))
+        throw new Error("Invalid research collector tokens");
+      const collectorTokens = tokens.map(item => ({ endpoint: endpoint(item.endpoint), token: item.token }));
       return { schemaVersion: VERSION, policyVersion: POLICY, localEnabled: value.localEnabled, sharing: value.sharing,
-        endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints };
+        endpoint: value.endpoint == null ? null : endpoint(value.endpoint), nextRevision: value.nextRevision, records, queue, fingerprints, collectorTokens };
     };
     const updatePermission = () => { permitted = state.sharing && pendingConsent === null && !storageError; };
     const install = value => { state = decode(value) || fresh(); updatePermission(); };
@@ -2270,12 +2279,40 @@ function createResearchSharing() {
         return { record: clone(record), ...status() };
       });
     }
+    const tokenFor = target => state.collectorTokens.find(item => item.endpoint === target)?.token;
+    const POST_OPTIONS = { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store" };
+    // Ask the collector for an installation token before the first upload.
+    async function enrol() {
+      // Already enrolled: skip the lock entirely (the upload re-checks under it).
+      if (state.endpoint && tokenFor(state.endpoint)) return;
+      const request = await serial(() => {
+        if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint || tokenFor(state.endpoint)) return null;
+        if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
+        const response = adapters.send(state.endpoint, { ...POST_OPTIONS, headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, enrol: true }) });
+        return { generation, endpoint: state.endpoint, response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
+      });
+      if (!request) return;
+      const result = await request.response;
+      if (result.error) throw result.error;
+      if (!result.value || !result.value.ok || result.value.redirected) throw new Error("Research collector enrolment failed");
+      const receipt = await result.value.json();
+      if (!receipt || !validToken(receipt.token)) throw new Error("Invalid research collector enrolment");
+      await serial(async () => {
+        if (request.generation !== generation || state.endpoint !== request.endpoint || tokenFor(request.endpoint)) return;
+        await save({ ...state, collectorTokens: state.collectorTokens.filter(item => item.endpoint !== request.endpoint)
+          .concat([{ endpoint: request.endpoint, token: receipt.token }]).slice(-MAX_TOKENS) });
+      });
+    }
     async function flush() {
       if (inflight) return inflight;
       const operation = async () => {
+        await enrol();
         const batch = await serial(() => {
           if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint) return null;
           if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
+          const token = tokenFor(state.endpoint);
+          if (!token) return null;
           const entries = [];
           for (const item of state.queue.slice(0, MAX_BATCH)) {
             if (JSON.stringify(entries.concat([item]).map(entry => entry.record)).length > 60000) break;
@@ -2285,8 +2322,8 @@ function createResearchSharing() {
           abort = () => controller?.abort();
           // Start the request before releasing the storage lock. Awaiting it must
           // not block another tab's deletion, opt-out, or new observation.
-          const response = adapters.send(state.endpoint, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store",
-            headers: { "Content-Type": "application/json" }, signal: controller?.signal,
+          const response = adapters.send(state.endpoint, { ...POST_OPTIONS,
+            headers: { "Content-Type": "application/json", "X-Research-Token": token }, signal: controller?.signal,
             body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, records: entries.map(item => item.record) }) });
           return { generation, endpoint: state.endpoint, entries: clone(entries), response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
         });
@@ -2563,6 +2600,9 @@ function createPlugin(host, services) {
   let storageWriteBroken = false;
   let grinderProfiles = Object.create(null);
   let selectedGrinderProfileId = null;
+  let hostGrinderProfileId = null;
+  // {profileId, hostSetting}: a page choice and the host setting it overrode.
+  let pageSelection = null;
   let grinderStorageReady = false;
   let grinderStorageReadStarted = false;
   let grinderStorageUnavailable = false;
@@ -2643,7 +2683,8 @@ function createPlugin(host, services) {
       send: (url, init) => {
         if (!active || epoch !== sessionEpoch) throw new Error("plugin unloaded");
         factory().validateEndpoint(url);
-        return apiRequest(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: init.body });
+        const token = init.headers && init.headers["X-Research-Token"];
+        return apiRequest(url, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { "X-Research-Token": token } : {}) }, body: init.body });
       },
     });
     return researchClient;
@@ -2758,6 +2799,30 @@ function createPlugin(host, services) {
     return researchStatus();
   }
 
+  // Decaid passes request headers through (lowercased by its HTTP server) and
+  // parses any body as JSON, so a page on another site can send state-changing
+  // requests. Refuse those when the browser-supplied Origin names another host.
+  // Ports are ignored: skins on the same device use a different port. No Origin
+  // (curl, native clients) is allowed; the opaque origin "null" is not.
+  // The QuickJS runtime has no URL global, so authorities are parsed by hand.
+  function requestHeader(request, name) {
+    const headers = request && request.headers;
+    if (!headers || typeof headers !== "object") return undefined;
+    const key = Object.keys(headers).find((item) => item.toLowerCase() === name);
+    return key === undefined || headers[key] == null ? undefined : String(headers[key]).trim();
+  }
+  function hostnameOf(authority) {
+    const match = /^(\[[0-9a-f:.]+\]|[^:/?#@[\]\s,]+)(?::\d{1,5})?$/i.exec(authority);
+    return match ? match[1].toLowerCase() : null;
+  }
+  function crossSite(request) {
+    const origin = requestHeader(request, "origin");
+    if (origin === undefined) return false;
+    const originAuthority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)$/i.exec(origin);
+    const originHost = originAuthority && hostnameOf(originAuthority[1]);
+    const host = requestHeader(request, "host");
+    return !originHost || !host || originHost !== hostnameOf(host);
+  }
   function log(message) {
     try {
       host.log(`[dialin] ${message}`);
@@ -3020,6 +3085,7 @@ function createPlugin(host, services) {
     const generation = cacheGeneration;
     await loadStorage();
     await feedbackQueue;
+    const recordedObservations = await recordedShotObservations();
     const full = await fullShot(shotId);
     const mark = feedback[shotId]
       ? JSON.parse(JSON.stringify(feedback[shotId]))
@@ -3050,9 +3116,10 @@ function createPlugin(host, services) {
       metrics,
       measuredBeanDose: metrics.measuredBeanDose || null,
       feedback: mark,
-      context: historicalContext(full, mark),
+      context: withRecordedSetting(historicalContext(full, mark), shotId, recordedObservations),
+      recordedGrinderObservation: recordedObservations[shotId] || null,
       provenance:
-        "Saved full shot and plugin-local operator feedback; no physical configuration observation is inferred",
+        "Saved full shot and plugin-local operator feedback; a grinder setting observed live when the shot was stored is labelled as such",
     };
   }
   const BREW_CLOCKS = ["pump", "pouring", "recording"];
@@ -3072,22 +3139,39 @@ function createPlugin(host, services) {
       manualStopConfirmed: input.manualStopConfirmed === true,
     };
   }
+  // Feedback is keyed by host shot ID (UUIDs, "de1app-<clock>" imports).
+  const SHOT_ID = /^[A-Za-z0-9][A-Za-z0-9._:@+~-]{0,255}$/;
+  // Recommendations scan at most 250 recent shots, so 500 entries is ample.
+  const MAX_FEEDBACK = 500;
+  // Evict the least recently updated entries beyond the cap (never `keep`).
+  // Returns the evicted [id, entry] pairs so a failed write can restore them.
+  function trimFeedback(map, keep, max = MAX_FEEDBACK, field = "updatedAt") {
+    const ids = Object.keys(map);
+    if (ids.length <= max) return [];
+    const updated = (id) => Date.parse(map[id][field]) || 0;
+    return ids.filter((id) => id !== keep).sort((a, b) => updated(a) - updated(b))
+      .slice(0, ids.length - max)
+      .map((id) => { const entry = map[id]; delete map[id]; return [id, entry]; });
+  }
   function feedbackFromStorage(value) {
     if (value == null) return Object.create(null);
     if (typeof value !== "object" || Array.isArray(value)) return null;
     const result = Object.create(null);
+    let skipped = 0;
     for (const key of Object.keys(value)) {
-      if (
-        !key ||
-        key.length > 256 ||
-        !value[key] ||
-        typeof value[key] !== "object" ||
-        Array.isArray(value[key]) ||
-        typeof value[key].good !== "boolean"
-      )
-        return null;
       const entry = value[key];
-      if (entry.taste != null && !TASTES.includes(entry.taste)) return null;
+      // One damaged entry must not make every saved mark unavailable.
+      if (
+        !SHOT_ID.test(key) ||
+        !entry ||
+        typeof entry !== "object" ||
+        Array.isArray(entry) ||
+        typeof entry.good !== "boolean" ||
+        (entry.taste != null && !TASTES.includes(entry.taste))
+      ) {
+        skipped++;
+        continue;
+      }
       let confirmedContext, flavour, measuredBeanDose, timing;
       try {
         timing = timingFeedback(entry);
@@ -3098,7 +3182,8 @@ function createPlugin(host, services) {
           measuredBeanDose = validateMeasuredBeanDose(storedMeasurement);
         }
       } catch (_) {
-        return null;
+        skipped++;
+        continue;
       }
       result[key] = {
         good: entry.good,
@@ -3111,6 +3196,9 @@ function createPlugin(host, services) {
         measuredBeanDose,
       };
     }
+    if (skipped) log(`skipped ${skipped} invalid stored feedback entries; they are dropped on the next save`);
+    const evicted = trimFeedback(result, null).length;
+    if (evicted) log(`kept the ${MAX_FEEDBACK} most recently updated feedback entries; ${evicted} older entries are dropped on the next save`);
     return result;
   }
 
@@ -3225,11 +3313,8 @@ function createPlugin(host, services) {
       ),
       machineId: textOrNull(workflow.machine?.serialNumber || workflow.machine?.id || context.machineId),
       machineFlowCalibration: textOrNull(workflow.machine?.flowCalibration || context.flowCalibration),
-      grinderRpm: numberOrNull(
-        useSettings
-          ? value(context.grinderRpm, value(extras.grinderRpm, numberOrNull(settings.GrinderRPM)))
-          : value(context.grinderRpm, extras.grinderRpm),
-      ),
+      // No GrinderRPM setting exists; RPM comes only from the saved workflow.
+      grinderRpm: numberOrNull(value(context.grinderRpm, extras.grinderRpm)),
       burrIdentity: textOrNull(
         useSettings
           ? value(
@@ -3344,9 +3429,19 @@ function createPlugin(host, services) {
     return workflow;
   }
 
-  // Decaid exposes the current grinder display as a read-only observation.
-  // The value is deliberately opaque: ddValueDum is not a micron unit and
-  // must never be converted or copied into historical shot context.
+  // Decaid exposes the current grinder display as a read-only observation
+  // (GET /api/v1/grinder/info + /state). The string stays opaque; only the E64
+  // driver's "<n> ddValueDum" form is additionally read as the dD research
+  // coordinate (deci-micrometres) that this plugin already uses. It is live
+  // device state: it fills only the current setup, or a shot recorded while
+  // the observation was fresh, and is never a control command.
+  const DD_OBSERVATION = /^(\d{1,6}) ddValueDum$/;
+  const SURFACE_HREF = /^\/api\/v1\/plugins\/[A-Za-z0-9._~%-]+\/[A-Za-z0-9._~%-]+(?:\?[A-Za-z0-9._~%=&+-]*)?$/;
+  const unavailableObservation = (reason) => ({
+    status: "unavailable",
+    reason,
+    provenance: "Decaid read-only grinder observation; no historical shot state was changed",
+  });
   async function grinderObservation() {
     const infoResponse = await apiRequest(`${API_BASE}/api/v1/grinder/info`);
     if (!infoResponse.ok) throw new Error("grinder observation unavailable");
@@ -3355,24 +3450,21 @@ function createPlugin(host, services) {
     if (!stateResponse.ok) throw new Error("grinder observation unavailable");
     const state = await stateResponse.json();
     if (!info || typeof info !== "object" || !Array.isArray(info.observations) ||
-        !info.observations.includes("setting")) {
-      return {
-        status: "unavailable",
-        reason: "This grinder does not advertise a read-only setting observation",
-        provenance: "Decaid read-only grinder observation; no historical shot state was changed",
-      };
-    }
+        !info.observations.includes("setting"))
+      return unavailableObservation("This grinder does not advertise a read-only setting observation");
     const observedSetting = state && typeof state === "object"
       ? (state.observedSetting ?? state.state?.observedSetting)
       : null;
     if (typeof observedSetting !== "string" || !observedSetting.trim() ||
-        observedSetting.length > 128) {
-      return {
-        status: "unavailable",
-        reason: "The grinder setting observation is missing or its sensor is not healthy",
-        provenance: "Decaid read-only grinder observation; no historical shot state was changed",
-      };
-    }
+        observedSetting.length > 128)
+      return unavailableObservation("The grinder setting observation is missing or its sensor is not healthy");
+    const dd = DD_OBSERVATION.exec(observedSetting);
+    // Driver surfaces are host-built same-plugin links (e.g. E64 diagnostics).
+    const surfaces = Array.isArray(info.surfaces)
+      ? info.surfaces.filter((item) => item && ["settings", "diagnostics"].includes(item.role) &&
+          typeof item.href === "string" && SURFACE_HREF.test(item.href)).slice(0, 8)
+        .map((item) => ({ role: item.role, label: textOrNull(item.label)?.slice(0, 80) || null, href: item.href }))
+      : [];
     return {
       status: "available",
       setting: observedSetting,
@@ -3380,7 +3472,143 @@ function createPlugin(host, services) {
       verified: false,
       source: "decaid-grinder-observation",
       provenance: "Live read-only grinder display observation. The value is opaque and is not a micron conversion, verified shot setting, or automatic control command.",
+      observedAt: typeof state.timestamp === "string" && Number.isFinite(Date.parse(state.timestamp)) ? state.timestamp : null,
+      grinderState: typeof state.state === "string" ? state.state : null,
+      observedRpm: info.observations.includes("rpm") && Number.isSafeInteger(state.observedRpm) && state.observedRpm >= 0 ? state.observedRpm : null,
+      coordinate: dd ? { value: Number(dd[1]), unit: "deci-micrometre" } : null,
+      surfaces,
     };
+  }
+  function settingUnitKind(unit) {
+    const normalized = textOrNull(unit)?.toLocaleLowerCase().replace(/[\u2010-\u2015]/g, "-").replace(/[_-]+/g, " ").trim();
+    if (!normalized) return null;
+    if (["dd", "d d", "deci micrometre", "deci micrometres", "deci micron"].includes(normalized)) return "dd";
+    if (["um", "µm", "micron", "microns", "micrometre", "micrometres"].includes(normalized)) return "um";
+    return "other";
+  }
+  // A dD coordinate expressed in `unit` for this grinder model, or null when
+  // the model does not use dD (only E64-family profiles carry algorithmScale)
+  // or the unit is unrelated.
+  function ddSetting(model, dd, unit) {
+    const profile = grinderDialTools.profileFor(model);
+    if (!profile || !profile.algorithmScale) return null;
+    const kind = settingUnitKind(unit);
+    if (kind === null || kind === "dd") return { grinderSetting: String(dd), settingUnit: textOrNull(unit) || "deci-micrometre" };
+    if (kind === "um") return { grinderSetting: String(Number((dd / profile.algorithmScale).toPrecision(12))), settingUnit: textOrNull(unit) };
+    return null;
+  }
+  // Current setting precedence: the workflow's recorded value, then the live
+  // grinder observation, then the manual CurrentSetting plugin setting.
+  async function applyLiveSetting(current, recorded) {
+    if (recorded.grinderSetting !== null) return { source: "workflow", fields: [], observation: null };
+    let observation = null;
+    try { observation = await grinderObservation(); } catch (_) {}
+    const live = observation?.coordinate && ddSetting(current.grinderModel, observation.coordinate.value, recorded.settingUnit ?? current.settingUnit);
+    if (!live) return { source: current.grinderSetting !== null ? "plugin-setting" : null, fields: [], observation };
+    Object.assign(current, live);
+    return { source: "live-grinder-observation", fields: Object.keys(live), observation };
+  }
+
+  // Observations captured when a new shot is stored, keyed by shot ID. Decaid
+  // does not save observations with shots, so this is the only record of the
+  // physical setting a shot was ground at. Bounded like feedback.
+  const OBSERVATION_KEY = "grinderObservations.v1";
+  const MAX_SHOT_OBSERVATIONS = 500;
+  const OBSERVATION_MAX_AGE_MS = 120000, SHOT_MAX_AGE_MS = 15 * 60000;
+  let shotObservations = Object.create(null), observationStore = "idle";
+  let observationWaiters = [], observationWriteWaiters = [], observationQueue = Promise.resolve();
+  function settleObservationWaiters(error) {
+    observationWaiters.splice(0).forEach((waiter) => (error ? waiter.reject(error) : waiter.resolve()));
+  }
+  function loadShotObservations() {
+    if (observationStore === "ready") return Promise.resolve();
+    if (observationStore === "unavailable" || !active) return Promise.reject(new Error("grinder observation storage unavailable"));
+    return new Promise((resolve, reject) => {
+      const waiter = { resolve, reject };
+      observationWaiters.push(waiter);
+      setTimeout(() => {
+        if (!observationWaiters.includes(waiter)) return;
+        observationStore = "unavailable";
+        settleObservationWaiters(new Error("grinder observation storage timed out"));
+      }, 5000);
+      if (observationStore !== "idle") return;
+      observationStore = "loading";
+      try { host.storage({ type: "read", key: OBSERVATION_KEY }); }
+      catch (_) { observationStore = "unavailable"; settleObservationWaiters(new Error("grinder observation storage unavailable")); }
+    });
+  }
+  function restoreShotObservations(value) {
+    const shots = value && typeof value === "object" && !Array.isArray(value) && value.shots;
+    const restored = Object.create(null);
+    if (shots && typeof shots === "object" && !Array.isArray(shots))
+      for (const [id, item] of Object.entries(shots)) {
+        if (SHOT_ID.test(id) && item && Number.isSafeInteger(item.ddValueDum) && item.ddValueDum >= 0 &&
+            typeof item.observedAt === "string" && Number.isFinite(Date.parse(item.observedAt)))
+          restored[id] = { ddValueDum: item.ddValueDum, observedAt: item.observedAt };
+      }
+    return restored;
+  }
+  function persistShotObservations() {
+    return new Promise((resolve, reject) => {
+      const waiter = { resolve, reject };
+      observationWriteWaiters.push(waiter);
+      const timer = setTimeout(() => {
+        observationWriteWaiters = observationWriteWaiters.filter((entry) => entry !== waiter);
+        reject(new Error("grinder observation storage timed out"));
+      }, 5000);
+      waiter.resolve = () => { clearTimeout(timer); resolve(); };
+      waiter.reject = (error) => { clearTimeout(timer); reject(error); };
+      try { host.storage({ type: "write", key: OBSERVATION_KEY, data: { key: OBSERVATION_KEY, schemaVersion: 1, shots: shotObservations } }); }
+      catch (_) { observationWriteWaiters = observationWriteWaiters.filter((entry) => entry !== waiter); waiter.reject(new Error("grinder observation storage unavailable")); }
+    });
+  }
+  // Record the live dD for a just-stored shot: the shot must be recent (not an
+  // import of an old shot), use an E64-family grinder, and the observation
+  // must be fresh.
+  async function recordShotObservation(shotId) {
+    if (!active || !SHOT_ID.test(String(shotId || ""))) return;
+    const epoch = sessionEpoch;
+    // No connected or observing grinder is the normal case: stay silent.
+    let observation;
+    try { observation = await grinderObservation(); } catch (_) { return; }
+    try {
+      if (observation.status !== "available" || !observation.coordinate || !observation.observedAt) return;
+      const now = Date.now();
+      if (now - Date.parse(observation.observedAt) > OBSERVATION_MAX_AGE_MS) return;
+      const shot = await fullShot(shotId);
+      const age = now - Date.parse(shot.timestamp);
+      if (!(age >= 0 && age <= SHOT_MAX_AGE_MS)) return;
+      if (!grinderDialTools.profileFor(contextOf(shot, false).grinderModel)?.algorithmScale) return;
+      await loadShotObservations();
+      if (!active || epoch !== sessionEpoch) return;
+      const write = observationQueue.then(async () => {
+        const previous = shotObservations[shotId];
+        shotObservations[shotId] = { ddValueDum: observation.coordinate.value, observedAt: observation.observedAt };
+        const evicted = trimFeedback(shotObservations, shotId, MAX_SHOT_OBSERVATIONS, "observedAt");
+        try { await persistShotObservations(); }
+        catch (error) {
+          if (previous) shotObservations[shotId] = previous; else delete shotObservations[shotId];
+          evicted.forEach(([id, entry]) => { shotObservations[id] = entry; });
+          throw error;
+        }
+      });
+      observationQueue = write.catch(() => {});
+      await write;
+    } catch (_) {
+      log("could not record the live grinder setting for a stored shot");
+    }
+  }
+  // Fills a missing historical setting from the observation recorded with
+  // that shot. Explicit shot values and operator confirmations win.
+  function withRecordedSetting(context, shotId, recordedObservations) {
+    const recordedItem = recordedObservations && recordedObservations[String(shotId)];
+    if (!recordedItem || context.grinderSetting !== null) return context;
+    const filled = ddSetting(context.grinderModel, recordedItem.ddValueDum, context.settingUnit);
+    return filled ? { ...context, ...filled, grinderSettingSource: "recorded-live-observation" } : context;
+  }
+  async function recordedShotObservations() {
+    try { await loadShotObservations(); return shotObservations; }
+    catch (_) { return Object.create(null); }
   }
 
   function compare(current, candidate) {
@@ -3425,7 +3653,7 @@ function createPlugin(host, services) {
   }
 
   async function loadStorage() {
-    if (!active || storageUnavailable)
+    if (!active || storageUnavailable || storageWriteBroken)
       throw new Error("feedback storage unavailable");
     if (storageReady) return;
     await new Promise((resolve, reject) => {
@@ -3492,7 +3720,9 @@ function createPlugin(host, services) {
       waiter.resolve = () => { clearTimeout(timeout); resolve(); };
       waiter.reject = (error) => { clearTimeout(timeout); reject(error); };
       try {
-        host.storage({ type: "write", key: GRINDER_STORAGE_KEY, data: { schemaVersion: 1, profiles: grinderProfiles, selectedProfileId: selectedGrinderProfileId } });
+        // The host acknowledges with the written data only, so tag it to keep
+        // grinder acks apart from concurrent feedback writes.
+        host.storage({ type: "write", key: GRINDER_STORAGE_KEY, data: { key: GRINDER_STORAGE_KEY, schemaVersion: 1, profiles: grinderProfiles, selectedProfileId: selectedGrinderProfileId, pageSelection } });
       } catch (_) {
         clearTimeout(timeout);
         grinderWriteWaiters = grinderWriteWaiters.filter((entry) => entry !== waiter);
@@ -3507,16 +3737,19 @@ function createPlugin(host, services) {
     const input = bodyOf(request);
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new Error("grinder profile request must be an object");
-    const operation = input.operation || "upsert";
+    const operation = input.operation || (request.method === "DELETE" ? "delete" : "upsert");
+    if (request.method === "DELETE" && operation !== "delete")
+      throw new Error("DELETE only removes grinder profiles");
     const id = textOrNull(input.id || input.profile?.id);
     if (!id || id.length > 128) throw new Error("stable grinder profile id is required");
     if (operation === "delete") {
       if (!grinderProfiles[id]) throw new Error("grinder profile not found");
       const previous = grinderProfiles[id];
-      const previousSelection = selectedGrinderProfileId;
+      const previousSelection = selectedGrinderProfileId, previousPage = pageSelection;
       delete grinderProfiles[id];
       if (selectedGrinderProfileId === id) selectedGrinderProfileId = null;
-      try { await persistGrinderProfiles(); } catch (error) { grinderProfiles[id] = previous; selectedGrinderProfileId = previousSelection; throw error; }
+      if (pageSelection?.profileId === id) pageSelection = null;
+      try { await persistGrinderProfiles(); } catch (error) { grinderProfiles[id] = previous; selectedGrinderProfileId = previousSelection; pageSelection = previousPage; throw error; }
       return { deleted: true, id };
     }
     if (operation !== "upsert") throw new Error("unsupported grinder profile operation");
@@ -3575,14 +3808,20 @@ function createPlugin(host, services) {
     }
   }
 
-  async function fetchShots() {
-    if (cachedShots && Date.now() - cachedAt < 5000) return cachedShots;
+  // `filter` narrows the bounded scan server-side to the current bean batch and
+  // grinder record (Decaid shot-list filters), so the 250-shot bound covers
+  // only comparable shots. Only the unfiltered list is cached.
+  async function fetchShots(filter) {
+    const query = filter && filter.beanBatchId && filter.grinderId
+      ? `&beanBatchId=${encodeURIComponent(filter.beanBatchId)}&grinderId=${encodeURIComponent(filter.grinderId)}`
+      : "";
+    if (!query && cachedShots && Date.now() - cachedAt < 5000) return cachedShots;
     const result = [];
     const requestGeneration = cacheGeneration;
     let truncated = true;
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const response = await apiRequest(
-        `${API_BASE}/api/v1/shots?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}&order=desc`,
+        `${API_BASE}/api/v1/shots?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}&order=desc${query}`,
       );
       if (!response.ok)
         throw new Error(`Shot history unavailable (HTTP ${response.status})`);
@@ -3609,8 +3848,7 @@ function createPlugin(host, services) {
     if (!active) throw new Error("plugin unloaded");
     if (requestGeneration !== cacheGeneration)
       throw new Error("shot history changed");
-    if (requestGeneration === cacheGeneration) cachedShots = snapshot;
-    cachedAt = Date.now();
+    if (!query) { cachedShots = snapshot; cachedAt = Date.now(); }
     return snapshot;
   }
 
@@ -3618,11 +3856,12 @@ function createPlugin(host, services) {
     const requestEpoch = cacheGeneration;
     await loadStorage();
     await feedbackQueue;
-    const history = await fetchShots();
-    const shots = history.items;
     const workflow = await currentWorkflow();
     const recordedCurrent = contextOf({ workflow }, false);
     const current = contextOf({ workflow }, true);
+    const history = await fetchShots(current);
+    const shots = history.items;
+    const recordedObservations = await recordedShotObservations();
     const userSuppliedCurrentFields = Object.keys(current).filter(
       (key) => recordedCurrent[key] === null && current[key] !== null,
     );
@@ -3646,7 +3885,7 @@ function createPlugin(host, services) {
       if (!mark?.good) continue;
       let candidate;
       try {
-        candidate = historicalContext(shot, mark);
+        candidate = withRecordedSetting(historicalContext(shot, mark), shot.id, recordedObservations);
       } catch (_) {
         abstentions.push({
           shotId: shot.id,
@@ -3680,11 +3919,9 @@ function createPlugin(host, services) {
           mismatched: result.mismatched,
         });
     }
-    considered.sort((a, b) =>
-      String(b.shot.timestamp || "").localeCompare(
-        String(a.shot.timestamp || ""),
-      ),
-    );
+    // Compare instants, not strings: offsets and fractional seconds vary.
+    const instant = (item) => Date.parse(item.shot.timestamp) || 0;
+    considered.sort((a, b) => instant(b) - instant(a));
     if (!considered.length)
       return {
         status: "abstain",
@@ -3699,6 +3936,8 @@ function createPlugin(host, services) {
       status: "recommendation",
       sourceShotId: selected.shot.id,
       grinderSetting: selected.candidate.grinderSetting,
+      settingUnit: selected.candidate.settingUnit,
+      grinderSettingSource: selected.candidate.grinderSettingSource || "shot-workflow",
       recordedValue: true,
       comparison: {
         beanBatchId: current.beanBatchId,
@@ -3772,9 +4011,11 @@ function createPlugin(host, services) {
       calibrationError = "individual grinder profile does not match the current model, burrs or calibration epoch";
     if (localProfile && !calibrationError && localProfile.ownerAnchors)
       calibration = localProfile.ownerAnchors;
-    if (settings.DialCalibration) {
+    // A selected individual profile owns calibration; DialCalibration is not
+    // consulted, so it must not replace the profile's own error.
+    if (settings.DialCalibration && !localProfile) {
       try {
-        if (!localProfile) calibration = typeof settings.DialCalibration === "string" ? JSON.parse(settings.DialCalibration) : settings.DialCalibration;
+        calibration = typeof settings.DialCalibration === "string" ? JSON.parse(settings.DialCalibration) : settings.DialCalibration;
         if (!calibration || typeof calibration !== "object" || Array.isArray(calibration)) throw new Error("DialCalibration must be a JSON object");
       } catch (error) {
         calibrationError = error.message;
@@ -3849,6 +4090,44 @@ function createPlugin(host, services) {
       calibrationScope: calibration ? { grinderId: calibration.grinderId || null, hostGrinderId: localProfile ? localProfile.hostGrinderId : (context.grinderId || null), localProfileId: localProfile ? localProfile.id : null, model: calibration.model || null, burrIdentity: calibration.burrIdentity || null, calibrationEpoch: calibration.calibrationEpoch || null } : null,
     };
   }
+  // One owner-calibrated step for both suggestion paths. Returns an abstain
+  // reason, or null after setting proposedSetting or a direction-only warning.
+  function applyNumericStep(proposal, current, direction) {
+    const currentNumber = dialNumber(current.grinderSetting),
+      step = configuredNumber("StepSize", 0),
+      sign = configuredNumber("NumericFinerDelta", 0),
+      min = configuredNumber("MinSetting", 0),
+      max = configuredNumber("MaxSetting", 0);
+    if (min > max) return "MinSetting is greater than MaxSetting; correct the dial bounds";
+    // Equal bounds, including the 0/0 default, disable bounds.
+    const bounded = min !== max;
+    if (
+      !(
+        Number.isFinite(currentNumber) &&
+        step > 0 &&
+        (sign === 1 || sign === -1) &&
+        Number.isFinite(min) &&
+        Number.isFinite(max) &&
+        (!bounded || (currentNumber >= min && currentNumber <= max))
+      )
+    ) {
+      proposal.warnings.push(
+        "Direction only: confirm a numeric setting, positive owner-calibrated step, finer sign and dial bounds",
+      );
+      return null;
+    }
+    const next = currentNumber + step * sign * (direction === "finer" ? 1 : -1);
+    if (!Number.isFinite(next) || (bounded && (next < min || next > max)))
+      return "The calibrated step would leave the confirmed dial bounds";
+    proposal.proposedSetting = Number(next.toPrecision(12));
+    proposal.numericProvenance =
+      "one owner-calibrated step; not a firmware GBS prediction";
+    if (!bounded)
+      proposal.warnings.push(
+        "Dial bounds are not configured; confirm the proposed setting is within your grinder's range",
+      );
+    return null;
+  }
   async function suggestion() {
     const generation = cacheGeneration;
     await loadStorage();
@@ -3856,10 +4135,12 @@ function createPlugin(host, services) {
     await feedbackQueue;
     // Freeze feedback while awaiting full-shot requests. Subsequent changes fence the result.
     const marks = JSON.parse(JSON.stringify(feedback));
-    const history = await fetchShots();
     const workflow = await currentWorkflow();
     const current = contextOf({ workflow }, true);
     const recorded = contextOf({ workflow }, false);
+    const live = await applyLiveSetting(current, recorded);
+    const history = await fetchShots(current);
+    const recordedObservations = await recordedShotObservations();
     const excluded = [],
       evidence = [];
     const base = {
@@ -3872,8 +4153,10 @@ function createPlugin(host, services) {
       provenance:
         "Saved workflow settings are intended values, not observed hardware state. Dose/yield are recipe targets. Timing uses the explicitly selected target clock; recording time can include preheat and settling.",
       userSuppliedCurrentFields: Object.keys(current).filter(
-        (key) => recorded[key] === null && current[key] !== null,
+        (key) => recorded[key] === null && current[key] !== null && !live.fields.includes(key),
       ),
+      currentSettingSource: live.source,
+      liveGrinderObservation: live.observation,
       dialReference: dialReferenceFor(current),
     };
     const abstain = (reason, extra = {}) => ({
@@ -3896,7 +4179,7 @@ function createPlugin(host, services) {
     const rawTarget = settings.TargetTimeSec;
     const target = (typeof rawTarget === "number" ||
       (typeof rawTarget === "string" && rawTarget.trim() !== "")) ? Number(rawTarget) : NaN;
-    const targetClock = settings.TargetTimeClock ?? "pump";
+    const targetClock = (textOrNull(settings.TargetTimeClock) || "pump").toLowerCase();
     if (!(Number.isFinite(target) && target > 0))
       return abstain("An explicit positive recipe time target is required", { missingData: ["TargetTimeSec"] });
     if (!BREW_CLOCKS.includes(targetClock))
@@ -3938,7 +4221,7 @@ function createPlugin(host, services) {
       }
       let candidate;
       try {
-        candidate = historicalContext(shot, mark);
+        candidate = withRecordedSetting(historicalContext(shot, mark), id, recordedObservations);
       } catch (_) {
         reject("confirmed context conflicts with saved shot");
         continue;
@@ -3977,7 +4260,7 @@ function createPlugin(host, services) {
         // Do not combine a stale summary's cohort with a newly edited full record.
         let complete;
         try {
-          complete = historicalContext(full, mark);
+          complete = withRecordedSetting(historicalContext(full, mark), id, recordedObservations);
         } catch (_) {
           reject("full-shot context conflicts with confirmation");
           continue;
@@ -4036,6 +4319,7 @@ function createPlugin(host, services) {
         tasteSignals: tasteSignals(mark),
         metrics,
         unavailableComparisonFields: comparison.unavailable,
+        grinderSettingSource: candidate.grinderSettingSource || "shot-workflow",
         good: mark.good,
         confirmedHistoricalFields: Object.keys(mark.confirmedContext || {}),
       });
@@ -4158,36 +4442,8 @@ function createPlugin(host, services) {
           [...new Set(evidence.flatMap((item) => item.unavailableComparisonFields))].join(", ") +
           "; equivalence of these conditions is not established",
         );
-      const currentNumber = dialNumber(current.grinderSetting);
-      const step = configuredNumber("StepSize", 0);
-      const sign = configuredNumber("NumericFinerDelta", 0);
-      const min = configuredNumber("MinSetting", 0);
-      const max = configuredNumber("MaxSetting", 0);
-      if (
-        Number.isFinite(currentNumber) &&
-        step > 0 &&
-        (sign === 1 || sign === -1) &&
-        Number.isFinite(min) &&
-        Number.isFinite(max) &&
-        min < max &&
-        currentNumber >= min &&
-        currentNumber <= max
-      ) {
-        const next =
-          currentNumber + step * sign * (direction === "finer" ? 1 : -1);
-        if (!Number.isFinite(next) || next < min || next > max)
-          return abstain(
-            "The calibrated step would leave the confirmed dial bounds",
-            timing,
-          );
-        proposal.proposedSetting = Number(next.toPrecision(12));
-        proposal.numericProvenance =
-          "one owner-calibrated step; not a firmware GBS prediction";
-      } else {
-        proposal.warnings.push(
-          "Direction only: confirm a numeric setting, positive owner-calibrated step, finer sign and dial bounds",
-        );
-      }
+      const numericProblem = applyNumericStep(proposal, current, direction);
+      if (numericProblem) return abstain(numericProblem, timing);
       proposal.dialReference = dialReferenceFor(current, proposal.proposedSetting);
       return proposal;
     }
@@ -4278,38 +4534,8 @@ function createPlugin(host, services) {
         [...new Set(evidence.flatMap((item) => item.unavailableComparisonFields))].join(", ") +
         "; equivalence of these conditions is not established",
       );
-    const currentNumber = dialNumber(current.grinderSetting),
-      step = configuredNumber("StepSize", 0),
-      sign = configuredNumber("NumericFinerDelta", 0),
-      min = configuredNumber("MinSetting", 0),
-      max = configuredNumber("MaxSetting", 0);
-    if (
-      !(
-        Number.isFinite(currentNumber) &&
-        step > 0 &&
-        (sign === 1 || sign === -1) &&
-        Number.isFinite(min) &&
-        Number.isFinite(max) &&
-        min < max &&
-        currentNumber >= min &&
-        currentNumber <= max
-      )
-    ) {
-      proposal.warnings.push(
-        "Direction only: confirm a numeric setting, positive owner-calibrated step, finer sign and dial bounds",
-      );
-    } else {
-      const next =
-        currentNumber + step * sign * (direction === "finer" ? 1 : -1);
-      if (!Number.isFinite(next) || next < min || next > max)
-        return abstain(
-          "The calibrated step would leave the confirmed dial bounds",
-          timing,
-        );
-      proposal.proposedSetting = Number(next.toPrecision(12));
-      proposal.numericProvenance =
-        "one owner-calibrated step; not a firmware GBS prediction";
-    }
+    const numericProblem = applyNumericStep(proposal, current, direction);
+    if (numericProblem) return abstain(numericProblem, timing);
     proposal.dialReference = dialReferenceFor(current, proposal.proposedSetting);
     return proposal;
   }
@@ -4560,7 +4786,8 @@ const modeToggle=document.querySelector('#modeToggle');
 if(modeToggle){modeToggle.onclick=()=>{const expert=modeToggle.getAttribute('aria-pressed')!=='true';modeToggle.setAttribute('aria-pressed',String(expert));modeToggle.textContent=expert?'Show simple controls':'Show expert controls';document.querySelectorAll('.expert-panel').forEach(panel=>{panel.hidden=!expert;});const help=document.querySelector('#modeHelp');if(help)help.textContent=expert?'Expert view exposes replay inputs and exact technical details.':'Simple view keeps recommendations, bean context and brew analysis together.';};}
 const nativeWizardButtons=typeof document.querySelectorAll==='function'?[...document.querySelectorAll('[data-native-step]')].filter(node=>node.tagName==='BUTTON'):[];const nativeWizardPanels=typeof document.querySelectorAll==='function'?[...document.querySelectorAll('section[data-native-step]')]:[];let nativeWizardStep=1;const nativeWizardNames=['Coffee and equipment','Recipe and profile','Brew trace and taste','Next setting'];const showNativeWizardStep=step=>{nativeWizardStep=Math.max(1,Math.min(4,step));nativeWizardPanels.forEach(panel=>{panel.hidden=Number(panel.getAttribute('data-native-step'))!==nativeWizardStep;});nativeWizardButtons.forEach(button=>{const active=Number(button.getAttribute('data-native-step'))===nativeWizardStep;button.setAttribute('aria-current',active?'step':'false');});const status=document.querySelector('#nativeWizardStatus');if(status)status.textContent='Step '+nativeWizardStep+' of 4 · '+nativeWizardNames[nativeWizardStep-1];const back=document.querySelector('#nativeWizardBack'),next=document.querySelector('#nativeWizardNext');if(back)back.disabled=nativeWizardStep===1;if(next)next.textContent=nativeWizardStep===4?'Stay on results':'Next';};nativeWizardButtons.forEach(button=>button.onclick=()=>showNativeWizardStep(Number(button.getAttribute('data-native-step'))));document.querySelector('#nativeWizardBack')?.addEventListener('click',()=>showNativeWizardStep(nativeWizardStep-1));document.querySelector('#nativeWizardNext')?.addEventListener('click',()=>showNativeWizardStep(nativeWizardStep+1));showNativeWizardStep(1);
 const endpoint=name=>basePath?basePath+'/'+name:name;
-const coreBase='http://127.0.0.1:8080/api/v1';
+// Plugin pages are served on the API origin; loopback would hit the viewer's own device.
+const coreBase='/api/v1';
 const grinderState={items:[],profiles:new Map(),selected:null};
 const grinderStatus=document.querySelector('#grinderManagerStatus');
 const grinderObservationStatus=document.querySelector('#grinderObservationStatus');
@@ -4575,7 +4802,7 @@ const saveGrinder=async()=>{try{const selected=currentGrinder(),model=document.q
 const selectGrinder=async()=>{try{const selected=currentGrinder();if(!selected)throw new Error('Select a host grinder first.');const response=await fetch(endpoint('settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({GrinderProfileId:String(selected.id)})});await grinderJson(response);const readback=await grinderJson(await fetch(endpoint('settings')));if(String(readback.GrinderProfileId||'')!==String(selected.id))throw new Error('Host did not confirm the selected grinder profile.');grinderMessage('Using '+selected.model+' ('+selected.id+') for future suggestions.');}catch(error){grinderMessage(error.message||'Could not select grinder profile.',true);}};
 knownModelOptions();
 document.querySelector('#loadGrinders')?.addEventListener('click',loadGrinders);document.querySelector('#grinderProfileSelect')?.addEventListener('change',event=>{grinderState.selected=event.target.value;fillGrinderForm();});document.querySelector('#saveGrinder')?.addEventListener('click',saveGrinder);document.querySelector('#selectGrinder')?.addEventListener('click',selectGrinder);
-document.querySelector('#grinderObservation')?.addEventListener('click',async event=>{const button=event.currentTarget||event.target;try{button.disabled=true;const body=await grinderJson(await fetch(endpoint('grinder-observation')));if(grinderObservationStatus)grinderObservationStatus.textContent=body.status==='available'?'Live grinder display: '+String(body.setting)+' ('+String(body.unit)+'). '+String(body.provenance):String(body.reason||'Live grinder observation unavailable.');}catch(error){if(grinderObservationStatus)grinderObservationStatus.textContent=error.message||'Live grinder observation unavailable. Try again.';}finally{button.disabled=false;}});
+document.querySelector('#grinderObservation')?.addEventListener('click',async event=>{const button=event.currentTarget||event.target;try{button.disabled=true;const body=await grinderJson(await fetch(endpoint('grinder-observation')));if(grinderObservationStatus){grinderObservationStatus.textContent=body.status==='available'?'Live grinder display: '+String(body.setting)+' ('+String(body.unit)+'). '+String(body.provenance):String(body.reason||'Live grinder observation unavailable.');const surface=(Array.isArray(body.surfaces)?body.surfaces:[]).find(item=>item&&item.role==='diagnostics'&&typeof item.href==='string'&&item.href.startsWith('/api/v1/plugins/'));if(surface){const link=document.createElement('a');link.href=surface.href;link.textContent=String(surface.label||'Grinder diagnostics');link.id='grinderDiagnosticsLink';grinderObservationStatus.textContent+=' ';grinderObservationStatus.appendChild(link);}}}catch(error){if(grinderObservationStatus)grinderObservationStatus.textContent=error.message||'Live grinder observation unavailable. Try again.';}finally{button.disabled=false;}});
 const catalogBox=document.querySelector('#coffeeCatalog'),catalogButton=document.querySelector('#loadCoffeeCatalog');
 let nativeCoffeeProducts=[],nativeCoffeePage=1;
 function renderCoffeeCatalog(){if(!catalogBox)return;catalogBox.textContent='';const query=(document.querySelector('#nativeCoffeeSearch')?.value||'').toLowerCase();const matches=nativeCoffeeProducts.filter(item=>[item.name,item.publisher,item.origin,item.process,item.format].join(' ').toLowerCase().includes(query));matches.slice(0,nativeCoffeePage*10).forEach(item=>{
@@ -4617,7 +4844,10 @@ adviceForm?.addEventListener('input',()=>{adviceGeneration++;if(adviceResult)adv
 adviceForm?.addEventListener('submit',async event=>{event.preventDefault();const generation=++adviceGeneration,analysis=latestAnalysis;const button=adviceForm.querySelector('button');try{if(!analysis)throw new Error('Analyse your saved shot in step 3 first.');if(/error|disconnected|stopping.?backstop/i.test(String(analysis.metrics?.stopReason||'')))throw new Error('This shot ended with an interrupted machine stop. Keep the dial unchanged and record a completed shot before using time as grind evidence.');if(!['pressure','mixed_preinfusion_flow'].includes(analysis.metrics?.trace?.controlMode))throw new Error('This flow-controlled or unknown profile cannot support a time-based dial adjustment. Compare the actual flow trace and taste first; keep the dial unchanged.');const read=id=>document.querySelector('#nativeAdvice'+id);if(!read('Confirm').checked)throw new Error('Confirm your physical dial, adjustment size and completed recipe first.');const models={e64ws:'E64 WS',df54:'DF54',df64_gen1:'DF64 Gen 1',df64_gen2:'DF64 Gen 2'},normalize=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]/g,'');if(normalize(analysis.context?.grinderModel)!==normalize(models[read('Model').value]))throw new Error('The selected grinder must match this saved shot. Analyse a shot from your '+models[read('Model').value]+' before proposing a dial number.');if(['Current','Step','Actual','Target','Direction'].some(name=>!read(name).value.trim()))throw new Error('Enter each measured value and confirm the physical finer direction; an empty dial is not zero.');const current=Number(read('Current').value),step=Number(read('Step').value),actual=Number(read('Actual').value),target=Number(read('Target').value),sign=Number(read('Direction').value);if(![current,step,actual,target].every(Number.isFinite)||step<=0||actual<=0||actual>600||target<=0||target>600||![-1,1].includes(sign))throw new Error('Enter a current dial number, a positive small step, measured and target times, and the verified finer direction.');const unit=read('Model').value==='e64ws'?'µm':'marks',taste=read('Taste').value;const savedRaw=analysis.context?.grinderSetting,savedUnit=String(analysis.context?.settingUnit||'').toLowerCase(),savedValue=savedRaw!=null&&String(savedRaw).trim()!==''?Number(savedRaw):NaN;let savedNative=null;if(Number.isFinite(savedValue)){if(read('Model').value==='e64ws'&&savedUnit==='deci-micrometre')savedNative=savedValue/10;else if(read('Model').value==='e64ws'&&['micrometres','micrometre','micrometers','micrometer','µm','um'].includes(savedUnit))savedNative=savedValue;else if(read('Model').value!=='e64ws'&&['dial-mark','dial-marks','marks','owner marks','owner-calibrated marks'].includes(savedUnit))savedNative=savedValue;}if(savedNative!=null&&Math.abs(savedNative-current)>1e-7)throw new Error('This shot was recorded at '+savedNative+' '+unit+'. Enter the setting used for that shot, or analyse a shot at your current setting.');if(!taste){adviceResult.textContent='Keep '+current+' '+unit+' for now. Taste the shot and choose what needs improving before requesting an exact adjustment.';return;}if(['weak','channeling'].includes(taste)){adviceResult.textContent='Keep '+current+' '+unit+' for now. Check dose, distribution and the actual flow trace; this taste observation does not identify a reliable dial change.';return;}button.disabled=true;const response=await grinderJson(await fetch(endpoint('research'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'manual',input:{profile:read('Model').value,currentDial:current,...(read('Model').value==='e64ws'?{settingUnit:'micrometres',stepNative:step}:{stepMarks:step}),numericFinerDelta:sign,targetTimeSec:target,actualTimeSec:actual,flavor:taste}})}));if(generation!==adviceGeneration||analysis!==latestAnalysis)return;const result=response.result;if(Number.isFinite(result.proposedDial))adviceResult.textContent='Try '+result.proposedDial+' '+unit+' next (currently '+current+'; '+step+' '+(unit==='marks'?'mark'+(step===1?'':'s'):unit)+' '+result.direction+'). Keep dose and beverage weight unchanged. Brew, taste and record the next shot before another adjustment. This is an owner-confirmed experiment, not a measured grind-response prediction.';else adviceResult.textContent='Keep '+current+' '+unit+' for now. '+(result.reasons||[]).join(' ');}catch(error){if(generation===adviceGeneration&&adviceResult)adviceResult.textContent=error.message;}finally{if(button)button.disabled=false;}});
 
 const renderTraceGraph=body=>{const holder=document.querySelector('#traceGraph'),content=document.querySelector('#traceGraphBody');if(!holder||!content)return;holder.hidden=!body?.metrics?.trace?.points?.length;if(!holder.hidden)uiTools.renderTrace(content,body.metrics);};
-const render=({endpoint:name,body})=>{
+// A setting read live from the connected grinder is always disclosed with the suggestion.
+const liveSettingNote=(name,body)=>name==='suggestion'&&body?.currentSettingSource==='live-grinder-observation'&&body.liveGrinderObservation?'\\n\\nCurrent setting read live from the connected grinder: '+String(body.liveGrinderObservation.setting)+(body.liveGrinderObservation.observedAt?' at '+String(body.liveGrinderObservation.observedAt):'')+'. Confirm it on the grinder before changing anything.':'';
+const render=input=>{const text=renderBody(input);return typeof text==='string'?text+liveSettingNote(input.endpoint,input.body):text;};
+const renderBody=({endpoint:name,body})=>{
   if(name==='recommendation'&&modeToggle&&modeToggle.getAttribute('aria-pressed')!=='true')return body.status==='recommendation'?beginnerMessage(body):'No matching good shot yet. '+(body.reason||'Save feedback after a completed shot.');
   if(name==='recommendation')return body.status==='recommendation'?'Recorded recommendation\\nSetting: '+body.grinderSetting+'\\nSource shot: '+body.sourceShotId+'\\n\\n'+(body.notes||'No note saved.'):'No safe recommendation\\n'+(body.reason||'Comparable history is unavailable.');
   if(name==='suggestion'&&modeToggle&&modeToggle.getAttribute('aria-pressed')!=='true')return beginnerMessage(body);
@@ -4664,7 +4894,10 @@ const beanTimeForFeedback=(key,value,date)=>beanTimeHints[key]?.local===value?be
   input?.addEventListener('input',edited);input?.addEventListener('change',edited);
 });
 let feedbackBusy=false;const feedbackForm=document.querySelector('#feedback');const feedbackButtons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];const resetFeedbackBusy=()=>{feedbackBusy=false;feedbackButtons.forEach(button=>button.disabled=!feedbackReady);};feedbackForm.onsubmit=async e=>{e.preventDefault();if(feedbackBusy||!feedbackReady)return;feedbackBusy=true;feedbackButtons.forEach(button=>button.disabled=true);try{const f=new FormData(e.target);const context={};['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel'].forEach(k=>{const v=f.get(k);if(v)context[k]=v});['dose','yield'].forEach(k=>{const v=f.get(k);if(v!=='')context[k]=Number(v)});const raw=f.get('brewTimeSec');const flavour={};const descriptors=f.get('descriptors');if(descriptors.trim())flavour.descriptors=descriptors.split(',').map(v=>v.trim()).filter(Boolean);const overall=f.get('overall');if(overall)flavour.overall=overall;['acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin'].forEach(k=>{const v=f.get(k);if(v!=='')flavour[k]=Number(v)});const measurementConfirmed=f.get('confirmBeanMeasurement')==='on'||f.get('confirmBeanMeasurement')==='true';let measuredBeanDose=null;if(measurementConfirmed){const weight=Number(f.get('beanWeight'));const capturedAt=f.get('beanCapturedAt');const scaleId=f.get('beanScaleId');const capturedDate=capturedAt?new Date(capturedAt):null;const sampleValue=f.get('beanSampleTimestamp');const sampleDate=sampleValue?new Date(sampleValue):null;if(!scaleId||!Number.isFinite(weight)||weight<=0||!capturedDate||Number.isNaN(capturedDate.getTime())||(sampleDate&&!Number.isFinite(sampleDate.getTime()))){throw new Error('Confirm a positive bean weight, scale ID and valid capture time.');}measuredBeanDose={deviceId:scaleId,connectionRole:'auxiliary',purpose:'beans',weightG:weight,units:'g',capturedAt:beanTimeForFeedback('beanCapturedAt',capturedAt,capturedDate),sampleTimestamp:sampleDate?beanTimeForFeedback('beanSampleTimestamp',sampleValue,sampleDate):null,userConfirmed:true};}const baseline=selectedFeedbackBaseline||{}, baselineFlavour=baseline.flavour&&typeof baseline.flavour==='object'?baseline.flavour:{}, editableFlavour=new Set(['acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin','overall','descriptors']), preservedFlavour=Object.fromEntries(Object.entries(baselineFlavour).filter(([key])=>!editableFlavour.has(key))), baselineContext=baseline.confirmedContext&&typeof baseline.confirmedContext==='object'?baseline.confirmedContext:{}, editableContext=new Set(['burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','beanType','roastLevel','dose','yield']), preservedContext=Object.fromEntries(Object.entries(baselineContext).filter(([key])=>!editableContext.has(key))), payload={...baseline,shotId:f.get('shotId'),good:(e.submitter?.value||'true')==='true',notes:f.get('notes'),taste:f.get('taste')||null,flavour:Object.keys({...preservedFlavour,...flavour}).length?{...preservedFlavour,...flavour}:null,brewTimeSec:raw===''?null:Number(raw),...(raw!==''?{brewTimeClock:f.get('brewTimeClock')||'pump'}:{}),manualStopConfirmed:f.get('manualStopConfirmed')==='on',confirmedContext:{...preservedContext,...context}};if(raw==='')delete payload.brewTimeClock;delete payload.measuredBeanDose;if(measuredBeanDose)payload.measuredBeanDose=measuredBeanDose;await show('feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)},'Saving feedback...');}catch(e){if(e.message&&e.message.startsWith('Confirm a positive'))fail(e.message);else failRequest(e,'Could not save feedback. Try again.');}finally{resetFeedbackBusy();}};
-try{const query=new URLSearchParams(typeof location!=='undefined'&&location.search?location.search:'');const shotId=query.get('shotId');const action=query.get('action');const initialHydration=shotId?setShotId(shotId,true):null;const launchToken=feedbackHydrationGeneration;const applyLaunchMeasurement=()=>{if(shotId&&(selectedShotId!==shotId||launchToken!==feedbackHydrationGeneration))return;const measurementFields={beanScaleId:query.get('beanScaleId'),beanScaleRole:query.get('beanScaleRole')||'auxiliary',beanWeight:query.get('beanWeight'),beanCapturedAt:query.get('beanCapturedAt'),beanSampleTimestamp:query.get('beanSampleTimestamp')};const hasLaunchMeasurement=['beanScaleId','beanWeight','beanCapturedAt','beanSampleTimestamp'].some(key=>measurementFields[key]!==null&&measurementFields[key]!=='');if(hasLaunchMeasurement){['beanScaleId','beanScaleRole','beanWeight','beanCapturedAt','beanSampleTimestamp'].forEach(key=>{const input=document.querySelector('#feedback input[name=\"'+key+'\"]');if(input)input.value='';});const confirmed=document.querySelector('#feedback input[name=\"confirmBeanMeasurement\"]');if(confirmed)confirmed.checked=false;if(typeof beanTimeHints!=='undefined'){delete beanTimeHints.beanCapturedAt;delete beanTimeHints.beanSampleTimestamp;}}Object.keys(measurementFields).forEach(key=>{const input=document.querySelector('#feedback input[name="'+key+'"]');if(input&&measurementFields[key]){if(key==='beanCapturedAt'||key==='beanSampleTimestamp')prefillBeanTime(key,input,measurementFields[key]);else input.value=measurementFields[key];}});const confirm=document.querySelector('#feedback input[name="confirmBeanMeasurement"]');if(confirm&&hasLaunchMeasurement)confirm.checked=false;};let analysisLoad=initialHydration;if(action==='analyze'&&shotId){analysisLoad=initialHydration;}if(action==='feedback'){const feedbackShot=document.querySelector('#feedback input[name="shotId"]');if(feedbackShot&&feedbackShot.focus)feedbackShot.focus();analysisLoad=initialHydration;}if(analysisLoad)analysisLoad.then(body=>{if(body)applyLaunchMeasurement();});else applyLaunchMeasurement();const returnValue=query.get('returnTo')||query.get('return');const returnLink=document.querySelector('#returnLink');if(returnLink&&returnValue){const here=typeof location!=='undefined'?new URL(location.href):new URL('http://127.0.0.1/');const target=new URL(returnValue,here.href);if((target.protocol===here.protocol&&(target.protocol==='http:'||target.protocol==='https:'))&&!target.username&&!target.password&&target.hostname===here.hostname&&target.pathname.startsWith('/')){returnLink.href=target.href;returnLink.hidden=false;}}}catch(e){}
+try{const query=new URLSearchParams(typeof location!=='undefined'&&location.search?location.search:'');const shotId=query.get('shotId');const action=query.get('action');const initialHydration=shotId?setShotId(shotId,true):null;const launchToken=feedbackHydrationGeneration;const applyLaunchMeasurement=()=>{if(shotId&&(selectedShotId!==shotId||launchToken!==feedbackHydrationGeneration))return;const measurementFields={beanScaleId:query.get('beanScaleId'),beanScaleRole:query.get('beanScaleRole')||'auxiliary',beanWeight:query.get('beanWeight'),beanCapturedAt:query.get('beanCapturedAt'),beanSampleTimestamp:query.get('beanSampleTimestamp')};const hasLaunchMeasurement=['beanScaleId','beanWeight','beanCapturedAt','beanSampleTimestamp'].some(key=>measurementFields[key]!==null&&measurementFields[key]!=='');if(hasLaunchMeasurement){['beanScaleId','beanScaleRole','beanWeight','beanCapturedAt','beanSampleTimestamp'].forEach(key=>{const input=document.querySelector('#feedback input[name=\"'+key+'\"]');if(input)input.value='';});const confirmed=document.querySelector('#feedback input[name=\"confirmBeanMeasurement\"]');if(confirmed)confirmed.checked=false;if(typeof beanTimeHints!=='undefined'){delete beanTimeHints.beanCapturedAt;delete beanTimeHints.beanSampleTimestamp;}}Object.keys(measurementFields).forEach(key=>{const input=document.querySelector('#feedback input[name="'+key+'"]');if(input&&measurementFields[key]){if(key==='beanCapturedAt'||key==='beanSampleTimestamp')prefillBeanTime(key,input,measurementFields[key]);else input.value=measurementFields[key];}});const confirm=document.querySelector('#feedback input[name="confirmBeanMeasurement"]');if(confirm&&hasLaunchMeasurement)confirm.checked=false;};let analysisLoad=initialHydration;if(action==='analyze'&&shotId){analysisLoad=initialHydration;}if(action==='feedback'){const feedbackShot=document.querySelector('#feedback input[name="shotId"]');if(feedbackShot&&feedbackShot.focus)feedbackShot.focus();analysisLoad=initialHydration;}if(analysisLoad)analysisLoad.then(body=>{if(body)applyLaunchMeasurement();});else applyLaunchMeasurement();const returnValue=query.get('returnTo')||query.get('return');const returnLink=document.querySelector('#returnLink');
+// Decaid's return convention: a skin-local path resolves against the skin server, whose port comes from webui/server/status. Absolute same-host URLs remain accepted.
+if(returnLink&&returnValue&&returnValue[0]==='/'&&returnValue[1]!=='/'&&returnValue.charCodeAt(1)!==92){fetch(coreBase+'/webui/server/status').then(response=>response.ok?response.json():null).then(status=>{if(!status||status.serving!==true||!Number.isInteger(status.port))return;const skin=new URL(typeof location!=='undefined'?location.href:'http://127.0.0.1/');skin.port=String(status.port);const target=new URL(returnValue,skin.origin);if(target.origin===skin.origin&&!target.username&&!target.password){returnLink.href=target.href;returnLink.hidden=false;}}).catch(()=>{});}
+else if(returnLink&&returnValue){const here=typeof location!=='undefined'?new URL(location.href):new URL('http://127.0.0.1/');const target=new URL(returnValue,here.href);if((target.protocol===here.protocol&&(target.protocol==='http:'||target.protocol==='https:'))&&!target.username&&!target.password&&target.hostname===here.hostname&&target.pathname.startsWith('/')){returnLink.href=target.href;returnLink.hidden=false;}}}catch(e){}
 // Final UI guards: the simple view starts collapsed, and a failed/new analysis
 // cannot leave a previous shot's graph or comparison eligible for reuse.
 if(typeof document.querySelectorAll==='function')document.querySelectorAll('.expert-panel').forEach(panel=>{panel.hidden=true;});
@@ -4696,16 +4929,35 @@ if(researchPanel){
 
   return {
     id: ID,
-    version: "0.6.0",
+    version: "0.6.3",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;
       active = true;
       settings = nextSettings || {};
-      if (textOrNull(settings.GrinderProfileId)) selectedGrinderProfileId = textOrNull(settings.GrinderProfileId);
+      hostGrinderProfileId = textOrNull(settings.GrinderProfileId);
+      selectedGrinderProfileId = hostGrinderProfileId;
+      pageSelection = null;
+      // Start every load from a clean storage state; onUnload marks it unavailable.
+      feedback = Object.create(null);
+      feedbackQueue = Promise.resolve();
+      storageReady = false;
+      storageUnavailable = false;
+      storageWriteBroken = false;
+      storageWaiters = [];
+      storageWriteWaiters = [];
+      grinderProfiles = Object.create(null);
+      grinderStorageReady = false;
+      grinderStorageWaiters = [];
+      grinderWriteWaiters = [];
       grinderStorageUnavailable = false;
       grinderWriteBroken = false;
       grinderStorageReadStarted = false;
+      shotObservations = Object.create(null);
+      observationStore = "idle";
+      observationWaiters = [];
+      observationWriteWaiters = [];
+      observationQueue = Promise.resolve();
       startStorage();
       if (services.researchSharing || typeof createResearchSharing === "function") {
         researchClient = null; researchError = null; researchRetry = 30000; researchBusy = false;
@@ -4736,6 +4988,9 @@ if(researchPanel){
       grinderWriteWaiters
         .splice(0)
         .forEach((waiter) => waiter.reject(new Error("plugin unloaded")));
+      observationStore = "unavailable";
+      settleObservationWaiters(new Error("plugin unloaded"));
+      observationWriteWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded")));
     },
     onEvent(event) {
       if (!active) return;
@@ -4745,6 +5000,17 @@ if(researchPanel){
       }
       if (event.name === "storageWrite" && event.payload?.key === RESEARCH_KEY) {
         if (researchWaiter?.type === "write" && researchWaiter.token === event.payload.token) researchWaiter.resolve();
+        return;
+      }
+      if (event.name === "storageRead" && event.payload?.key === OBSERVATION_KEY) {
+        if (observationStore !== "loading") return;
+        shotObservations = restoreShotObservations(event.payload.value);
+        observationStore = "ready";
+        settleObservationWaiters();
+        return;
+      }
+      if (event.name === "storageWrite" && event.payload?.key === OBSERVATION_KEY) {
+        observationWriteWaiters.shift()?.resolve();
         return;
       }
       if (event.name === "storageRead" && event.payload?.key === STORAGE_KEY) {
@@ -4771,16 +5037,25 @@ if(researchPanel){
           grinderStorageWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("grinder profile storage unavailable")));
         } else {
           grinderProfiles = restored;
-          const persistedSelection = textOrNull(event.payload.value?.selectedProfileId);
-          selectedGrinderProfileId = persistedSelection && grinderProfiles[persistedSelection] ? persistedSelection : null;
-          if (!textOrNull(settings.GrinderProfileId) && selectedGrinderProfileId)
-            settings = { ...settings, GrinderProfileId: selectedGrinderProfileId };
+          const stored = event.payload.value || {};
+          const page = stored.pageSelection;
+          pageSelection = page && typeof page === "object" && textOrNull(page.profileId) && grinderProfiles[page.profileId] &&
+            (page.hostSetting === null || typeof page.hostSetting === "string")
+            ? { profileId: page.profileId, hostSetting: page.hostSetting } : null;
+          const persistedSelection = textOrNull(stored.selectedProfileId);
+          // A choice made on the plugin page wins until the host's own
+          // GrinderProfileId setting changes; otherwise the host setting wins.
+          let chosen = hostGrinderProfileId;
+          if (pageSelection && pageSelection.hostSetting === hostGrinderProfileId) chosen = pageSelection.profileId;
+          else if (!hostGrinderProfileId && persistedSelection && grinderProfiles[persistedSelection]) chosen = persistedSelection;
+          selectedGrinderProfileId = chosen;
+          if (chosen) settings = { ...settings, GrinderProfileId: chosen };
           grinderStorageReady = true;
           grinderStorageWaiters.splice(0).forEach((waiter) => waiter.resolve());
         }
       }
-      if (event.name === "storageWrite" && (event.payload?.key === GRINDER_STORAGE_KEY || (event.payload?.key == null && grinderWriteWaiters.length)) && !grinderWriteBroken) {
-        const waiter = grinderWriteWaiters.shift();
+      if (event.name === "storageWrite" && event.payload?.key === GRINDER_STORAGE_KEY) {
+        const waiter = grinderWriteBroken ? null : grinderWriteWaiters.shift();
         if (waiter) waiter.resolve();
       } else if (event.name === "storageWrite" && !storageWriteBroken) {
         const waiter = storageWriteWaiters.shift();
@@ -4793,6 +5068,7 @@ if(researchPanel){
       ) {
         cacheGeneration += 1;
         cachedShots = null;
+        if (event.name === "shotStored") void recordShotObservation(event.payload?.id);
         if (event.name !== "workflowUpdated") void captureResearchShot(event.payload?.id || event.payload?.shot?.id);
       }
     },
@@ -4801,9 +5077,17 @@ if(researchPanel){
       const requestSession = sessionEpoch;
       try {
         if (!active) throw new Error("plugin unloaded");
+        if (["POST", "PUT", "PATCH", "DELETE"].includes(String(request.method || "").toUpperCase()) && crossSite(request))
+          return json(403, { error: "Cross-site request refused", code: "cross_site_request" });
         if (endpoint === "ui" && request.method === "GET")
           return html(200, page);
         if (endpoint === "sharing" && ["GET", "POST", "DELETE"].includes(request.method)) {
+          // Consent to upload, the collector address and archive deletion are
+          // owner decisions made on the plugin page. A browser always sends
+          // Origin with these requests; a tokenless LAN client sends none.
+          const ownerDecision = request.method === "DELETE" || (request.method === "POST" && bodyOf(request)?.sharing === true);
+          if (ownerDecision && (requestHeader(request, "origin") === undefined || crossSite(request)))
+            return json(403, { error: "Enable research sharing, choose a collector or delete research data from the plugin page.", code: "plugin_page_required", hostCapabilities: RESEARCH_HOST_LIMITS });
           try { return json(200, await researchEndpoint(request)); }
           catch (error) { return json(400, { error: error.message, hostCapabilities: RESEARCH_HOST_LIMITS }); }
         }
@@ -4821,13 +5105,15 @@ if(researchPanel){
           if (!profileId || profileId.length > 128) return json(400, { error: "GrinderProfileId is required" });
           await loadGrinderProfiles();
           if (!grinderProfiles[profileId]) return json(409, { error: "selected grinder profile is unavailable" });
-          const previousSelection = selectedGrinderProfileId;
+          const previousSelection = selectedGrinderProfileId, previousPage = pageSelection;
           const previousSetting = settings.GrinderProfileId;
           selectedGrinderProfileId = profileId;
+          pageSelection = { profileId, hostSetting: hostGrinderProfileId };
           settings = { ...settings, GrinderProfileId: profileId };
           try { await persistGrinderProfiles(); }
           catch (error) {
             selectedGrinderProfileId = previousSelection;
+            pageSelection = previousPage;
             settings = { ...settings };
             if (previousSetting) settings.GrinderProfileId = previousSetting;
             else delete settings.GrinderProfileId;
@@ -4887,8 +5173,8 @@ if(researchPanel){
           if (!input || typeof input !== "object" || Array.isArray(input))
             return json(400, { error: "feedback must be an object" });
           const shotId = textOrNull(input.shotId);
-          if (!shotId || shotId.length > 256 || typeof input.good !== "boolean")
-            return json(400, { error: "shotId and boolean good are required" });
+          if (!shotId || !SHOT_ID.test(shotId) || typeof input.good !== "boolean")
+            return json(400, { error: "a valid shotId and boolean good are required" });
           if (
             input.taste != null &&
             input.taste !== "" &&
@@ -4931,8 +5217,9 @@ if(researchPanel){
             }
           }
           await loadStorage();
-          feedbackQueue = feedbackQueue
-            .catch(() => {})
+          // A failed write rejects this request only; it must not poison later
+          // readers that await feedbackQueue (a timeout fails closed via storageWriteBroken).
+          const write = feedbackQueue
             .then(async () => {
               if (!active || requestSession !== sessionEpoch)
                 throw new Error("plugin unloaded");
@@ -4949,15 +5236,18 @@ if(researchPanel){
                 confirmedContext,
                 measuredBeanDose,
               };
+              const evicted = trimFeedback(feedback, shotId);
               try {
                 await persist();
               } catch (error) {
                 if (previous) feedback[shotId] = previous;
                 else delete feedback[shotId];
+                evicted.forEach(([id, entry]) => { feedback[id] = entry; });
                 throw error;
               }
             });
-          await feedbackQueue;
+          feedbackQueue = write.catch(() => {});
+          await write;
           if (!active || requestSession !== sessionEpoch)
             throw new Error("plugin unloaded");
           void captureResearchShot(shotId);

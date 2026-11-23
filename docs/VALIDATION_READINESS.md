@@ -19,7 +19,7 @@ physical grinder’s calibration or prove that a recommendation improves a drink
 
 Run the required CI matrix: Node 22/24/26, package regression tests, deterministic
 algorithm replay and graphs, all browser journeys, the collector deployment-image
-smoke test, and the pinned Decaid package
+smoke test, and the upstream Decaid main package
 parser plus QuickJS/API/storage tests. Missing taste, native clocks, calibration,
 bean context or matched settings must produce a visible abstention. Changing a
 current setting cannot change the meaning of a saved shot. The simulation uses

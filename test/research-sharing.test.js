@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { createResearchSharing } = require('../research-sharing.js');
 const schema = createResearchSharing();
+// Collector enrolment has its own tests below; elsewhere answer it here so
+// each mock `send` sees only uploads.
+const enrolledToken = 'f'.repeat(64);
+const createClientDirect = schema.createClient;
+schema.createClient = adapters => createClientDirect({ ...adapters, send: adapters.send && ((url, init) => JSON.parse(init.body).enrol === true
+  ? { ok: true, json: async () => ({ token: enrolledToken }) } : adapters.send(url, init)) });
 const record = (time = 27) => ({ source: 'website', mode: 'measured', kind: 'shot', grinder: { model: 'E64 WS', setting: 60, settingUnit: 'micrometres' }, measurements: { pumpTimeSec: time, pumpComplete: true }, taste: { intent: 'too_sour' } });
 function setup(extra = {}) {
   let stored = null; const sent = [];
@@ -10,8 +16,12 @@ function setup(extra = {}) {
     send: async (url, init) => { sent.push({ url, init }); return { ok: true, json: async () => ({ accepted: JSON.parse(init.body).records.length }) }; }, ...extra });
   return { client, sent, stored: () => stored };
 }
-function coordinated() {
-  let stored = null, lock = Promise.resolve();
+// Saved state of a client already enrolled with the test collector, for tests
+// whose lock ordering must not include the one-time enrolment write.
+const enrolledState = () => ({ schemaVersion: 1, policyVersion: 1, localEnabled: true, sharing: false, endpoint: null, nextRevision: 0,
+  records: [], queue: [], fingerprints: [], collectorTokens: [{ endpoint: 'https://collector.example.org/v1/events', token: enrolledToken }] });
+function coordinated(initial = null) {
+  let stored = initial, lock = Promise.resolve();
   const withLock = operation => {
     const result = lock.then(operation);
     lock = result.catch(() => {});
@@ -348,7 +358,7 @@ test('concurrent tabs preserve each other\'s captures', async () => {
 });
 
 test('request starts under the storage lock, before a deletion at lock release', { timeout: 2000 }, async () => {
-  const shared = coordinated(), upload = deferred(), events = [];
+  const shared = coordinated(enrolledState()), upload = deferred(), events = [];
   const second = shared.make(); let afterRelease = null;
   const first = shared.make({
     withLock: async operation => {
@@ -405,7 +415,7 @@ test('another tab can revoke or change endpoint during a stalled upload', { time
 });
 
 test('capture and receipt persistence always share one local serial queue', { timeout: 2000 }, async () => {
-  let stored = null, delay = false;
+  let stored = enrolledState(), delay = false;
   const pending = [], upload = deferred(), started = deferred(), sent = [];
   const client = schema.createClient({ load: async () => stored,
     save: value => {
@@ -439,4 +449,35 @@ test('comparison approaches and random series retain scientific provenance but d
   assert.equal(value.approaches[0].explanation, undefined); assert.match(value.researchSeries, /^[a-f0-9]{32}$/);
   assert.equal(schema.sanitizeRecord({ ...record(), researchSeries: 'private-bean-name', shotOrdinal: 2 }).shotOrdinal, undefined);
   assert.equal(schema.sanitizeRecord({ ...record(), advice: { algorithm: 'grindTime', status: 'computed' } }).advice.status, 'computed');
+});
+
+test('the client enrols once per collector, sends its token, and forgets it on delete', async () => {
+  let stored = null; const sent = [];
+  const client = createClientDirect({ load: async () => stored, save: async state => { stored = structuredClone(state); },
+    send: async (url, init) => {
+      const body = JSON.parse(init.body); sent.push({ url, body, headers: init.headers });
+      return { ok: true, json: async () => body.enrol ? { token: (sent.length % 2 ? 'a' : 'b').repeat(64) } : { accepted: body.records.length } };
+    } });
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(), 'one'); await client.flush();
+  assert.deepEqual(sent.map(item => item.body.enrol === true ? 'enrol' : 'upload'), ['enrol', 'upload']);
+  assert.equal(sent[1].headers['X-Research-Token'], 'a'.repeat(64));
+  assert.equal(JSON.stringify(sent[1].body).includes('a'.repeat(64)), false, 'the token never enters records');
+  await client.setSharing(false); await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(28), 'two'); await client.flush();
+  assert.equal(sent.length, 3, 'the same collector keeps its token');
+  assert.equal(sent[2].headers['X-Research-Token'], 'a'.repeat(64));
+  assert.equal((await client.exportLocal()).records.some(item => JSON.stringify(item).includes('a'.repeat(64))), false);
+  await client.clear();
+  assert.deepEqual(stored.collectorTokens, []);
+});
+
+test('a failed enrolment uploads nothing and keeps the queue', async () => {
+  let stored = null, uploads = 0;
+  const client = createClientDirect({ load: async () => stored, save: async state => { stored = structuredClone(state); },
+    send: async (_url, init) => { if (JSON.parse(init.body).enrol) return { ok: false, json: async () => ({}) }; uploads++; return receipt; } });
+  await client.setSharing(true, 'https://collector.example.org/v1/events');
+  await client.capture(record(), 'one');
+  await assert.rejects(client.flush(), /enrolment failed/);
+  assert.equal(uploads, 0); assert.equal((await client.status()).queuedCount, 1);
 });

@@ -5,7 +5,9 @@
         reverse_proxy collector:8787 {
             header_up -Cookie
             header_up -Authorization
-            header_up -X-Forwarded-For
+            # Replace any client-supplied value with the address Caddy saw, so
+            # the collector's in-memory rate limit is per client. It is never stored.
+            header_up X-Forwarded-For {client_ip}
             header_up -X-Real-IP
         }
     }

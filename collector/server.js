@@ -3,12 +3,30 @@
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { randomUUID } = require("node:crypto");
+const { randomUUID, randomBytes, createHash } = require("node:crypto");
+const net = require("node:net");
 const { createResearchSharing } = require("../research-sharing.js");
 const schema = createResearchSharing();
 const { createResearchMetrics } = require("./metrics.js");
 const { startHttpSpan, shutdownTelemetry } = require("./telemetry.js");
 const FILE = /^research-([a-f0-9]{32})\.json$/;
+const TOKEN = /^[a-f0-9]{64}$/;
+// Per-observation owner digest: binds a record to the installation token that
+// created it without storing the token or one value shared by its records.
+const ownerOf = (token, observationId) => createHash("sha256").update(observationId + ":" + token).digest("hex");
+// Stored files are a one-record batch plus an optional owner (absent before enrolment).
+function readStored(text, observationId) {
+  const value = JSON.parse(text);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid stored observation");
+  const { owner = null, ...batch } = value;
+  if (owner !== null && !TOKEN.test(owner)) throw new Error("Invalid stored owner");
+  const stored = schema.validateBatch(batch);
+  if (stored.records.length !== 1 || stored.records[0].observationId !== observationId) throw new Error("Invalid stored observation");
+  return { record: stored.records[0], owner };
+}
+const isEnrolment = value => value && typeof value === "object" && !Array.isArray(value) &&
+  Object.keys(value).sort().join() === "enrol,policyVersion,schemaVersion" &&
+  value.enrol === true && value.schemaVersion === schema.schemaVersion && value.policyVersion === schema.policyVersion;
 
 async function createCollector(options = {}) {
   if (!options.directory) throw new Error("Private collector directory required");
@@ -24,11 +42,17 @@ async function createCollector(options = {}) {
   const perMinute = options.perMinute ?? 60;
   const maxRecords = options.maxRecords ?? 100000;
   const maxConnections = options.maxConnections ?? 128;
+  const maxTrackedClients = options.maxTrackedClients ?? 10000;
+  // Only these peers (the reverse proxy) may state the client address.
+  const trustedProxies = new Set((options.trustedProxies || []).map(String));
+  for (const address of trustedProxies) if (!net.isIP(address)) throw new Error("Trusted proxies must be IP addresses");
+  const log = options.log || (message => process.stderr.write(message + "\n"));
   if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 90 ||
       !Number.isInteger(maxStorageBytes) || maxStorageBytes < 1024 ||
       !Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > 1000000 ||
       !Number.isInteger(perMinute) || perMinute < 1 || perMinute > 10000 ||
-      !Number.isInteger(maxConnections) || maxConnections < 1 || maxConnections > 10000) throw new Error("Invalid collector limits");
+      !Number.isInteger(maxConnections) || maxConnections < 1 || maxConnections > 10000 ||
+      !Number.isInteger(maxTrackedClients) || maxTrackedClients < 1 || maxTrackedClients > 100000) throw new Error("Invalid collector limits");
   const metricsEnabled = options.metricsEnabled === true;
   let metrics = createResearchMetrics(), metricsText = null;
   const now = options.now || Date.now;
@@ -54,15 +78,17 @@ async function createCollector(options = {}) {
       if (/^\.pending-[a-f0-9-]+$/.test(name)) { await fs.unlink(path.join(directory, name)); changed = true; continue; }
       const match = FILE.exec(name); if (!match) continue;
       const file = path.join(directory, name), stat = await fs.lstat(file);
-      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unexpected collector data file");
+      // One damaged or foreign file must not stop retention or startup.
+      // Logs name the file only; never its contents.
+      if (!stat.isFile() || stat.isSymbolicLink()) { log("Skipping non-regular collector data file " + name); continue; }
       if (stat.mtimeMs < now() - retentionDays * 86400000) { await fs.unlink(file); changed = true; }
       else {
         bytes += stat.size; count++;
         if (metricsEnabled) {
-          if (stat.size > 65536) throw new Error("Oversized stored record");
-          const stored = schema.validateBatch(JSON.parse(await fs.readFile(file, "utf8")));
-          if (stored.records.length !== 1 || stored.records[0].observationId !== match[1]) throw new Error("Invalid stored observation");
-          rebuilt.observe(stored.records[0], 1);
+          try {
+            if (stat.size > 65536) throw new Error("oversized");
+            rebuilt.observe(readStored(await fs.readFile(file, "utf8"), match[1]).record, 1);
+          } catch (_) { log("Skipping invalid stored research file " + name); }
         }
       }
     }
@@ -72,11 +98,20 @@ async function createCollector(options = {}) {
     lastCleanup = now();
   }
   await cleanup();
+  function clientAddress(req) {
+    const peer = String(req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+    if (!trustedProxies.has(peer)) return peer;
+    // The trusted proxy appends the address it saw; earlier entries are client-supplied.
+    const forwarded = String(req.headers["x-forwarded-for"] || "").split(",").map(value => value.trim()).filter(Boolean).pop();
+    return forwarded && net.isIP(forwarded) ? forwarded : peer;
+  }
   function limited(address) {
     const time = now();
-    for (const [key, value] of buckets) if (time - value.start >= 60000) buckets.delete(key);
+    // Windows are inserted in start order, so expired ones lead the map.
+    for (const [key, value] of buckets) { if (time - value.start < 60000) break; buckets.delete(key); }
     if (!buckets.has(address)) {
-      if (buckets.size >= 10000) return true;
+      // A full table drops its oldest window rather than refusing every new client.
+      if (buckets.size >= maxTrackedClients) buckets.delete(buckets.keys().next().value);
       buckets.set(address, { start: time, count: 0 });
     }
     return ++buckets.get(address).count > perMinute;
@@ -91,14 +126,14 @@ async function createCollector(options = {}) {
     const origin = req.headers.origin;
     if (origin && !origins.has(origin)) return answer(res, 403, { error: "Origin not allowed" });
     // Addresses are used only in a bounded, expiring in-memory abuse counter.
-    if (limited(req.socket.remoteAddress || "unknown")) return answer(res, 429, { error: "Rate limit" }, origin);
+    if (limited(clientAddress(req))) return answer(res, 429, { error: "Rate limit" }, origin);
     if (req.method === "GET" && req.url === "/healthz") return answer(res, 200, { status: "ok" }, origin);
     if (req.url !== "/v1/events") return answer(res, 404, { error: "Not found" }, origin);
     if (req.method === "OPTIONS") {
       if (!origin || req.headers["access-control-request-method"] !== "POST" ||
-          String(req.headers["access-control-request-headers"] || "").split(",").some(value => value.trim() && value.trim().toLowerCase() !== "content-type"))
+          String(req.headers["access-control-request-headers"] || "").split(",").some(value => value.trim() && !["content-type", "x-research-token"].includes(value.trim().toLowerCase())))
         return answer(res, 403, { error: "Preflight not allowed" }, origin);
-      res.writeHead(204, { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin", "Cache-Control": "no-store" });
+      res.writeHead(204, { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type, X-Research-Token", "Vary": "Origin", "Cache-Control": "no-store" });
       return res.end();
     }
     if (req.method !== "POST") return answer(res, 405, { error: "Method not allowed" }, origin);
@@ -113,24 +148,34 @@ async function createCollector(options = {}) {
         if (size > 65536) { answer(res, 413, { error: "Request too large" }, origin); req.resume(); return; }
         chunks.push(chunk);
       }
-      let batch;
-      try { batch = schema.validateBatch(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
+      let value, batch;
+      try { value = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch (_) { return answer(res, 400, { error: "Invalid minimized research batch" }, origin); }
+      // Enrolment issues a random installation token; nothing is stored until
+      // a batch uses it.
+      if (isEnrolment(value)) return answer(res, 201, { token: randomBytes(32).toString("hex") }, origin);
+      try { batch = schema.validateBatch(value); }
       catch (_) { return answer(res, 400, { error: "Invalid minimized research batch" }, origin); }
+      const token = req.headers["x-research-token"];
+      if (typeof token !== "string" || !TOKEN.test(token))
+        return answer(res, 401, { error: "Enrol with this collector before uploading", code: "enrolment_required" }, origin);
       const write = writing.then(async () => {
         if (now() - lastCleanup > 3600000) await cleanup();
         // Each random observation key owns one replaceable record. Retries and
         // stale corrections acknowledge without appending another observation.
         for (const record of batch.records) {
           const file = path.join(directory, "research-" + record.observationId + ".json");
+          const owner = ownerOf(token, record.observationId);
           let previous = null, oldSize = 0;
           try {
             const stat = await fs.lstat(file);
             if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unsafe record file");
-            previous = schema.validateBatch(JSON.parse(await fs.readFile(file, "utf8"))).records[0];
+            previous = readStored(await fs.readFile(file, "utf8"), record.observationId);
             oldSize = stat.size;
           } catch (error) { if (error.code !== "ENOENT") throw error; }
-          if (previous && previous.revision >= record.revision) continue;
-          const serialized = JSON.stringify({ schemaVersion: batch.schemaVersion, policyVersion: batch.policyVersion, records: [record] }) + "\n";
+          // Records from before enrolment have no owner; the first enrolled writer claims them.
+          if (previous && previous.owner !== null && previous.owner !== owner) { const error = new Error("Foreign observation"); error.forbidden = true; throw error; }
+          if (previous && previous.record.revision >= record.revision) continue;
+          const serialized = JSON.stringify({ schemaVersion: batch.schemaVersion, policyVersion: batch.policyVersion, records: [record], owner }) + "\n";
           const length = Buffer.byteLength(serialized);
           if ((!previous && storedCount >= maxRecords) || storedBytes - oldSize + length > maxStorageBytes) { const error = new Error("Storage limit"); error.capacity = true; throw error; }
           const temporary = path.join(directory, ".pending-" + randomUUID());
@@ -141,7 +186,7 @@ async function createCollector(options = {}) {
             await fs.rename(temporary, file);
             storedBytes += length - oldSize;
             if (!previous) storedCount++;
-            if (metricsEnabled) { metricsText = null; if (previous) metrics.observe(previous, -1); metrics.observe(record, 1); }
+            if (metricsEnabled) { metricsText = null; if (previous) metrics.observe(previous.record, -1); metrics.observe(record, 1); }
           } finally { await fs.unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; }); }
         }
         // Includes a retried record whose earlier rename succeeded but whose
@@ -150,7 +195,10 @@ async function createCollector(options = {}) {
       });
       writing = write.catch(() => {});
       try { await write; }
-      catch (error) { return answer(res, error.capacity ? 507 : 503, { error: "Research storage unavailable" }, origin); }
+      catch (error) {
+        if (error.forbidden) return answer(res, 403, { error: "Observation belongs to another installation", code: "observation_owned" }, origin);
+        return answer(res, error.capacity ? 507 : 503, { error: "Research storage unavailable" }, origin);
+      }
       answer(res, 201, { accepted: batch.records.length }, origin);
     } catch (_) { if (!res.headersSent) answer(res, 400, { error: "Incomplete request" }, origin); }
   });
@@ -211,6 +259,7 @@ if (require.main === module) {
     maxRecords: Number(process.env.RESEARCH_MAX_RECORDS || 100000),
     perMinute: Number(process.env.RESEARCH_REQUESTS_PER_MINUTE || 60),
     maxConnections: Number(process.env.RESEARCH_MAX_CONNECTIONS || 128),
+    trustedProxies: (process.env.RESEARCH_TRUSTED_PROXIES || "").split(",").map(value => value.trim()).filter(Boolean),
     metricsEnabled: !!process.env.RESEARCH_METRICS_PORT }).then(server => {
     const port = Number(process.env.PORT || 8787);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");

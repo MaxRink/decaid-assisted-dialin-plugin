@@ -860,7 +860,12 @@ test("research archive defaults local-only and exports amended shots without per
 
 test("remote research requires consent and explicit send; opt-out and local-off persist", async () => {
   const ui = uiFixture(); await settleResearch();
-  const calls = []; ui.context.fetch = async (url, init) => { calls.push({url, init}); return {ok: true, json: async () => ({accepted: JSON.parse(init.body).records.length})}; };
+  const calls = [], enrolments = [];
+  ui.context.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.enrol === true) { enrolments.push(init); return {ok: true, json: async () => ({token: "a".repeat(64)})}; }
+    calls.push({url, init}); return {ok: true, json: async () => ({accepted: body.records.length})};
+  };
   const endpoint = ui.elements.get("research-sharing-endpoint"); endpoint.value = "https://collector.example/v1/events";
   await ui.elements.get("research-sharing-apply").click();
   assert.equal(ui.elements.get("research-sharing-consent").checked, false);
@@ -871,6 +876,8 @@ test("remote research requires consent and explicit send; opt-out and local-off 
   await ui.elements.get("research-sharing-send").click();
   assert.equal(calls.length, 1);
   assert.equal(calls[0].init.credentials, "omit"); assert.equal(calls[0].init.redirect, "error");
+  assert.equal(enrolments.length, 1); assert.equal(enrolments[0].credentials, "omit");
+  assert.equal(calls[0].init.headers["X-Research-Token"], "a".repeat(64));
   const batch = JSON.parse(calls[0].init.body); assert.equal(batch.records.length, 1); assert.equal(batch.records[0].measurements.pumpTimeSec, 23);
   recordResearchFixture(ui, 24); await settleResearch();
   await ui.elements.get("research-sharing-disable").click();

@@ -59,9 +59,12 @@ function request(path) {
     assert.equal(response.status, 200);
     const forwarded = JSON.parse(response.body);
     assert.equal(forwarded.url, path);
-    for (const header of ['cookie', 'authorization', 'x-forwarded-for', 'x-real-ip']) assert.equal(forwarded.headers[header], undefined);
+    for (const header of ['cookie', 'authorization', 'x-real-ip']) assert.equal(forwarded.headers[header], undefined);
+    // The client-supplied value is replaced by the single address Caddy saw.
+    assert.ok(require('node:net').isIP(forwarded.headers['x-forwarded-for']), 'proxy forwards only the observed client address');
+    assert.notEqual(forwarded.headers['x-forwarded-for'], '192.0.2.1');
   }
   for (const path of ['/metrics', '/', '/v1/events/extra']) assert.equal((await request(path)).status, 404);
-  console.log('Caddy isolated TLS, proxy routing, sensitive-header removal and private-metrics boundary passed');
+  console.log('Caddy isolated TLS, proxy routing, sensitive-header removal, observed client address and private-metrics boundary passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 NODE

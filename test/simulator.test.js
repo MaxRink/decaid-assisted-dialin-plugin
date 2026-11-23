@@ -158,3 +158,16 @@ test("rich replay creates chronological synthetic plant observations", async () 
 test("rich replay rejects a target-only shot instead of manufacturing an observed success", async () => {
   await assert.rejects(engine.replayRichSuggestions(context.createPlugin, scenario({shots: [{}]})), /target is not an observation/);
 });
+
+test("simulator storage harness acknowledges writes the way Decaid does (echoing written data)", async () => {
+  const writes = [], acks = [];
+  const factory = (host, services) => {
+    const plugin = context.createPlugin({ ...host, storage(command) { if (command.type === "write") writes.push(JSON.parse(JSON.stringify(command.data))); return host.storage(command); } }, services);
+    const onEvent = plugin.onEvent;
+    plugin.onEvent = (event) => { if (event.name === "storageWrite") acks.push(event.payload); return onEvent(event); };
+    return plugin;
+  };
+  await engine.replayRichSuggestions(factory, scenario({ shots: [{ actualBrewTimeMs: 28000, taste: "sour" }] }), { now: Date.now() });
+  assert.ok(acks.length > 0, "the replay must write feedback");
+  assert.deepEqual(JSON.parse(JSON.stringify(acks)), writes.slice(0, acks.length));
+});

@@ -15,15 +15,19 @@ jobs:
     name: Playwright browser and novice journeys
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
+      # The E64 simulator specs need the private research repository; the
+      # e64-simulator job runs them with it.
       - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+        env:
+          E64_SIM_OPTIONAL: '1'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: browser-evidence-${{ github.sha }}
@@ -40,8 +44,8 @@ jobs:
       matrix:
         node: [22.x, 24.x, 26.x]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -57,7 +61,7 @@ jobs:
       - run: python3 scripts/build-simulator.py
       - run: npm run package
       - run: python3 -m unittest discover -s test -p package_plugin_test.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: matrix.node == '24.x'
         with:
           name: decaid-assisted-dialin-plugin-${{ github.sha }}
@@ -68,11 +72,11 @@ jobs:
     name: Algorithm replay and graph data
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
       - run: python -m pip install -r requirements-graphs.txt
@@ -82,32 +86,125 @@ jobs:
         env:
           MPLCONFIGDIR: ${{ runner.temp }}/matplotlib
         run: python scripts/plot-algorithms.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: algorithm-graphs-${{ github.sha }}
           path: docs/algorithm-plots/
           if-no-files-found: error
 
+  e64-simulator:
+    # Grinder data originates from the E64 WS simulator in the private research
+    # repository (read-only deploy key; nothing from it is copied into this
+    # repository) and flows through the published E64 plugin. The host test
+    # needs the private Decaid fork, whose host enforces certSha256 pinning.
+    name: E64 WS simulator end-to-end (Decaid host and browser)
+    runs-on: ubuntu-latest
+    env:
+      HAS_RESEARCH_KEY: ${{ secrets.RESEARCH_REPO_SSH_KEY != '' }}
+      HAS_FORK_KEY: ${{ secrets.DECAID_FORK_SSH_KEY != '' }}
+      E64_SIM_ROOT: ${{ github.workspace }}/research
+      E64_PLUGIN_ROOT: ${{ github.workspace }}/e64-plugin
+      E64_SIM_PYTHON: python3
+    steps:
+      - name: Report skipped simulator tests
+        if: env.HAS_RESEARCH_KEY != 'true' || env.HAS_FORK_KEY != 'true'
+        run: |
+          if [ "$HAS_RESEARCH_KEY" != true ]; then
+            message="E64 simulator end-to-end tests (host and browser) were NOT run: the RESEARCH_REPO_SSH_KEY secret is unavailable (forks and Dependabot do not receive it)."
+          else
+            message="The E64 simulator test in the real Decaid host was NOT run: the DECAID_FORK_SSH_KEY secret is unavailable. The browser simulator test still runs."
+          fi
+          echo "::warning title=E64 simulator tests skipped::$message"
+          echo "### E64 simulator tests skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo "$message" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        if: env.HAS_RESEARCH_KEY == 'true'
+      - name: Check out the private simulator
+        if: env.HAS_RESEARCH_KEY == 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: MaxRink/mahlkoenig-e64ws-local-research
+          ssh-key: ${{ secrets.RESEARCH_REPO_SSH_KEY }}
+          path: research
+          persist-credentials: false
+      - name: Check out the E64 plugin (0.4.3)
+        if: env.HAS_RESEARCH_KEY == 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: MaxRink/decaid-e64ws-plugin
+          ref: cf74463f50d9b4b46596b2638fbb0d5d21916052
+          path: e64-plugin
+          persist-credentials: false
+      - name: Check out the Decaid fork with host certificate pinning
+        if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: MaxRink/decaid
+          ref: 314498021899c734227931dd34001590cabd34e5
+          ssh-key: ${{ secrets.DECAID_FORK_SSH_KEY }}
+          path: decaid-host
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: env.HAS_RESEARCH_KEY == 'true'
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.HAS_RESEARCH_KEY == 'true'
+        with:
+          node-version: 24.x
+          cache: npm
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - name: Install simulator and browser dependencies
+        if: env.HAS_RESEARCH_KEY == 'true'
+        run: |
+          python3 -m pip install -r research/tools/requirements.txt
+          npm ci
+          npx playwright install --with-deps chromium
+          echo "Simulator MaxRink/mahlkoenig-e64ws-local-research@$(git -C research rev-parse HEAD), E64 plugin @$(git -C e64-plugin rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Install host dependencies
+        if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
+        working-directory: decaid-host
+        run: |
+          echo "Decaid fork MaxRink/decaid@$(git rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          flutter pub get
+          mkdir -p assets/bundled_skins && printf '[]\n' > assets/bundled_skins/manifest.json && : > assets/bundled_skins/stub-skin.zip
+      - name: Simulator (WSS, pinned certificate, REST login, grind replay) through the real Decaid QuickJS host
+        if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
+        run: DECAID_ROOT="$GITHUB_WORKSPACE/decaid-host" sh scripts/run-sim-host-test.sh
+      - name: Simulator through the served plugin page
+        if: env.HAS_RESEARCH_KEY == 'true'
+        run: npx playwright test e2e/e64-sim.spec.js --project=chromium --project=mobile
+
   host-contract:
-    name: Pinned Decaid QuickJS and API/storage contract
+    # Deliberately tracks upstream main (not a pinned commit); the tested SHA is
+    # written to the job summary so a result can be traced to its host revision.
+    name: Upstream Decaid main QuickJS and API/storage contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: decentespresso/decaid
           ref: main
           path: decaid-host
           fetch-depth: 1
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           flutter-version: 3.50.0
           cache: true
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
           cache: npm
+      - name: Record tested Decaid revision
+        working-directory: decaid-host
+        run: echo "Decaid host tested at decentespresso/decaid@$(git rev-parse HEAD) (main)" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Install host dependencies
         working-directory: decaid-host
         run: flutter pub get
@@ -160,8 +257,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
       - name: Build patched Caddy and validate deployment proxy configuration
@@ -212,7 +309,7 @@ jobs:
           timeout: 5m
       - name: Retain deployment image vulnerability reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: collector-security-${{ github.sha }}
           path: collector-security-results/*.json
