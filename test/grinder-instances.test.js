@@ -351,7 +351,7 @@ test("a stored shot gets its next-step recommendation in the background: brew lo
   assert.equal(first.trigger, "shotStored");
   assert.match(first.message, /^Next shot: grind 1 .*finer \(10 → 9\)\.$/);
   assert.equal(h.notices.length, 1);
-  assert.deepEqual(h.notices[0], { id: "recommendation", message: first.message, action: { id: "open", label: "Open dial-in", type: "openPluginSurface", surface: "dialin" } });
+  assert.deepEqual(h.notices[0], { id: "recommendation", message: first.message, action: { id: "open", label: "Open dial-in", type: "openPluginSurface", surfaceId: "dialin" } });
   // A host without the openPluginSurface action rejects it; the notice is sent again without one.
   h.plugin.onEvent({ name: "notificationResult", payload: { requestId: "n-1", id: "recommendation", status: "rejected", reason: "validation" } });
   assert.deepEqual(h.notices[1], { id: "recommendation", message: first.message });

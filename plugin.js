@@ -4210,7 +4210,7 @@ function createPlugin(host, services) {
     if (lastNotice && lastNotice.shotId === shotId && lastNotice.message === record.message) return;
     lastNotice = { shotId, message: record.message };
     sendNotice({ id: NOTICE_ID, message: record.message,
-      ...(noticeActionSupported ? { action: { id: "open", label: "Open dial-in", type: "openPluginSurface", surface: "dialin" } } : {}) });
+      ...(noticeActionSupported ? { action: { id: "open", label: "Open dial-in", type: "openPluginSurface", surfaceId: "dialin" } } : {}) });
   }
   function sendNotice(payload) {
     try {
@@ -6090,7 +6090,7 @@ if(typeof window!=='undefined'&&window.pu){pu.init();const setupLink=document.qu
 
   return {
     id: ID,
-    version: "0.8.0",
+    version: "0.8.1",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;
