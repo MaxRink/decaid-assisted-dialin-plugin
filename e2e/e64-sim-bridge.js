@@ -161,7 +161,9 @@ async function startE64SimBridge() {
     sim, e64,
     async setDd(value) {
       await sim.post('/sim/action', { suffix: 'SetAgsaTargetDdValue', data: { targetDdValue: value } });
-      await waitFor(() => e64.snapshot()?.observedSetting === `${value} ddValueDum`, `the E64 plugin to publish ${value} ddValueDum`);
+      // E64 plugin 0.4.4+ publishes the display value (round half up of dD / 10); older ones the raw dD.
+      const forms = [String(Math.floor((value + 5) / 10)), `${value} ddValueDum`];
+      await waitFor(() => forms.includes(e64.snapshot()?.observedSetting), `the E64 plugin to publish dD ${value}`);
     },
     async stop() { await e64?.stop().catch(() => {}); sim.stop(); },
   };

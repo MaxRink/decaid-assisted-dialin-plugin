@@ -286,6 +286,17 @@ test("a suggestion that used the live grinder setting says so", async () => {
   assert.match(ui.output.textContent, /read live from the connected grinder: 630 ddValueDum at 2026-11-23T10:00:00.000Z/);
 });
 
+test("an E64 display reading is shown as the grinder shows it, with its rounding disclosed", async () => {
+  const ui = await uiFixture(async (url) => String(url).endsWith("grinder-observation")
+    ? response({ status: "available", setting: "83", unit: "opaque", reading: { kind: "display", value: 83 }, provenance: "live" })
+    : response({ status: "abstain", reason: "More feedback is needed", currentSettingSource: "live-grinder-observation", currentSettingPrecisionDd: 5,
+      liveGrinderObservation: { setting: "83", observedAt: "2026-11-23T10:00:00.000Z" } }));
+  await ui.grinderObservation.click();
+  assert.match(ui.grinderObservationStatus.textContent, /Live grinder display: 83 \(as shown on the grinder\)/);
+  await ui.suggestion.onclick();
+  assert.match(ui.output.textContent, /read live from the connected grinder: 83 at .*rounds to whole micrometres \(±5 dD\)/);
+});
+
 test("native grinder manager uses host IDs, saves anchors, selects and reads back the setting", async () => {
   const hostGrinders = [{ id: "host-df64-gen1", model: "DF64 Gen 1", burrs: "Stock" }];
   let selected = "";

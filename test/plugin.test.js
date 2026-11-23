@@ -89,7 +89,7 @@ test('exposes a healthy grinder observation as opaque live provenance', async ()
     source: 'decaid-grinder-observation',
     provenance: 'Live read-only grinder display observation. The value is opaque and is not a micron conversion, verified shot setting, or automatic control command.',
     observedAt: null, grinderState: 'running', observedRpm: null,
-    coordinate: {value: 501, unit: 'deci-micrometre'}, surfaces: [],
+    reading: {kind: 'ddValueDum', value: 501}, coordinate: {value: 501, unit: 'deci-micrometre'}, surfaces: [],
   });
 });
 

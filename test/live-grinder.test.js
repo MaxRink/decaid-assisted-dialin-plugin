@@ -9,7 +9,7 @@ const ok = (body) => ({ok: true, status: 200, json: async () => JSON.parse(JSON.
 
 // Plugin with Decaid-shaped storage (echoed write acks) and REST routes. The
 // grinder routes reproduce GET /api/v1/grinder/info and /state.
-function load({workflow, shots = [], observation = {observedSetting: '630 ddValueDum'}, info = {observations: ['setting'], capabilities: []}, stored = {}} = {}) {
+function load({workflow, shots = [], observation = {observedSetting: '630 ddValueDum'}, info = {observations: ['setting'], capabilities: []}, stored = {}, settings = {}} = {}) {
   const storage = new Map(Object.entries(stored)), writes = [], logs = [];
   let plugin;
   const routes = async (url) => {
@@ -18,6 +18,8 @@ function load({workflow, shots = [], observation = {observedSetting: '630 ddValu
     if (path === '/api/v1/grinder/info') return ok(info);
     if (path === '/api/v1/grinder/state') return ok({timestamp: new Date().toISOString(), state: 'idle', ...observation});
     if (path === '/api/v1/shots') return ok({items: shots, total: shots.length});
+    if (path === '/api/v1/bean-batches/batch-1') return ok({id: 'batch-1', beanId: 'bean-1'});
+    if (path === '/api/v1/beans/bean-1') return ok({id: 'bean-1', name: 'Fixture'});
     const shot = shots.find((item) => path === '/api/v1/shots/' + item.id);
     return shot ? ok(shot) : {ok: false, status: 404, json: async () => ({})};
   };
@@ -31,7 +33,7 @@ function load({workflow, shots = [], observation = {observedSetting: '630 ddValu
   const context = vm.createContext({console, setTimeout, clearTimeout, Date, JSON, Math, Promise, URL, URLSearchParams, queueMicrotask, fetch: routes});
   vm.runInContext(`${source}\nthis.createPlugin = createPlugin;`, context);
   plugin = context.createPlugin(host);
-  plugin.onLoad({TargetTimeSec: 28});
+  plugin.onLoad({TargetTimeSec: 28, ...settings});
   const get = async (endpoint, method = 'GET', body) => JSON.parse((await plugin.handleHttpRequest({endpoint, method, body})).body);
   return {plugin, storage, writes, logs, get};
 }
@@ -118,4 +120,59 @@ test('settings use the host enum type for the timing clock', () => {
     assert.ok(setting.label && !/[a-z][A-Z]/.test(setting.label), key + ' needs a human-friendly label, not a storage key');
     assert.ok(setting.description, key + ' needs a description');
   }
+});
+
+test('an E64 display reading (plugin 0.4.4) is micrometres, flagged as rounded, and kept in the grinder\'s own number', async () => {
+  const display = {observedSetting: '83'};
+  const noUnit = await load({workflow: e64Workflow(), observation: display}).get('suggestion');
+  assert.equal(noUnit.currentSettingSource, 'live-grinder-observation');
+  assert.deepEqual(noUnit.liveGrinderObservation.reading, {kind: 'display', value: 83});
+  assert.equal(noUnit.liveGrinderObservation.coordinate, null, 'no exact dD is claimed');
+  assert.equal(noUnit.currentSettingPrecisionDd, 5);
+  assert.equal(noUnit.dialReference.currentNative.value, 83);
+
+  const dd = await load({workflow: e64Workflow({}, {grinderSettingUnit: 'deci-micrometre'}), observation: display}).get('suggestion');
+  assert.equal(dd.dialReference.currentNative.value, 83, '83 µm display = 830 dD ±5');
+  assert.equal(dd.currentSettingPrecisionDd, 5);
+
+  const df64 = await load({workflow: e64Workflow({grinderModel: 'DF64 Gen 1'}, {grinderSettingUnit: 'marks'}), observation: display}).get('suggestion');
+  assert.equal(df64.currentSettingSource, null, 'a bare number is only interpreted for E64-family grinders');
+});
+
+test('display-derived settings warn when the calibrated step is finer than the display', async () => {
+  const shots = [0, 1, 2].map((index) => ({id: 'step-' + index, timestamp: new Date(Date.now() - (index + 1) * 60000).toISOString(),
+    workflow: e64Workflow({grinderSetting: '830'}, {grinderSettingUnit: 'deci-micrometre'})}));
+  const suggest = async (StepSize) => {
+    const h = load({workflow: e64Workflow({}, {grinderSettingUnit: 'deci-micrometre'}), observation: {observedSetting: '83'}, shots,
+      settings: {StepSize, NumericFinerDelta: -1}});
+    for (const shot of shots)
+      assert.equal((await h.plugin.handleHttpRequest({endpoint: 'feedback', method: 'POST', body: {shotId: shot.id, good: false, taste: 'sour', brewTimeSec: 22, brewTimeClock: 'pump'}})).status, 200);
+    return h.get('suggestion');
+  };
+  const fine = await suggest(5);
+  assert.equal(fine.status, 'suggestion', fine.reason);
+  assert.equal(fine.proposedSetting, 825, 'sour: one step finer (smaller)');
+  assert.ok(fine.warnings.some((warning) => /finer than the grinder display resolution \(10 deci-micrometre\)/.test(warning)));
+  const coarse = await suggest(10);
+  assert.equal(coarse.proposedSetting, 820);
+  assert.equal(coarse.warnings.some((warning) => /display resolution/.test(warning)), false);
+});
+
+test('shot records keep the display value, and records written with exact dD still load', async () => {
+  const fresh = {id: 'fresh-shot', timestamp: new Date(Date.now() - 40000).toISOString(), workflow: e64Workflow(), measurements: []};
+  const h = load({workflow: e64Workflow(), shots: [fresh], observation: {observedSetting: '83'}});
+  h.plugin.onEvent({name: 'shotStored', payload: {id: 'fresh-shot'}});
+  await settle();
+  assert.deepEqual(Object.keys(h.storage.get('grinderObservations.v1').shots['fresh-shot']).sort(), ['display', 'observedAt']);
+  const analysis = await h.get('analysis', 'POST', {shotId: 'fresh-shot'});
+  assert.equal(analysis.context.grinderSetting, '83');
+  assert.equal(analysis.context.settingUnit, 'micrometres');
+  assert.equal(analysis.context.grinderSettingPrecisionDd, 5);
+
+  const legacy = {key: 'grinderObservations.v1', schemaVersion: 1, shots: {'fresh-shot': {ddValueDum: 827, observedAt: new Date().toISOString()}}};
+  const old = load({workflow: e64Workflow(), shots: [{...fresh, workflow: e64Workflow({}, {grinderSettingUnit: 'deci-micrometre'})}], stored: {'grinderObservations.v1': legacy}});
+  const restored = await old.get('analysis', 'POST', {shotId: 'fresh-shot'});
+  assert.equal(restored.context.grinderSetting, '827');
+  assert.equal(restored.context.grinderSettingPrecisionDd, undefined, 'an exact dD record is not flagged as rounded');
+  assert.equal(restored.recordedGrinderObservation.ddValueDum, 827);
 });

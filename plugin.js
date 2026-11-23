@@ -3430,12 +3430,15 @@ function createPlugin(host, services) {
   }
 
   // Decaid exposes the current grinder display as a read-only observation
-  // (GET /api/v1/grinder/info + /state). The string stays opaque; only the E64
-  // driver's "<n> ddValueDum" form is additionally read as the dD research
-  // coordinate (deci-micrometres) that this plugin already uses. It is live
-  // device state: it fills only the current setup, or a shot recorded while
-  // the observation was fresh, and is never a control command.
+  // (GET /api/v1/grinder/info + /state). The string stays opaque. Two E64
+  // driver forms are additionally read: from E64 plugin 0.4.4 a bare integer
+  // is the grinder's own display value (micrometres, Math.round(dD / 10), so
+  // the dD behind it is only known to ±5), and older plugins publish the exact
+  // dD as "<n> ddValueDum". Either is interpreted only for an E64-family
+  // grinder model. It is live device state: it fills only the current setup,
+  // or a shot recorded while the observation was fresh, never a control command.
   const DD_OBSERVATION = /^(\d{1,6}) ddValueDum$/;
+  const DISPLAY_OBSERVATION = /^\d{1,5}$/;
   const SURFACE_HREF = /^\/api\/v1\/plugins\/[A-Za-z0-9._~%-]+\/[A-Za-z0-9._~%-]+(?:\?[A-Za-z0-9._~%=&+-]*)?$/;
   const unavailableObservation = (reason) => ({
     status: "unavailable",
@@ -3459,6 +3462,8 @@ function createPlugin(host, services) {
         observedSetting.length > 128)
       return unavailableObservation("The grinder setting observation is missing or its sensor is not healthy");
     const dd = DD_OBSERVATION.exec(observedSetting);
+    const reading = dd ? { kind: "ddValueDum", value: Number(dd[1]) }
+      : DISPLAY_OBSERVATION.test(observedSetting) ? { kind: "display", value: Number(observedSetting) } : null;
     // Driver surfaces are host-built same-plugin links (e.g. E64 diagnostics).
     const surfaces = Array.isArray(info.surfaces)
       ? info.surfaces.filter((item) => item && ["settings", "diagnostics"].includes(item.role) &&
@@ -3475,6 +3480,8 @@ function createPlugin(host, services) {
       observedAt: typeof state.timestamp === "string" && Number.isFinite(Date.parse(state.timestamp)) ? state.timestamp : null,
       grinderState: typeof state.state === "string" ? state.state : null,
       observedRpm: info.observations.includes("rpm") && Number.isSafeInteger(state.observedRpm) && state.observedRpm >= 0 ? state.observedRpm : null,
+      reading,
+      // Exact dD, available only from the legacy "<n> ddValueDum" form.
       coordinate: dd ? { value: Number(dd[1]), unit: "deci-micrometre" } : null,
       surfaces,
     };
@@ -3486,15 +3493,24 @@ function createPlugin(host, services) {
     if (["um", "µm", "micron", "microns", "micrometre", "micrometres"].includes(normalized)) return "um";
     return "other";
   }
-  // A dD coordinate expressed in `unit` for this grinder model, or null when
+  // A live E64 reading expressed in `unit` for this grinder model, or null when
   // the model does not use dD (only E64-family profiles carry algorithmScale)
-  // or the unit is unrelated.
-  function ddSetting(model, dd, unit) {
+  // or the unit is unrelated. A display reading keeps the grinder's own number
+  // (micrometres) when the setup has no unit; its dD is uncertain by half a
+  // display step, reported as grinderSettingPrecisionDd.
+  function readingSetting(model, reading, unit) {
     const profile = grinderDialTools.profileFor(model);
-    if (!profile || !profile.algorithmScale) return null;
-    const kind = settingUnitKind(unit);
-    if (kind === null || kind === "dd") return { grinderSetting: String(dd), settingUnit: textOrNull(unit) || "deci-micrometre" };
-    if (kind === "um") return { grinderSetting: String(Number((dd / profile.algorithmScale).toPrecision(12))), settingUnit: textOrNull(unit) };
+    if (!profile || !profile.algorithmScale || !reading) return null;
+    const scale = profile.algorithmScale, kind = settingUnitKind(unit), declared = textOrNull(unit);
+    const number = (value) => String(Number(value.toPrecision(12)));
+    if (reading.kind === "display") {
+      const precision = { grinderSettingPrecisionDd: scale / 2 };
+      if (kind === null || kind === "um") return { grinderSetting: String(reading.value), settingUnit: declared || "micrometres", ...precision };
+      if (kind === "dd") return { grinderSetting: String(reading.value * scale), settingUnit: declared, ...precision };
+      return null;
+    }
+    if (kind === null || kind === "dd") return { grinderSetting: String(reading.value), settingUnit: declared || "deci-micrometre" };
+    if (kind === "um") return { grinderSetting: number(reading.value / scale), settingUnit: declared };
     return null;
   }
   // Current setting precedence: the workflow's recorded value, then the live
@@ -3503,10 +3519,10 @@ function createPlugin(host, services) {
     if (recorded.grinderSetting !== null) return { source: "workflow", fields: [], observation: null };
     let observation = null;
     try { observation = await grinderObservation(); } catch (_) {}
-    const live = observation?.coordinate && ddSetting(current.grinderModel, observation.coordinate.value, recorded.settingUnit ?? current.settingUnit);
+    const live = observation?.reading && readingSetting(current.grinderModel, observation.reading, recorded.settingUnit ?? current.settingUnit);
     if (!live) return { source: current.grinderSetting !== null ? "plugin-setting" : null, fields: [], observation };
     Object.assign(current, live);
-    return { source: "live-grinder-observation", fields: Object.keys(live), observation };
+    return { source: "live-grinder-observation", fields: ["grinderSetting", "settingUnit"], observation };
   }
 
   // Observations captured when a new shot is stored, keyed by shot ID. Decaid
@@ -3542,9 +3558,12 @@ function createPlugin(host, services) {
     const restored = Object.create(null);
     if (shots && typeof shots === "object" && !Array.isArray(shots))
       for (const [id, item] of Object.entries(shots)) {
-        if (SHOT_ID.test(id) && item && Number.isSafeInteger(item.ddValueDum) && item.ddValueDum >= 0 &&
-            typeof item.observedAt === "string" && Number.isFinite(Date.parse(item.observedAt)))
-          restored[id] = { ddValueDum: item.ddValueDum, observedAt: item.observedAt };
+        // Records hold either the display value (E64 plugin 0.4.4+) or the
+        // exact dD written by earlier versions; both stay readable.
+        const valid = (value) => Number.isSafeInteger(value) && value >= 0;
+        if (!SHOT_ID.test(id) || !item || typeof item.observedAt !== "string" || !Number.isFinite(Date.parse(item.observedAt))) continue;
+        if (valid(item.display) && item.ddValueDum === undefined) restored[id] = { display: item.display, observedAt: item.observedAt };
+        else if (valid(item.ddValueDum) && item.display === undefined) restored[id] = { ddValueDum: item.ddValueDum, observedAt: item.observedAt };
       }
     return restored;
   }
@@ -3572,7 +3591,7 @@ function createPlugin(host, services) {
     let observation;
     try { observation = await grinderObservation(); } catch (_) { return; }
     try {
-      if (observation.status !== "available" || !observation.coordinate || !observation.observedAt) return;
+      if (observation.status !== "available" || !observation.reading || !observation.observedAt) return;
       const now = Date.now();
       if (now - Date.parse(observation.observedAt) > OBSERVATION_MAX_AGE_MS) return;
       const shot = await fullShot(shotId);
@@ -3583,7 +3602,9 @@ function createPlugin(host, services) {
       if (!active || epoch !== sessionEpoch) return;
       const write = observationQueue.then(async () => {
         const previous = shotObservations[shotId];
-        shotObservations[shotId] = { ddValueDum: observation.coordinate.value, observedAt: observation.observedAt };
+        shotObservations[shotId] = observation.reading.kind === "display"
+          ? { display: observation.reading.value, observedAt: observation.observedAt }
+          : { ddValueDum: observation.reading.value, observedAt: observation.observedAt };
         const evicted = trimFeedback(shotObservations, shotId, MAX_SHOT_OBSERVATIONS, "observedAt");
         try { await persistShotObservations(); }
         catch (error) {
@@ -3603,7 +3624,9 @@ function createPlugin(host, services) {
   function withRecordedSetting(context, shotId, recordedObservations) {
     const recordedItem = recordedObservations && recordedObservations[String(shotId)];
     if (!recordedItem || context.grinderSetting !== null) return context;
-    const filled = ddSetting(context.grinderModel, recordedItem.ddValueDum, context.settingUnit);
+    const reading = recordedItem.display !== undefined
+      ? { kind: "display", value: recordedItem.display } : { kind: "ddValueDum", value: recordedItem.ddValueDum };
+    const filled = readingSetting(context.grinderModel, reading, context.settingUnit);
     return filled ? { ...context, ...filled, grinderSettingSource: "recorded-live-observation" } : context;
   }
   async function recordedShotObservations() {
@@ -4122,6 +4145,15 @@ function createPlugin(host, services) {
     proposal.proposedSetting = Number(next.toPrecision(12));
     proposal.numericProvenance =
       "one owner-calibrated step; not a firmware GBS prediction";
+    // A setting read from a rounded grinder display cannot resolve a smaller step.
+    const precisionDd = current.grinderSettingPrecisionDd;
+    const scale = grinderDialTools.profileFor(current.grinderModel)?.algorithmScale;
+    const kind = settingUnitKind(current.settingUnit);
+    const resolution = precisionDd && (kind === "dd" ? 2 * precisionDd : kind === "um" && scale ? (2 * precisionDd) / scale : null);
+    if (resolution && step < resolution)
+      proposal.warnings.push(
+        `The step (${step} ${current.settingUnit}) is finer than the grinder display resolution (${resolution} ${current.settingUnit}); the change may not show on the display`,
+      );
     if (!bounded)
       proposal.warnings.push(
         "Dial bounds are not configured; confirm the proposed setting is within your grinder's range",
@@ -4157,6 +4189,8 @@ function createPlugin(host, services) {
       ),
       currentSettingSource: live.source,
       liveGrinderObservation: live.observation,
+      // Set when the current setting comes from a rounded grinder display.
+      currentSettingPrecisionDd: current.grinderSettingPrecisionDd ?? null,
       dialReference: dialReferenceFor(current),
     };
     const abstain = (reason, extra = {}) => ({
@@ -4802,7 +4836,7 @@ const saveGrinder=async()=>{try{const selected=currentGrinder(),model=document.q
 const selectGrinder=async()=>{try{const selected=currentGrinder();if(!selected)throw new Error('Select a host grinder first.');const response=await fetch(endpoint('settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({GrinderProfileId:String(selected.id)})});await grinderJson(response);const readback=await grinderJson(await fetch(endpoint('settings')));if(String(readback.GrinderProfileId||'')!==String(selected.id))throw new Error('Host did not confirm the selected grinder profile.');grinderMessage('Using '+selected.model+' ('+selected.id+') for future suggestions.');}catch(error){grinderMessage(error.message||'Could not select grinder profile.',true);}};
 knownModelOptions();
 document.querySelector('#loadGrinders')?.addEventListener('click',loadGrinders);document.querySelector('#grinderProfileSelect')?.addEventListener('change',event=>{grinderState.selected=event.target.value;fillGrinderForm();});document.querySelector('#saveGrinder')?.addEventListener('click',saveGrinder);document.querySelector('#selectGrinder')?.addEventListener('click',selectGrinder);
-document.querySelector('#grinderObservation')?.addEventListener('click',async event=>{const button=event.currentTarget||event.target;try{button.disabled=true;const body=await grinderJson(await fetch(endpoint('grinder-observation')));if(grinderObservationStatus){grinderObservationStatus.textContent=body.status==='available'?'Live grinder display: '+String(body.setting)+' ('+String(body.unit)+'). '+String(body.provenance):String(body.reason||'Live grinder observation unavailable.');const surface=(Array.isArray(body.surfaces)?body.surfaces:[]).find(item=>item&&item.role==='diagnostics'&&typeof item.href==='string'&&item.href.startsWith('/api/v1/plugins/'));if(surface){const link=document.createElement('a');link.href=surface.href;link.textContent=String(surface.label||'Grinder diagnostics');link.id='grinderDiagnosticsLink';grinderObservationStatus.textContent+=' ';grinderObservationStatus.appendChild(link);}}}catch(error){if(grinderObservationStatus)grinderObservationStatus.textContent=error.message||'Live grinder observation unavailable. Try again.';}finally{button.disabled=false;}});
+document.querySelector('#grinderObservation')?.addEventListener('click',async event=>{const button=event.currentTarget||event.target;try{button.disabled=true;const body=await grinderJson(await fetch(endpoint('grinder-observation')));if(grinderObservationStatus){grinderObservationStatus.textContent=body.status==='available'?'Live grinder display: '+String(body.setting)+(body.reading&&body.reading.kind==='display'?' (as shown on the grinder)':' ('+String(body.unit)+')')+'. '+String(body.provenance):String(body.reason||'Live grinder observation unavailable.');const surface=(Array.isArray(body.surfaces)?body.surfaces:[]).find(item=>item&&item.role==='diagnostics'&&typeof item.href==='string'&&item.href.startsWith('/api/v1/plugins/'));if(surface){const link=document.createElement('a');link.href=surface.href;link.textContent=String(surface.label||'Grinder diagnostics');link.id='grinderDiagnosticsLink';grinderObservationStatus.textContent+=' ';grinderObservationStatus.appendChild(link);}}}catch(error){if(grinderObservationStatus)grinderObservationStatus.textContent=error.message||'Live grinder observation unavailable. Try again.';}finally{button.disabled=false;}});
 const catalogBox=document.querySelector('#coffeeCatalog'),catalogButton=document.querySelector('#loadCoffeeCatalog');
 let nativeCoffeeProducts=[],nativeCoffeePage=1;
 function renderCoffeeCatalog(){if(!catalogBox)return;catalogBox.textContent='';const query=(document.querySelector('#nativeCoffeeSearch')?.value||'').toLowerCase();const matches=nativeCoffeeProducts.filter(item=>[item.name,item.publisher,item.origin,item.process,item.format].join(' ').toLowerCase().includes(query));matches.slice(0,nativeCoffeePage*10).forEach(item=>{
@@ -4845,7 +4879,7 @@ adviceForm?.addEventListener('submit',async event=>{event.preventDefault();const
 
 const renderTraceGraph=body=>{const holder=document.querySelector('#traceGraph'),content=document.querySelector('#traceGraphBody');if(!holder||!content)return;holder.hidden=!body?.metrics?.trace?.points?.length;if(!holder.hidden)uiTools.renderTrace(content,body.metrics);};
 // A setting read live from the connected grinder is always disclosed with the suggestion.
-const liveSettingNote=(name,body)=>name==='suggestion'&&body?.currentSettingSource==='live-grinder-observation'&&body.liveGrinderObservation?'\\n\\nCurrent setting read live from the connected grinder: '+String(body.liveGrinderObservation.setting)+(body.liveGrinderObservation.observedAt?' at '+String(body.liveGrinderObservation.observedAt):'')+'. Confirm it on the grinder before changing anything.':'';
+const liveSettingNote=(name,body)=>name==='suggestion'&&body?.currentSettingSource==='live-grinder-observation'&&body.liveGrinderObservation?'\\n\\nCurrent setting read live from the connected grinder: '+String(body.liveGrinderObservation.setting)+(body.liveGrinderObservation.observedAt?' at '+String(body.liveGrinderObservation.observedAt):'')+'.'+(body.currentSettingPrecisionDd?' The grinder display rounds to whole micrometres (±'+String(body.currentSettingPrecisionDd)+' dD).':'')+' Confirm it on the grinder before changing anything.':'';
 const render=input=>{const text=renderBody(input);return typeof text==='string'?text+liveSettingNote(input.endpoint,input.body):text;};
 const renderBody=({endpoint:name,body})=>{
   if(name==='recommendation'&&modeToggle&&modeToggle.getAttribute('aria-pressed')!=='true')return body.status==='recommendation'?beginnerMessage(body):'No matching good shot yet. '+(body.reason||'Save feedback after a completed shot.');
@@ -4929,7 +4963,7 @@ if(researchPanel){
 
   return {
     id: ID,
-    version: "0.6.3",
+    version: "0.6.4",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;

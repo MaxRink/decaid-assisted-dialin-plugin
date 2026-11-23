@@ -25,7 +25,8 @@ const sim = async (request, dd) => {
 };
 
 test('the live setting the simulator reports reaches the page and the next-step suggestion', async ({ page, request }) => {
-  expect((await sim(request, 630)).observedSetting).toBe('630 ddValueDum');
+  // The E64 plugin publishes what the grinder displays: dD 630 shows as 63 (µm).
+  expect((await sim(request, 630)).observedSetting).toBe('63');
   // Current workflow without a recorded setting: only the live grinder can supply it.
   const { workflow } = await (await request.get('/__test/state')).json();
   delete workflow.context.grinderSetting;
@@ -33,25 +34,27 @@ test('the live setting the simulator reports reaches the page and the next-step 
 
   await page.goto(UI); await step(page, 1);
   const first = pluginResponse(page, 'grinder-observation'); await page.locator('#grinderObservation').click();
-  expect((await (await first).json()).coordinate).toEqual({ value: 630, unit: 'deci-micrometre' });
-  await expect(page.locator('#grinderObservationStatus')).toContainText('630 ddValueDum');
+  expect((await (await first).json()).reading).toEqual({ kind: 'display', value: 63 });
+  await expect(page.locator('#grinderObservationStatus')).toContainText('Live grinder display: 63 (as shown on the grinder)');
   await expect(page.locator('#grinderDiagnosticsLink')).toHaveAttribute('href', /^\/api\/v1\/plugins\/mahlkoenig-e64\.reaplugin\/e64-diagnostics\?ui=1&deviceId=plugin%3A/);
 
   // A dial change on the simulated grinder is what the page reads next.
   await sim(request, 700);
   const second = pluginResponse(page, 'grinder-observation'); await page.locator('#grinderObservation').click(); await second;
-  await expect(page.locator('#grinderObservationStatus')).toContainText('700 ddValueDum');
+  await expect(page.locator('#grinderObservationStatus')).toContainText('Live grinder display: 70');
 
   await page.locator('#modeToggle').click();
   const suggestion = pluginResponse(page, 'suggestion'); await page.locator('#suggestion').click();
   const body = await (await suggestion).json();
   expect(body.currentSettingSource).toBe('live-grinder-observation');
   expect(body.dialReference.currentNative.value).toBe(70);
-  await expect(page.locator('#result')).toContainText('read live from the connected grinder: 700 ddValueDum');
+  expect(body.currentSettingPrecisionDd).toBe(5);
+  await expect(page.locator('#result')).toContainText('read live from the connected grinder: 70');
+  await expect(page.locator('#result')).toContainText('rounds to whole micrometres');
 });
 
 test('a shot stored while the simulator reports a setting keeps it for later analysis', async ({ page, request }) => {
-  await sim(request, 655);
+  await sim(request, 650);
   const { shots } = await (await request.get('/__test/state')).json();
   const stored = JSON.parse(JSON.stringify(shots[0]));
   stored.id = 'sim-recorded-shot';
@@ -59,7 +62,7 @@ test('a shot stored while the simulator reports a setting keeps it for later ana
   delete stored.workflow.context.grinderSetting;
   await request.post('/__test/config', { data: { shots: [...shots, stored] } });
   await request.post('/__test/event', { data: { name: 'shotStored', payload: { id: stored.id } } });
-  await expect.poll(async () => (await (await request.get('/__test/state')).json()).storage['grinderObservations.v1']?.shots?.[stored.id]?.ddValueDum).toBe(655);
+  await expect.poll(async () => (await (await request.get('/__test/state')).json()).storage['grinderObservations.v1']?.shots?.[stored.id]?.display).toBe(65);
 
   // A later dial change must not rewrite what was observed for that shot.
   await sim(request, 900);
@@ -67,7 +70,9 @@ test('a shot stored while the simulator reports a setting keeps it for later ana
   await page.locator('#analysis input[name=shotId]').fill(stored.id);
   const analysis = pluginResponse(page, 'analysis', 'POST'); await page.locator('#analysis button').click();
   const body = await (await analysis).json();
-  expect(body.context.grinderSetting).toBe('655');
+  // The shot's workflow uses dD: the recorded display 65 is 650 dD, known to ±5.
+  expect(body.context.grinderSetting).toBe('650');
+  expect(body.context.grinderSettingPrecisionDd).toBe(5);
   expect(body.context.grinderSettingSource).toBe('recorded-live-observation');
-  expect(body.recordedGrinderObservation.ddValueDum).toBe(655);
+  expect(body.recordedGrinderObservation.display).toBe(65);
 });

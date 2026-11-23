@@ -99,9 +99,13 @@ When the host advertises the read-only grinder setting observation (Decaid's
 `GET /api/v1/grinder/info` and `/state`), this returns the current display value
 with provenance, its host timestamp, grinder state, an observed RPM when the
 driver declares one, and the grinder plugin's host-built diagnostics links
-(shown on the plugin page). The value stays an opaque string; only the E64
-driver's `<n> ddValueDum` form is also read as the dD research coordinate
-(deci-micrometres) this plugin already uses. It is never a control command.
+(shown on the plugin page). The value stays an opaque string. For an E64-family
+grinder two driver forms are also read: from E64 plugin 0.4.4 a bare integer is
+the grinder's own display value in micrometres (for example `83` for dD 827; the
+dD behind it is known only to ±5, reported as `currentSettingPrecisionDd` /
+`grinderSettingPrecisionDd`), and older E64 plugins' `<n> ddValueDum` is the
+exact dD research coordinate (deci-micrometres). The page shows the number the
+grinder shows. It is never a control command.
 Unsupported, stale or failed observations are surfaced as unavailable.
 
 The live dD is used in exactly two places, both labelled:
@@ -109,12 +113,15 @@ The live dD is used in exactly two places, both labelled:
 - **Current setting.** Precedence is the current workflow's recorded setting,
   then the live observation, then the manual `CurrentSetting` plugin setting.
   The live value is used only for an E64-family grinder model (E64 WS, E65S
-  GbW) and only when the setting unit is a dD unit (kept as is) or
-  micrometres (dD ÷ 10). Suggestions report `currentSettingSource` and the
-  observation they used.
+  GbW). A display reading stays in micrometres when the setup has no unit or
+  uses micrometres, and becomes display × 10 for a dD unit; a legacy dD reading
+  stays dD or becomes dD ÷ 10 for micrometres. Suggestions report
+  `currentSettingSource` and the observation they used, and warn when the
+  calibrated `StepSize` is finer than the display resolution (1 µm = 10 dD).
 - **Shots recorded while it was live.** When Decaid reports a newly stored shot
   (`shotStored`), the plugin stores the dD observed at that moment, at most 500
-  shots, in plugin storage (`grinderObservations.v1`). This needs an observation at most 2 minutes old,
+  shots, in plugin storage (`grinderObservations.v1`): the display value, or the
+  exact dD for records made with older E64 plugins (both remain readable). This needs an observation at most 2 minutes old,
   a shot at most 15 minutes old (imports of older shots are ignored) and an
   E64-family grinder. Decaid does not keep observations with shots, so this
   record fills a missing historical setting only, labelled

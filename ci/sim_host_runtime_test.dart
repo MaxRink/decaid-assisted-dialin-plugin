@@ -229,7 +229,7 @@ class Chain {
   }
 
   /// Stores a shot now (as Decaid would) and waits for its recorded dial.
-  Future<int> storeShot(String id) async {
+  Future<Map> storeShot(String id) async {
     shots.add({
       'id': id,
       'timestamp': DateTime.now().toUtc().subtract(const Duration(seconds: 30)).toIso8601String(),
@@ -242,7 +242,7 @@ class Chain {
       final saved = store.values[dialinId]?['grinderObservations.v1'];
       final recorded = saved is Map ? saved['shots'] : null;
       final entry = recorded is Map ? recorded[id] : null;
-      if (entry is Map) return entry['ddValueDum'] as int;
+      if (entry is Map) return entry;
       expect(DateTime.now().isBefore(deadline), isTrue, reason: 'no live dial was recorded for $id');
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
@@ -269,11 +269,13 @@ void main() {
           query: {'deviceId': chain.e64DeviceId, 'read': 'connection'});
       expect(connection['tokenSource'], 'password');
 
+      // E64 plugin 0.4.4 publishes the grinder's display value: dD 630 shows as 63 (µm).
       await chain.simControl('/sim/action', {'suffix': 'SetAgsaTargetDdValue', 'data': {'targetDdValue': 630}});
-      await chain.observed((snapshot) => snapshot.observedSetting == '630 ddValueDum');
+      await chain.observed((snapshot) => snapshot.observedSetting == '63');
       final observation = await chain.call('grinder-observation');
-      expect(observation['setting'], '630 ddValueDum');
-      expect(observation['coordinate'], {'value': 630, 'unit': 'deci-micrometre'});
+      expect(observation['setting'], '63');
+      expect(observation['reading'], {'kind': 'display', 'value': 63});
+      expect(observation['coordinate'], isNull, reason: 'a rounded display claims no exact dD');
       expect(observation['observedAt'], isNotNull);
       expect((observation['surfaces'] as List).single['href'],
           allOf(startsWith('/api/v1/plugins/mahlkoenig-e64.reaplugin/e64-diagnostics?'), contains('deviceId=plugin%3Amahlkoenig-e64.reaplugin')));
@@ -281,19 +283,22 @@ void main() {
       var suggestion = await chain.call('suggestion');
       expect(suggestion['currentSettingSource'], 'live-grinder-observation');
       expect((suggestion['dialReference'] as Map)['currentNative']['value'], 63);
+      expect(suggestion['currentSettingPrecisionDd'], 5);
       expect(suggestion['missingData'] ?? const [], isNot(contains('grinderSetting')));
 
       await chain.simControl('/sim/action', {'suffix': 'SetAgsaTargetDdValue', 'data': {'targetDdValue': 700}});
-      await chain.observed((snapshot) => snapshot.observedSetting == '700 ddValueDum');
+      await chain.observed((snapshot) => snapshot.observedSetting == '70');
       suggestion = await chain.call('suggestion');
       expect((suggestion['dialReference'] as Map)['currentNative']['value'], 70);
 
       // A shot stored now keeps the dial the simulator reported for it.
-      expect(await chain.storeShot('sim-shot'), 700);
+      expect((await chain.storeShot('sim-shot'))['display'], 70);
       await chain.simControl('/sim/action', {'suffix': 'SetAgsaTargetDdValue', 'data': {'targetDdValue': 900}});
-      await chain.observed((snapshot) => snapshot.observedSetting == '900 ddValueDum');
+      await chain.observed((snapshot) => snapshot.observedSetting == '90');
       final analysis = await chain.call('analysis', method: 'POST', body: {'shotId': 'sim-shot'});
+      // The shot's workflow uses dD: display 70 µm is 700 dD, known to ±5.
       expect(analysis['context']['grinderSetting'], '700');
+      expect(analysis['context']['grinderSettingPrecisionDd'], 5);
       expect(analysis['context']['grinderSettingSource'], 'recorded-live-observation');
 
       // A grind started on the simulator shows as the live grinder state.
@@ -318,28 +323,29 @@ void main() {
       expect(File(replayFixture).existsSync(), isTrue, reason: 'replay fixture not found at $replayFixture');
       final chain = await Chain.start(simArgs: ['--replay', replayFixture]);
 
-      // Before the grind: idle at the captured dial.
-      await chain.observed((snapshot) => snapshot.observedSetting == '819 ddValueDum' && snapshot.state == GrinderState.idle);
+      // Before the grind: idle at the captured dial, dD 819, which the E64 shows as 82.
+      await chain.observed((snapshot) => snapshot.observedSetting == '82' && snapshot.state == GrinderState.idle);
       var observation = await chain.call('grinder-observation');
       expect(observation['grinderState'], 'idle');
-      expect(observation['coordinate'], {'value': 819, 'unit': 'deci-micrometre'});
+      expect(observation['reading'], {'kind': 'display', 'value': 82});
 
       // During the captured Grind phase.
       await chain.simControl('/sim/replay/seek', {'t': 30.0});
       await chain.observed((snapshot) => snapshot.state == GrinderState.grinding);
       observation = await chain.call('grinder-observation');
       expect(observation['grinderState'], 'grinding');
-      expect(observation['setting'], '819 ddValueDum');
+      expect(observation['setting'], '82');
       expect((await chain.call('suggestion'))['currentSettingSource'], 'live-grinder-observation');
 
       // After the grind (GbwPostGrind, then Idle) the shot is stored and keeps the replayed dial.
       await chain.simControl('/sim/replay/seek', {'t': 36.0});
       await chain.observed((snapshot) => snapshot.state == GrinderState.idle);
-      expect(await chain.storeShot('replayed-shot'), 819);
+      expect((await chain.storeShot('replayed-shot'))['display'], 82);
       final analysis = await chain.call('analysis', method: 'POST', body: {'shotId': 'replayed-shot'});
-      expect(analysis['context']['grinderSetting'], '819');
+      expect(analysis['context']['grinderSetting'], '820');
+      expect(analysis['context']['grinderSettingPrecisionDd'], 5);
       expect(analysis['context']['grinderSettingSource'], 'recorded-live-observation');
-      expect((analysis['recordedGrinderObservation'] as Map)['ddValueDum'], 819);
+      expect((analysis['recordedGrinderObservation'] as Map)['display'], 82);
     },
     skip: skip,
     timeout: const Timeout(Duration(minutes: 2)),
