@@ -175,7 +175,23 @@ jobs:
           mkdir -p assets/bundled_skins && printf '[]\n' > assets/bundled_skins/manifest.json && : > assets/bundled_skins/stub-skin.zip
       - name: Simulator (WSS, pinned certificate, REST login, grind replay) through the real Decaid QuickJS host
         if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
-        run: DECAID_ROOT="$GITHUB_WORKSPACE/decaid-host" sh scripts/run-sim-host-test.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          (
+            cd "$GITHUB_WORKSPACE/decaid-host"
+            flutter pub get
+            ./scripts/fetch_dye2_plugin.sh
+            ./scripts/fetch_shot_upload_plugin.sh
+            ./scripts/fetch_dcamp_plugin.sh
+            mkdir -p assets/bundled_skins
+            printf '[]\n' > assets/bundled_skins/manifest.json
+            : > assets/bundled_skins/stub-skin.zip
+          )
+          QUICKJS_LIB_DIR=$(find "${PUB_CACHE:-$HOME/.pub-cache}/git" -path '*dart_js*/linux/shared' -type d -print -quit)
+          test -n "$QUICKJS_LIB_DIR"
+          export LD_LIBRARY_PATH="$QUICKJS_LIB_DIR:${LD_LIBRARY_PATH:-}"
+          DECAID_ROOT="$GITHUB_WORKSPACE/decaid-host" sh scripts/run-sim-host-test.sh
       - name: Simulator through the served plugin page
         if: env.HAS_RESEARCH_KEY == 'true'
         run: npx playwright test e2e/e64-sim.spec.js --project=chromium --project=mobile
