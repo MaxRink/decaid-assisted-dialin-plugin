@@ -3,76 +3,89 @@
   "name": "Assisted dial-in",
   "author": "Maximilian Rink and Decaid contributors",
   "description": "Local assisted dial-in with bean context, post-brew flavour, brew metrics and recovered algorithm replay.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "apiVersion": 1,
   "permissions": [
     "log",
     "api",
     "pluginStorage",
     "events.shots",
-    "events.workflow"
+    "events.workflow",
+    "notifications"
   ],
   "settings": {
     "GrinderId": {
       "type": "string",
       "label": "Grinder identity",
-      "description": "Stable identity of the current grinder, used only if the current workflow omits it; historical shots are never backfilled."
+      "description": "Stable identity of the current grinder, used only if the current workflow omits it; historical shots are never backfilled.",
+      "hidden": true
     },
     "GrinderProfileId": {
       "type": "string",
       "label": "Individual grinder profile ID",
-      "description": "Optional stable owner-created local profile ID. It scopes owner calibration to one physical grinder; it is separate from the host's device grinderId. A profile chosen later on the plugin page takes precedence until this setting is changed."
+      "description": "Optional stable owner-created local profile ID. It scopes owner calibration to one physical grinder; it is separate from the host's device grinderId. A profile chosen later on the plugin page takes precedence until this setting is changed.",
+      "hidden": true
     },
     "GrinderModel": {
       "type": "string",
       "label": "Grinder model",
-      "description": "Optional grinder model used for comparisons."
+      "description": "Optional grinder model used for comparisons.",
+      "hidden": true
     },
     "BurrIdentity": {
       "type": "string",
       "label": "Burr identity",
-      "description": "Optional burr identity or replacement epoch."
+      "description": "Optional burr identity or replacement epoch.",
+      "hidden": true
     },
     "CalibrationEpoch": {
       "type": "string",
       "label": "Calibration epoch",
-      "description": "Optional user managed calibration label; it is never inferred."
+      "description": "Optional user managed calibration label; it is never inferred.",
+      "hidden": true
     },
     "BeanBatchId": {
       "type": "string",
       "label": "Bean batch",
-      "description": "Optional current bean batch identifier."
+      "description": "Optional current bean batch identifier.",
+      "hidden": true
     },
     "Dose": {
       "type": "number",
       "label": "Dose",
-      "description": "Optional current dose in grams."
+      "description": "Optional current dose in grams.",
+      "hidden": true
     },
     "Yield": {
       "type": "number",
       "label": "Yield",
-      "description": "Optional current yield in grams."
+      "description": "Optional current yield in grams.",
+      "hidden": true
     },
     "Basket": {
       "type": "string",
       "label": "Basket",
-      "description": "Optional basket identity."
+      "description": "Optional basket identity.",
+      "hidden": true
     },
     "CurrentSetting": {
       "type": "string",
       "label": "Current grinder setting",
-      "description": "Manual current setting used for suggestions when the current workflow has none and no connected E64-family grinder reports a live setting observation. It is never written to a grinder."
+      "description": "Manual current setting used for suggestions when the current workflow has none and no connected E64-family grinder reports a live setting observation. It is never written to a grinder.",
+      "hidden": true
     },
     "SettingUnit": {
       "type": "string",
       "label": "Setting unit",
-      "description": "Unit or coordinate system for the current setting, such as a dial mark or deci-micrometre."
+      "description": "Unit or coordinate system for the current setting, such as a dial mark or deci-micrometre.",
+      "hidden": true
     },
     "DialCalibration": {
       "type": "string",
       "default": "",
       "label": "Dial calibration (JSON)",
-      "description": "Optional owner-supplied JSON with model, burrIdentity, calibrationEpoch, dialA, ddDumA, dialB, ddDumB, dialMin and dialMax. It is used only to display native dial values and must match the current grinder context."
+      "description": "Optional owner-supplied JSON with model, burrIdentity, calibrationEpoch, dialA, ddDumA, dialB, ddDumB, dialMin and dialMax. It is used only to display native dial values and must match the current grinder context.",
+      "hidden": true
     },
     "TargetTimeSec": {
       "type": "number",
@@ -81,10 +94,24 @@
     },
     "TargetTimeClock": {
       "type": "enum",
-      "values": ["pump", "pouring", "recording"],
+      "values": [
+        "pump",
+        "pouring",
+        "recording"
+      ],
       "default": "pump",
       "label": "Target time clock",
-      "description": "pump: preinfusion plus pouring; pouring: main pouring only; recording: includes recorded preheat and settling. Evidence must use this same clock."
+      "description": "pump: preinfusion plus pouring; pouring: main pouring only; recording: includes recorded preheat and settling. Evidence must use this same clock.",
+      "valueLabels": {
+        "pump": "Pump time",
+        "pouring": "From first drops",
+        "recording": "Whole recording"
+      },
+      "valueDescriptions": {
+        "pump": "Preinfusion plus pouring.",
+        "pouring": "Main pouring only.",
+        "recording": "Everything the shot recording covers."
+      }
     },
     "TimeToleranceSec": {
       "type": "number",
@@ -92,50 +119,83 @@
       "label": "Time tolerance (seconds)",
       "description": "Deadband around the target brew time."
     },
+    "RecommendationNotices": {
+      "type": "enum",
+      "values": [
+        "on",
+        "off"
+      ],
+      "default": "on",
+      "label": "Recommendation pop-ups",
+      "description": "After each new shot, post the next-step grind recommendation as a Decaid notice. The recommendation is also kept with the shot either way.",
+      "valueLabels": {
+        "on": "Show",
+        "off": "Do not show"
+      }
+    },
     "EvidenceMaxAgeDays": {
       "type": "number",
       "default": 14,
       "label": "Evidence age limit (days)",
-      "description": "Only recent shots with recorded feedback within this age are used for rich suggestions."
+      "description": "Only recent shots with recorded feedback within this age are used for rich suggestions.",
+      "advanced": true
     },
     "StepSize": {
       "type": "number",
       "default": 0,
       "label": "Calibrated step size",
-      "description": "Owner-calibrated setting movement. Zero disables numeric proposals."
+      "description": "Owner-calibrated setting movement. Zero disables numeric proposals.",
+      "hidden": true
     },
     "NumericFinerDelta": {
       "type": "number",
       "default": 0,
       "label": "Numeric finer direction",
-      "description": "Owner-confirmed numeric sign (-1 or +1). Zero disables numeric proposals."
+      "description": "Owner-confirmed numeric sign (-1 or +1). Zero disables numeric proposals.",
+      "hidden": true
     },
     "MinSetting": {
       "type": "number",
       "default": 0,
       "label": "Minimum setting",
-      "description": "Optional calibrated lower bound. Equal minimum and maximum disable bounds."
+      "description": "Optional calibrated lower bound. Equal minimum and maximum disable bounds.",
+      "hidden": true
     },
     "MaxSetting": {
       "type": "number",
       "default": 0,
       "label": "Maximum setting",
-      "description": "Optional calibrated upper bound. Equal minimum and maximum disable bounds."
+      "description": "Optional calibrated upper bound. Equal minimum and maximum disable bounds.",
+      "hidden": true
+    },
+    "VisualizerBaseUrl": {
+      "type": "string",
+      "label": "Visualizer address",
+      "description": "Where shots uploaded by Decaid's Visualizer plugin can be viewed. Leave empty for https://visualizer.coffee; set your own https:// address for a self-hosted Visualizer.",
+      "default": "",
+      "advanced": true
     },
     "BeanType": {
       "type": "string",
       "label": "Bean type",
-      "description": "Explicit current BeanType; historical shots require saved context or per-shot operator confirmation."
+      "description": "Explicit current BeanType; historical shots require saved context or per-shot operator confirmation.",
+      "hidden": true
     },
     "RoastLevel": {
       "type": "string",
       "label": "Roast level",
-      "description": "Explicit current RoastLevel; historical shots require saved context or per-shot operator confirmation."
+      "description": "Explicit current RoastLevel; historical shots require saved context or per-shot operator confirmation.",
+      "hidden": true
     }
   },
   "api": [
     {
       "id": "ui",
+      "type": "http",
+      "data": {}
+    },
+    {
+      "id": "setup",
       "type": "http",
       "data": {}
     },
@@ -161,11 +221,6 @@
     },
     {
       "id": "research",
-      "type": "http",
-      "data": {}
-    },
-    {
-      "id": "settings",
       "type": "http",
       "data": {}
     },
@@ -228,6 +283,25 @@
       "id": "sharing-export",
       "type": "http",
       "data": {}
+    },
+    {
+      "id": "recommendations",
+      "type": "http",
+      "data": {}
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "setup",
+      "role": "setup",
+      "endpoint": "setup",
+      "label": "Set up assisted dial-in"
+    },
+    {
+      "id": "dialin",
+      "role": "settings",
+      "endpoint": "ui",
+      "label": "Assisted dial-in"
     }
   ]
 }

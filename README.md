@@ -37,17 +37,58 @@ ignored, so a skin on the same device still works, and clients that send no
 collector and deleting research data additionally require the plugin page
 itself (see [research sharing](docs/RESEARCH_SHARING.md)).
 
-An individual grinder profile chosen on the plugin page (`POST settings`) is
-remembered across reloads and takes precedence over the host's
-`GrinderProfileId` setting until that host setting is changed; a later change
-of the host setting wins.
 
 ## Install and use
 
 Enter this repository URL in Decaid's plugin installer to install the latest
 [GitHub release](https://github.com/MaxRink/decaid-assisted-dialin-plugin/releases).
-For development, a ZIP artifact from a green Actions run is also available. Enable the plugin, review its current-setup settings,
+For development, a ZIP artifact from a green Actions run is also available. Enable the plugin, run the setup assistant
+(`http://127.0.0.1:8080/api/v1/plugins/assisted-dialin.reaplugin/setup`, or **Set up** on the plugin page),
 and open `http://127.0.0.1:8080/api/v1/plugins/assisted-dialin.reaplugin/ui`.
+
+The plugin declares the `notifications` permission. Decaid hosts that reject
+unknown permissions (those from before Decaid's notification center) cannot load
+it; use 0.7.x there.
+
+### Setup assistant
+
+Five steps: the grinder (picked from Decaid's grinders), how its dial reads
+(unit, finer direction, step, range and optional two-point calibration), the
+time target, research sharing (off unless turned on) and a review. Save writes
+the grinder choice and dial-in data through `grinders`, sharing through
+`sharing`, and the targets last through Decaid's own
+`POST /api/v1/plugins/assisted-dialin.reaplugin/settings` (a settings save
+reloads the plugin). With Decaid's extension protection on, that last write is
+refused and the page says to finish the targets in Decaid. `ui?view=setup` opens
+the same page, and `GET setup?status=1` reports `{needsSetup, missing}`. The
+manifest also declares it as a top-level `setup` surface, which current hosts
+ignore. Internal settings are marked `hidden` (and two `advanced`) so generated
+settings forms show only the targets and the notice switch.
+
+Both pages use the shared plugin page kit (MaxRink/streamline-js
+`docs/plugin-ui`, vendored into `plugin.js` with its `vendor.mjs`; CI checks the
+copy against the pinned kit commit) and follow `theme=light|dark`, `lang` and
+`embed=1` from their URL. Decaid's settings route shadows any plugin endpoint
+named `settings`, so the plugin no longer has one.
+
+### Recommendations in the background
+
+After a shot is stored, and again after its feedback is saved, the plugin
+computes the next-step suggestion without the page being open (debounced; at
+most five shots queued). The result is kept with the shot (500 shots) and read
+with `GET recommendations?shotId=<id>`, `?shotIds=<id,...>` (up to 50) or
+without a query (the 20 latest); analysis also returns it. For a shot from the
+last 15 minutes it is posted as one Decaid notice, for example "Next shot: grind
+5 µm finer (500 → 495); last shot 23 s vs target 28 s." The notice is replaced
+for each new shot and only updated when its text changes; `RecommendationNotices`
+turns it off. The notice asks for an `openPluginSurface` action and is sent
+without an action when the host rejects that (stock hosts only open https pages,
+and the plugin page is http). Shots older than an hour (imports) get no advice.
+The latest recommendation is also copied into the active workflow's
+`context.extras["assisted-dialin.reaplugin"].recommendation` (only on change, at
+most every 30 seconds, and not while `GET /api/v1/machine/state` reports a shot,
+steam, hot water or flush), so the next shot's snapshot carries the advice it was
+brewed with. Stored shots are never written.
 Use **Load recent shots** to choose a saved brew. The HTML form records a good
 mark, taste feedback and optional notes. Enter submits
 "Mark good"; the second button removes a mark. The recommendation button displays
@@ -168,6 +209,57 @@ When the connected grinder comes from a grinder plugin (the host runtime ID
   then; `GET gbs-comparison` and the page's "Grinder GBS vs assisted dial-in"
   view list it next to the dial the grinder's own GBS chose for the next shot.
 - **Owner `off` or unknown**: read-only; no apply and no comparison records.
+
+### Grinders in Decaid
+
+Decaid's grinder inventory (`GET /api/v1/grinders`) decides which grinders
+exist; manage them in Decaid. The current grinder is the workflow's
+`grinderId`, else the one chosen on the plugin page, else the only
+non-archived grinder. Suggestions use that record's model and burrs, its
+`settingSmallStep` as the step until a step is calibrated, and for
+`settingType: "preset"` grinders propose the neighbouring entry of
+`settingValues` (`proposedPreset`) instead of a number.
+
+Per-grinder dial-in data (unit, finer direction, step, min/max, calibration
+epoch and two-point dial anchors) is kept in the grinder record's
+`extras["assisted-dialin.reaplugin"]`, so it travels with Decaid's export and
+backup. Decaid's grinder PUT replaces `extras` as a whole and has no
+precondition, so every save re-reads the record, merges only this key (other
+plugins' keys, such as the E64 plugin's inventory data, stay) and reads it back,
+retrying if another writer replaced it in between. `GET grinders` lists the
+grinders with their dial-in data and the current one; `POST grinders` saves
+`{grinderId, dialIn}` or selects with `{operation: "select", grinderId}`.
+
+Grinder profiles from 0.7 (`grinderProfiles.v1`) move into Decaid once, at most
+20 per request: into the record a profile was bound to, else a non-archived
+record of the same model (one the E64 plugin created counts), else a new
+record. Only this plugin's extras key is written, never user-edited fields, and
+a record that already has dial-in data is left alone. Progress is stored per
+profile and the moved profile is found again by its `migratedFrom` marker, so
+an interrupted or repeated run creates no duplicates.
+
+When dial-in data is saved for the workflow's grinder, the plugin also writes a
+small copy (grinder id, calibration epoch, unit, finer direction, step) into
+the active workflow's `context.extras["assisted-dialin.reaplugin"]`, so Decaid's
+shot snapshot carries it. That write happens only from the page, only when the
+values changed, at most every 30 seconds, and never in response to workflow
+events. Stored shots are never written.
+
+Reading a stored shot, the plugin prefers its workflow snapshot: the E64
+plugin's `context.extras["mahlkoenig-e64.reaplugin"]` (`displayedSetting`,
+`ddValueDum`, `lastGrind.{resultWeightGr, motorRunTimeMs, targetWeightGr,
+completedAt}`) fills a missing setting (`grinderSettingSource:
+"workflow-snapshot"`) and the grind; the plugin's own linked records fill older
+shots only. Shot records and the GBS comparison group by `grinderId`, falling
+back to the model.
+
+### Visualizer
+
+When Decaid's Visualizer plugin uploaded a shot, analysis returns
+`visualizer: {id, url}` from the shot's `annotations.extras.visualizerId` and
+the page shows "View this shot on Visualizer". The `VisualizerBaseUrl` setting
+points the link at a self-hosted instance (https only; default
+`https://visualizer.coffee`). No Visualizer credentials are read or shared.
 
 Recommendations and suggestions ask Decaid for history filtered by the current
 bean batch and grinder record (`GET /api/v1/shots?beanBatchId=&grinderId=`), so

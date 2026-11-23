@@ -1,7 +1,8 @@
 // E64 WS simulator -> E64 plugin -> Decaid grinder observation -> assisted dial-in,
 // all inside the real Decaid QuickJS host: PluginManager, PluginDeviceService,
-// GrinderController and the real /api/v1/grinder REST handler. Only the
-// workflow and shot-history routes are fixtures.
+// GrinderController, the real /api/v1/grinder REST handler and the real
+// /api/v1/grinders inventory handler over an in-memory store. The workflow
+// route deep-merges like PUT /api/v1/workflow; shot history is a fixture.
 //
 // The E64 plugin connects as it would to a grinder: WSS with a pinned
 // self-signed certificate (certSha256) and a token minted through the
@@ -18,12 +19,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reaprime/src/controllers/grinder_controller.dart';
+import 'package:reaprime/src/models/data/grinder.dart';
+import 'package:reaprime/src/models/data/json_utils.dart';
+import 'package:reaprime/src/models/data/workflow_context.dart';
 import 'package:reaprime/src/models/device/grinder_device.dart';
 import 'package:reaprime/src/plugins/plugin_device_service.dart';
 import 'package:reaprime/src/plugins/plugin_grinder.dart';
 import 'package:reaprime/src/plugins/plugin_manager.dart';
 import 'package:reaprime/src/plugins/plugin_manifest.dart';
+import 'package:reaprime/src/services/storage/grinder_storage_service.dart';
 import 'package:reaprime/src/services/storage/kv_store_service.dart';
+import 'package:reaprime/src/services/webserver/grinders_handler.dart';
 import 'package:reaprime/src/services/webserver_service.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_plus/shelf_plus.dart';
@@ -53,6 +59,26 @@ class MemoryStore implements KeyValueStoreService {
   Future<Map<String, Object>> getAll({String namespace = 'default'}) async => Map.of(values[namespace] ?? {});
 }
 
+// Decaid's grinder inventory, in memory, behind the real GrindersHandler.
+class MemoryGrinders implements GrinderStorageService {
+  final records = <Grinder>[];
+  @override
+  Future<List<Grinder>> getAllGrinders({bool includeArchived = false}) async =>
+      records.where((g) => includeArchived || !g.archived).toList();
+  @override
+  Stream<List<Grinder>> watchAllGrinders({bool includeArchived = false}) => throw UnimplementedError();
+  @override
+  Future<Grinder?> getGrinderById(String id) async => records.where((g) => g.id == id).firstOrNull;
+  @override
+  Future<void> insertGrinder(Grinder grinder) async => records.add(grinder);
+  @override
+  Future<void> updateGrinder(Grinder grinder) async {
+    records.removeWhere((g) => g.id == grinder.id);
+    records.add(grinder);
+  }
+  @override
+  Future<void> deleteGrinder(String id) async => records.removeWhere((g) => g.id == id);
+}
 
 Map<String, dynamic> workflow() => {
   'profile': {
@@ -86,13 +112,15 @@ final replayFixture = '$simRoot/tests/fixtures/grind-20261119-01.sanitized.jsonl
 /// One running chain: simulator, E64 plugin, grinder controller, Decaid REST
 /// on 127.0.0.1:8080 and the assisted dial-in plugin.
 class Chain {
-  Chain._(this.simControl, this.simRequest, this.store, this.manager, this.grinders, this.current, this.shots, this.dialinId, this.e64Id, this.e64DeviceId);
+  Chain._(this.simControl, this.simRequest, this.store, this.manager, this.grinders, this.inventory, this.current, this.shots, this.dialinId, this.e64Id,
+      this.e64DeviceId);
 
   final Future<void> Function(String route, Map<String, dynamic> body) simControl;
   final Future<Map<String, dynamic>> Function(String route, [Map<String, dynamic>? body]) simRequest;
   final MemoryStore store;
   final PluginManager manager;
   final GrinderController grinders;
+  final MemoryGrinders inventory;
   final Map<String, dynamic> current;
   final List<Map<String, dynamic>> shots;
   final String dialinId, e64Id, e64DeviceId;
@@ -100,7 +128,8 @@ class Chain {
 
   /// [replay] runs the simulator replaying a grind capture (`--replay`).
   static Future<Chain> start({String? replay, bool control = false, String owner = 'off',
-      Map<String, dynamic> dialinSettings = const {'TargetTimeSec': 28}, Map<String, dynamic>? currentWorkflow}) async {
+      Map<String, dynamic> dialinSettings = const {'TargetTimeSec': 28}, Map<String, dynamic>? currentWorkflow,
+      Map<String, Object> dialinStorage = const {}}) async {
     // The E64 repository's launcher: fresh certificate, pinned WSS and REST login.
     final sim = await E64Sim.start(simRoot, extraArgs: [if (replay != null) ...['--replay', replay]]);
     addTearDown(sim.stop);
@@ -108,7 +137,7 @@ class Chain {
     final e64Settings = Map<String, dynamic>.of(sim.settings(control: control, owner: owner));
     Future<void> simControl(String route, Map<String, dynamic> body) async => simRequest(route, body);
 
-    // 3. The real host: the E64 plugin pins the certificate and mints a token
+    // 3. The real host. The E64 plugin pins the certificate and mints a token
     //    through the simulator's REST login, then registers a grinder.
     final store = MemoryStore();
     final service = PluginDeviceService();
@@ -122,26 +151,26 @@ class Chain {
     final e64Manifest = PluginManifest.fromJson(
       jsonDecode(await File('$e64Root/manifest.json').readAsString()) as Map<String, dynamic>,
     );
-    await manager.loadPlugin(
-      id: e64Manifest.id,
-      manifest: e64Manifest,
-      settings: e64Settings,
-      jsCode: await File('$e64Root/plugin.js').readAsString(),
-    );
-    final device = (await service.devices.where((devices) => devices.length == 1).first.timeout(const Duration(seconds: 5)))
-        .cast<PluginGrinder>()
-        .single;
-    await grinders.connectToGrinder(device);
-
-    // 4. Decaid's REST API on the plugin's loopback port: the real grinder
-    //    handler, plus fixed workflow/shot routes.
+    // 4. Decaid's REST API on the plugins' loopback port: the real grinder and
+    //    grinder-inventory handlers, plus workflow/shot routes. It is up before
+    //    the E64 plugin connects, which is when it syncs its inventory record.
     final current = currentWorkflow ?? workflow();
     final shots = <Map<String, dynamic>>[];
     final router = Router().plus;
     GrinderHandler(controller: grinders).addRoutes(router);
+    final inventory = MemoryGrinders();
+    GrindersHandler(storage: inventory).addRoutes(router);
     Response jsonResponse(Object? body, [int status = 200]) =>
         Response(status, body: jsonEncode(body), headers: {'content-type': 'application/json'});
     router.get('/api/v1/workflow', (Request _) => jsonResponse(current));
+    router.put('/api/v1/workflow', (Request request) async {
+      final patch = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      // The host's own merge; its context model must accept the result.
+      final merged = deepMergeJson(current, patch);
+      WorkflowContext.fromJson(merged['context'] as Map<String, dynamic>);
+      current..clear()..addAll(merged);
+      return jsonResponse(current);
+    });
     router.get('/api/v1/shots', (Request _) => jsonResponse({'items': shots, 'total': shots.length}));
     router.get('/api/v1/shots/<id>', (Request _, String id) {
       final match = shots.where((shot) => shot['id'] == id);
@@ -170,17 +199,29 @@ class Chain {
     }
     addTearDown(() => api.close(force: true));
 
+    await manager.loadPlugin(
+      id: e64Manifest.id,
+      manifest: e64Manifest,
+      settings: e64Settings,
+      jsCode: await File('$e64Root/plugin.js').readAsString(),
+    );
+    final device = (await service.devices.where((devices) => devices.length == 1).first.timeout(const Duration(seconds: 5)))
+        .cast<PluginGrinder>()
+        .single;
+    await grinders.connectToGrinder(device);
+
     // 5. The assisted dial-in plugin, unmodified, in the same host.
     final dialinManifest = PluginManifest.fromJson(
       jsonDecode(await File('$dialinRoot/manifest.json').readAsString()) as Map<String, dynamic>,
     );
+    if (dialinStorage.isNotEmpty) store.values[dialinManifest.id] = Map.of(dialinStorage);
     await manager.loadPlugin(
       id: dialinManifest.id,
       manifest: dialinManifest,
       settings: dialinSettings,
       jsCode: await File('$dialinRoot/plugin.js').readAsString(),
     );
-    return Chain._(simControl, simRequest, store, manager, grinders, current, shots, dialinManifest.id, e64Manifest.id, device.deviceId);
+    return Chain._(simControl, simRequest, store, manager, grinders, inventory, current, shots, dialinManifest.id, e64Manifest.id, device.deviceId);
   }
 
   Future<void> observed(bool Function(GrinderSnapshot snapshot) test) =>
@@ -449,6 +490,130 @@ void main() {
       final control = await chain.call('grinder-control');
       expect(control['owner'], 'off');
       expect(control['applyAvailable'], isFalse);
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+  test(
+    'Decaid grinder inventory: the E64 record is adopted, dial-in data shares its extras, and the workflow carries both',
+    () async {
+      expect(missing, isEmpty, reason: missing.join('; '));
+      // No grinder in the workflow yet: the E64 plugin creates its record and links it.
+      final start = micronWorkflow();
+      (start['context'] as Map<String, dynamic>)..remove('grinderId')..remove('grinderModel')..remove('grinderBurrs');
+      // A 0.7 grinder profile for the same grinder, from before the inventory existed.
+      final legacy = {'key': 'grinderProfiles.v1', 'schemaVersion': 1, 'selectedProfileId': 'counter', 'profiles': {
+        'counter': {'id': 'counter', 'label': 'Counter E64', 'hostGrinderId': 'gone', 'model': 'E64 WS', 'burrIdentity': 'stock',
+          'calibrationEpoch': 'zero-1', 'pitchSource': 'owner', 'ownerAnchors': null},
+      }};
+      final chain = await Chain.start(currentWorkflow: start, dialinSettings: stepSettings, dialinStorage: {'grinderProfiles.v1': legacy});
+      // Each PUT /api/v1/workflow merges into a new context map.
+      Map context() => chain.current['context'] as Map;
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      while (context()['grinderId'] == null || chain.inventory.records.isEmpty) {
+        if (!DateTime.now().isBefore(deadline)) {
+          final inventory = await chain.call('e64-diagnostics', plugin: chain.e64Id, query: {'deviceId': chain.e64DeviceId, 'read': 'inventory'});
+          fail('E64 inventory sync: $inventory; workflow ${chain.current}; records ${chain.inventory.records.length}');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      final e64 = chain.inventory.records.single;
+      expect(e64.extras?['source'], 'mahlkoenig-e64.reaplugin');
+      expect(context()['grinderId'], e64.id);
+
+      var listing = await chain.call('grinders');
+      expect(listing['current'], {'grinderId': e64.id, 'source': 'workflow'});
+      expect(listing['migration'], {'completed': false, 'migrated': 1, 'legacyProfiles': 1});
+      expect(chain.inventory.records, hasLength(1), reason: 'the legacy profile adopts the E64 record, no duplicate');
+      final adopted = chain.inventory.records.single.extras!;
+      expect(adopted['source'], 'mahlkoenig-e64.reaplugin', reason: "the E64 plugin's keys stay");
+      expect((adopted['assisted-dialin.reaplugin'] as Map)['migratedFrom'], 'counter');
+      listing = await chain.call('grinders');
+      expect((listing['migration'] as Map)['completed'], isTrue);
+      expect(chain.inventory.records, hasLength(1));
+
+      // Per-grinder dial-in data through the page endpoint, into the real handler.
+      final saved = await chain.call('grinders', method: 'POST', headers: page, body: {
+        'grinderId': e64.id,
+        'dialIn': {'settingUnit': 'micrometres', 'finerDelta': -1, 'stepSize': 5, 'calibrationEpoch': 'zero-2'},
+      });
+      expect(saved['saved'], isTrue);
+      expect(saved['workflowSnapshot'], 'written');
+      final record = (await chain.inventory.getGrinderById(e64.id))!;
+      expect(record.extras?['source'], 'mahlkoenig-e64.reaplugin');
+      expect(record.extras?['instanceId'], adopted['instanceId']);
+      final dialIn = record.extras?['assisted-dialin.reaplugin'] as Map;
+      expect(dialIn['stepSize'], 5);
+      expect(dialIn['calibrationEpoch'], 'zero-2');
+      final extras = context()['extras'] as Map;
+      expect(extras['assisted-dialin.reaplugin'], allOf(containsPair('grinderId', e64.id), containsPair('calibrationEpoch', 'zero-2')));
+      expect(extras['grinderSettingUnit'], 'micrometres', reason: 'the deep merge keeps the rest of the context');
+
+      // Suggestions run against the workflow's grinder record.
+      // Evidence shots are copies of this workflow, as Decaid stores them.
+      await chain.observed((snapshot) => snapshot.observedSetting == '500');
+      for (var hour = 1; hour <= 3; hour++) {
+        final shot = jsonDecode(jsonEncode(chain.current)) as Map<String, dynamic>;
+        (shot['context'] as Map)['grinderSetting'] = '500';
+        chain.shots.add({'id': 'inventory-$hour', 'timestamp': DateTime.now().toUtc().subtract(Duration(hours: hour)).toIso8601String(),
+          'workflow': shot, 'measurements': <dynamic>[]});
+        await chain.call('feedback', method: 'POST',
+            body: {'shotId': 'inventory-$hour', 'good': false, 'taste': 'sour', 'brewTimeSec': 22, 'brewTimeClock': 'pump'});
+      }
+      final suggestion = await chain.call('suggestion');
+      expect(suggestion['grinder'], {'id': e64.id, 'model': e64.model, 'settingType': 'numeric', 'source': 'workflow'});
+      expect(suggestion['proposedSetting'], 495, reason: '$suggestion');
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+  test(
+    'a stored shot gets its recommendation in the background: one host notice, the brew log and the workflow snapshot',
+    () async {
+      expect(missing, isEmpty, reason: missing.join('; '));
+      final chain = await Chain.start(dialinSettings: stepSettings, currentWorkflow: micronWorkflow());
+      await chain.observed((snapshot) => snapshot.observedSetting == '500');
+      await sourShotsAt500(chain);
+      // Every accepted publication of this plugin's notices.
+      final published = <String>[];
+      void watch() {
+        for (final notice in chain.manager.notifications.value.where((item) => item.sourceId == chain.dialinId)) {
+          final entry = '${notice.id}|${notice.message}|${notice.actions.length}';
+          if (published.isEmpty || published.last != entry) published.add(entry);
+        }
+      }
+      chain.manager.notifications.addListener(watch);
+      addTearDown(() => chain.manager.notifications.removeListener(watch));
+
+      await chain.storeShot('background-1');
+      Map<String, dynamic>? recommendation;
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (recommendation == null || published.isEmpty) {
+        expect(DateTime.now().isBefore(deadline), isTrue, reason: 'background recommendation: $published');
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        recommendation = (await chain.call('recommendations', query: {'shotId': 'background-1'}))['recommendation'] as Map<String, dynamic>?;
+      }
+      expect(recommendation['status'], 'suggestion');
+      expect(recommendation['message'], allOf(startsWith('Next shot: grind'), contains('finer'), contains('495')));
+      // The stock host rejects the openPluginSurface action; the notice is kept without one.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(published, ['recommendation|${recommendation['message']}|0'], reason: 'one notice per shot');
+      final batch = await chain.call('recommendations', query: {'shotIds': 'background-1,evidence-1'});
+      expect((batch['recommendations'] as Map)['background-1'], recommendation);
+      expect((batch['recommendations'] as Map)['evidence-1'], isNull);
+      // The next shot's snapshot carries the advice it is brewed with.
+      final extras = (chain.current['context'] as Map)['extras'] as Map;
+      final carried = (extras['assisted-dialin.reaplugin'] as Map)['recommendation'] as Map;
+      expect(carried['afterShotId'], 'background-1');
+      expect(carried['message'], recommendation['message']);
+      expect(extras['grinderSettingUnit'], 'micrometres');
+      // A shot from history (an import) gets no advice and no notice.
+      chain.shots.add({'id': 'imported', 'timestamp': DateTime.now().toUtc().subtract(const Duration(days: 2)).toIso8601String(),
+        'workflow': micronWorkflow(setting: '500'), 'measurements': <dynamic>[]});
+      chain.manager.dispatchEvent(chain.dialinId, 'shotStored', {'id': 'imported'});
+      await Future<void>.delayed(const Duration(seconds: 3));
+      expect((await chain.call('recommendations', query: {'shotId': 'imported'}))['recommendation'], isNull);
+      expect(published, hasLength(1));
     },
     skip: skip,
     timeout: const Timeout(Duration(minutes: 2)),

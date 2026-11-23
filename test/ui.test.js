@@ -170,7 +170,7 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   research.fields = {
     state: html.match(/<textarea[^>]*name="state"[^>]*>([\s\S]*?)<\/textarea>/)[1],
   };
-  const sharingElements = Object.fromEntries(["researchSharing", "researchLocal", "researchEndpoint", "researchHostLimits", "researchEnable", "researchDisable", "researchRetry", "researchExport", "researchDelete", "researchStatus", "researchExportData", "grinderAdjust", "grinderAdjustStatus", "applyToGrinder", "confirmApply", "cancelApply", "gbsComparison", "loadGbsComparison", "gbsComparisonList"].map(id => [id, new Element(id)]));
+  const sharingElements = Object.fromEntries(["researchSharing", "researchLocal", "researchEndpoint", "researchHostLimits", "researchEnable", "researchDisable", "researchRetry", "researchExport", "researchDelete", "researchStatus", "researchExportData", "grinderCurrent", "dialUnit", "dialFiner", "dialStep", "dialMin", "dialMax", "grinderAdjust", "grinderAdjustStatus", "applyToGrinder", "confirmApply", "cancelApply", "gbsComparison", "loadGbsComparison", "gbsComparisonList"].map(id => [id, new Element(id)]));
   context.document = {
     querySelector(selector) {
       return {
@@ -297,65 +297,59 @@ test("an E64 display reading is shown as the grinder shows it, with its rounding
   assert.match(ui.output.textContent, /read live from the connected grinder: 83 at .*rounds to whole micrometres \(±5 dD\)/);
 });
 
-test("native grinder manager uses host IDs, saves anchors, selects and reads back the setting", async () => {
-  const hostGrinders = [{ id: "host-df64-gen1", model: "DF64 Gen 1", burrs: "Stock" }];
-  let selected = "";
+test("the grinder picker lists Decaid grinders, saves dial-in data to the chosen one and selects it", async () => {
+  const requests = [];
+  const grinders = [
+    { id: "g-e64", model: "Mahlkönig E64 WS", burrs: "64 mm flat (stock)", settingType: "numeric", settingSmallStep: 1, source: "mahlkoenig-e64.reaplugin", dialIn: { settingUnit: "micrometres", finerDelta: -1 } },
+    { id: "g-df", model: "DF64 Gen 1", burrs: "SSP HU", settingType: "numeric", settingSmallStep: 0.5, source: null, dialIn: null },
+  ];
   const ui = await uiFixture(async (url, init = {}) => {
-    if (String(url).includes("/api/v1/grinders?")) return response(hostGrinders);
-    if (String(url).includes("/api/v1/grinders/") && init.method === "PUT") return response({ ...hostGrinders[0], ...JSON.parse(init.body) });
-    if (url === "grinders" && (!init.method || init.method === "GET")) return response({ schemaVersion: 1, profiles: [] });
-    if (url === "grinders" && init.method === "POST") return response({ saved: true });
-    if (url === "settings" && init.method === "POST") { assert.deepEqual(JSON.parse(init.body), { GrinderProfileId: "host-df64-gen1" }); selected = JSON.parse(init.body).GrinderProfileId; return response({ GrinderProfileId: selected }); }
-    if (url === "settings") return response({ GrinderProfileId: selected });
-    return response({ items: [], total: 0 });
+    requests.push({ url, init });
+    if (url === "grinders" && init.method === "POST") {
+      const body = JSON.parse(init.body);
+      return body.operation === "select" ? response({ selected: true, selectedGrinderId: body.grinderId }) : response({ saved: true, grinderId: body.grinderId, dialIn: body.dialIn });
+    }
+    if (url === "grinders") return response({ grinders, current: { grinderId: "g-e64", source: "workflow" } });
+    return response({});
   });
+  const el = ui.sharingElements;
   await ui.loadGrinders.click();
-  await new Promise(setImmediate);
   assert.equal(ui.grinderProfileSelect.children.length, 2);
-  assert.equal(ui.grinderProfileSelect.children[0].value, "__new__");
-  ui.grinderLabel.value = "Kitchen DF64";
-  ui.grinderBurrs.value = "SSP HU";
+  assert.match(ui.grinderProfileSelect.children[0].textContent, /Mahlkönig E64 WS · 64 mm flat \(stock\) \(current\)/);
+  assert.equal(ui.grinderProfileSelect.value, "g-e64");
+  assert.equal(el.dialUnit.value, "micrometres");
+  assert.equal(el.dialFiner.value, "-1");
+  assert.match(el.grinderCurrent.textContent, /kept up to date by mahlkoenig-e64.reaplugin/);
+  assert.equal(requests.some((r) => String(r.url).includes("/api/v1/grinders")), false, "the page never writes Decaid grinders directly");
+
+  ui.grinderProfileSelect.value = "g-df";
+  await ui.grinderProfileSelect.listeners.change({ target: ui.grinderProfileSelect });
+  el.dialUnit.value = "marks"; el.dialFiner.value = "-1"; el.dialStep.value = "0.5"; el.dialMin.value = "0"; el.dialMax.value = "90";
   ui.grinderEpoch.value = "zero-1";
-  ui.grinderAnchors.value = JSON.stringify({ dialMin: 0, dialMax: 90, dialA: 10, ddDumA: 300, dialB: 90, ddDumB: 1200 });
+  ui.grinderAnchors.value = '{"dialMin":0,"dialMax":90,"dialA":0,"ddDumA":300,"dialB":90,"ddDumB":1200}';
   await ui.saveGrinder.click();
-  assert.match(ui.grinderManagerStatus.textContent, /Saved host grinder/);
+  const saved = JSON.parse(requests.find((r) => r.url === "grinders" && r.init.method === "POST").init.body);
+  assert.deepEqual(saved, { grinderId: "g-df", dialIn: { settingUnit: "marks", finerDelta: -1, stepSize: 0.5, minSetting: 0, maxSetting: 90, calibrationEpoch: "zero-1",
+    dialCalibration: { dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 300, dialB: 90, ddDumB: 1200 } } });
+  assert.match(ui.grinderManagerStatus.textContent, /Saved the dial-in data/);
+
   await ui.selectGrinder.click();
-  assert.equal(selected, "host-df64-gen1");
-  assert.match(ui.grinderManagerStatus.textContent, /Using DF64 Gen 1/);
+  const select = requests.filter((r) => r.url === "grinders" && r.init.method === "POST").map((r) => JSON.parse(r.init.body)).find((body) => body.operation === "select");
+  assert.deepEqual(select, { operation: "select", grinderId: "g-df" });
+  assert.equal(requests.some((r) => r.url === "settings"), false, "the host serves /settings itself, so it is never used");
 });
 
-test("native grinder manager surfaces host readback failure and rejects malformed anchors", async () => {
-  const ui = await uiFixture(async (url, init = {}) => {
-    if (String(url).includes("/api/v1/grinders?")) return response([{ id: "host-df54", model: "DF54", burrs: "Stock" }]);
-    if (url === "grinders") return response({ schemaVersion: 1, profiles: [] });
-    if (url === "settings" && init.method === "POST") return response({ GrinderProfileId: "other-id" });
-    if (url === "settings") return response({ GrinderProfileId: "" });
-    return response({ items: [], total: 0 });
-  });
+test("the grinder picker reports malformed anchors and refused saves without losing the form", async () => {
+  const ui = await uiFixture(async (url, init = {}) => url === "grinders" && init.method === "POST"
+    ? response({ error: "dial-in finerDelta is invalid" }, { ok: false, status: 400 })
+    : response({ grinders: [{ id: "g-df", model: "DF64 Gen 1", settingType: "numeric", dialIn: null }], current: { grinderId: null, source: null } }));
   await ui.loadGrinders.click();
-  ui.grinderAnchors.value = "not-json";
+  ui.grinderAnchors.value = "{bad";
   await ui.saveGrinder.click();
-  assert.match(ui.grinderManagerStatus.textContent, /valid JSON/);
+  assert.match(ui.grinderManagerStatus.textContent, /Anchors must be valid JSON/);
   ui.grinderAnchors.value = "";
-  await ui.selectGrinder.click();
-  assert.match(ui.grinderManagerStatus.textContent, /did not confirm|unavailable/i);
-});
-
-test("native grinder manager surfaces wrong-unit owner anchors from the profile API", async () => {
-  const ui = await uiFixture(async (url, init = {}) => {
-    if (String(url).includes("/api/v1/grinders?")) return response([{ id: "host-e64", model: "E64 WS", burrs: "Stock" }]);
-    if (url === "grinders" && init.method === "POST") return response({ error: "calibration unit does not match grinder" }, { ok: false, status: 400 });
-    if (url === "grinders") return response({ schemaVersion: 1, profiles: [] });
-    if (String(url).includes("/api/v1/grinders/") && init.method === "PUT") return response({ id: "host-e64", model: "E64 WS" });
-    return response({ items: [], total: 0 });
-  });
-  await ui.loadGrinders.click();
-  ui.grinderLabel.value = "E64 owner";
-  ui.grinderBurrs.value = "Stock";
-  ui.grinderEpoch.value = "zero-1";
-  ui.grinderAnchors.value = JSON.stringify({ dialMin: 0, dialMax: 90, dialA: 0, ddDumA: 300, dialB: 90, ddDumB: 1200 });
   await ui.saveGrinder.click();
-  assert.match(ui.grinderManagerStatus.textContent, /calibration unit does not match grinder/i);
+  assert.match(ui.grinderManagerStatus.textContent, /finerDelta is invalid/);
 });
 
 test("recommendation network failure surfaces a retryable safe message", async () => {

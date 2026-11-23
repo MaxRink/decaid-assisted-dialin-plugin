@@ -44,3 +44,15 @@ test("no private simulator code or captures are vendored into this public reposi
   const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { encoding: "utf8" }).split("\n");
   assert.deepEqual(tracked.filter((file) => /e64ws_simulator|grind_capture|captures\/|grind-2026\d+/.test(file)), []);
 });
+
+test("the vendored plugin-ui kit is unedited and CI checks it against a pinned kit commit", () => {
+  const source = fs.readFileSync("plugin.js", "utf8");
+  const block = /\/\* plugin-ui:begin \*\/\nconst PLUGIN_UI = (.*);\n\/\* plugin-ui:end \*\//.exec(source);
+  assert.ok(block, "plugin.js keeps the vendor.mjs marker block");
+  const kit = JSON.parse(block[1]);
+  const sha = (text) => require("node:crypto").createHash("sha256").update(text, "utf8").digest("hex");
+  assert.deepEqual({ css: sha(kit.css), js: sha(kit.js) }, kit.sha256, "re-run vendor.mjs inject instead of editing the copy");
+  const ci = workflows.find(([name]) => name === "ci.yml")[1];
+  assert.match(ci, /raw\.githubusercontent\.com\/MaxRink\/streamline-js\/[0-9a-f]{40}\/docs\/plugin-ui/);
+  assert.match(ci, /vendor\.mjs" check plugin\.js "\$KIT"/);
+});

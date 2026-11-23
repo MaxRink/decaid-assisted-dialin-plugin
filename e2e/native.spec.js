@@ -216,24 +216,35 @@ test('unsafe return links are hidden and feedback text renders as text after rel
   await analyse(page); expect(await page.evaluate(() => window.exploited)).toBeUndefined(); await expect(page.locator('#result img')).toHaveCount(0);
 });
 
-test('grinder create, update and selection persist without rewriting authoritative workflow identity', async ({ page, request }) => {
-  await expert(page); await page.getByText('Individual grinder profiles and calibration', {exact: true}).click(); await page.locator('#loadGrinders').click();
+test('the grinder picker uses Decaid grinders and keeps dial-in data in the chosen record', async ({ page, request }) => {
+  const e64 = { id: 'grinder-1', model: 'E64 WS', burrs: 'stock', settingType: 'numeric', settingSmallStep: 1, archived: false,
+    extras: { source: 'mahlkoenig-e64.reaplugin', instanceId: 'sim', lastSeenAt: '2026-11-23T00:00:00.000Z' } };
+  const df = { id: 'grinder-2', model: 'DF64 Gen 2', burrs: 'Owner burr set', settingType: 'numeric', settingSmallStep: 0.5, archived: false };
+  await request.post('/__test/config', { data: { grinders: [e64, df] } });
+  await expert(page); await page.getByText('Grinder and dial-in data', { exact: true }).click(); await page.locator('#loadGrinders').click();
   await expect(page.locator('#grinderProfileSelect option')).toHaveCount(2);
-  await page.locator('#grinderProfileSelect').selectOption('__new__');
-  await page.locator('#grinderModel').selectOption('DF64 Gen 2'); await page.locator('#grinderLabel').fill('My DF64');
-  await page.locator('#grinderBurrs').fill('Owner burr set'); await page.locator('#grinderEpoch').fill('zero-2026-10');
-  await page.locator('#grinderPitchSource').fill('Owner verified physical direction'); await page.locator('#saveGrinder').click();
-  await expect(page.locator('#grinderManagerStatus')).toContainText('Saved host grinder');
-  const id = await page.locator('#grinderProfileSelect').inputValue(); expect(id).not.toBe('grinder-1');
-  await page.locator('#grinderLabel').fill('My calibrated DF64'); await page.locator('#saveGrinder').click();
-  await expect(page.locator('#grinderManagerStatus')).toContainText('Saved host grinder'); await page.locator('#selectGrinder').click();
-  await expect(page.locator('#grinderManagerStatus')).toContainText('Using DF64 Gen 2');
-  let state = await (await request.get('/__test/state')).json(); expect(state.grinders).toHaveLength(2);
+  await expect(page.locator('#grinderProfileSelect option[value="grinder-1"]')).toContainText('(current)');
+  await expect(page.locator('#grinderCurrent')).toContainText('kept up to date by mahlkoenig-e64.reaplugin');
+  await page.locator('#grinderProfileSelect').selectOption('grinder-2');
+  await page.locator('#dialUnit').fill('marks'); await page.locator('#dialFiner').selectOption('-1');
+  await page.locator('#dialStep').fill('0.5'); await page.locator('#dialMin').fill('0'); await page.locator('#dialMax').fill('90');
+  await page.locator('#grinderEpoch').fill('zero-2026-10'); await page.locator('#saveGrinder').click();
+  await expect(page.locator('#grinderManagerStatus')).toContainText('Saved the dial-in data');
+  let state = await (await request.get('/__test/state')).json();
+  const saved = state.grinders.find((item) => item.id === 'grinder-2');
+  expect(saved.extras['assisted-dialin.reaplugin']).toMatchObject({ settingUnit: 'marks', finerDelta: -1, stepSize: 0.5, minSetting: 0, maxSetting: 90, calibrationEpoch: 'zero-2026-10' });
+  expect(saved.model).toBe('DF64 Gen 2');
+  expect(state.grinders.find((item) => item.id === 'grinder-1').extras).toEqual(e64.extras);
+  await page.locator('#selectGrinder').click();
+  await expect(page.locator('#grinderManagerStatus')).toContainText('used whenever the workflow names none');
+  state = await (await request.get('/__test/state')).json();
   expect(state.workflow.context.grinderId).toBe('grinder-1');
-  await request.post('/__test/reload'); await page.reload(); await expert(page); await page.getByText('Individual grinder profiles and calibration', {exact: true}).click(); await page.locator('#loadGrinders').click();
-  await expect(page.locator('#grinderProfileSelect option')).toHaveCount(3); await page.locator('#grinderProfileSelect').selectOption(id);
-  await expect(page.locator('#grinderLabel')).toHaveValue('My calibrated DF64');
-  const settings = await (await request.get(PREFIX + '/settings')).json(); expect(settings.GrinderProfileId).toBe(id);
+  expect(state.grinders).toHaveLength(2);
+  await request.post('/__test/reload'); await page.reload(); await expert(page);
+  await page.getByText('Grinder and dial-in data', { exact: true }).click(); await page.locator('#loadGrinders').click();
+  await page.locator('#grinderProfileSelect').selectOption('grinder-2');
+  await expect(page.locator('#dialUnit')).toHaveValue('marks');
+  await expect(page.locator('#grinderEpoch')).toHaveValue('zero-2026-10');
 });
 
 test('catalog host lookup failure prevents writes and retries; concurrent clicks produce one bean', async ({ page, request }) => {
@@ -358,4 +369,25 @@ test('beginner recorded-good advice shows verified E64 native units instead of t
   await step(page, 1); const response = pluginResponse(page, 'recommendation'); await page.locator('#recommend').click();
   expect((await (await response).json()).status).toBe('recommendation'); await expect(page.locator('#result')).toContainText('63 µm');
   await expect(page.locator('#result')).not.toContainText('630'); await expect(page.locator('#result')).toContainText('not a live hardware reading');
+});
+
+test('a shot uploaded by Decaid\'s Visualizer plugin links to it; other shots show no link', async ({ page }) => {
+  expect((await analyse(page, 'shot-2')).visualizer).toEqual({id: 'vis-shot-2', url: 'https://visualizer.coffee/shots/vis-shot-2'});
+  const link = page.locator('#visualizerLink');
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute('href', 'https://visualizer.coffee/shots/vis-shot-2');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await analyse(page, 'shot-1');
+  await expect(link).toBeHidden();
+});
+
+test('a stored shot gets its recommendation in the background: one notice, the brew log and the analysis', async ({ page, request }) => {
+  await request.post('/__test/event', {data: {name: 'shotStored', payload: {id: 'shot-1'}}});
+  await expect.poll(async () => (await (await request.get(PREFIX + '/recommendations?shotId=shot-1')).json()).recommendation?.message, {timeout: 10000}).toBeTruthy();
+  const {recommendation} = await (await request.get(PREFIX + '/recommendations?shotId=shot-1')).json();
+  expect(recommendation.trigger).toBe('shotStored');
+  const state = await (await request.get('/__test/state')).json();
+  expect(state.notices).toEqual([expect.objectContaining({id: 'recommendation', message: recommendation.message})]);
+  await analyse(page, 'shot-1');
+  await expect(page.locator('#result')).toContainText('Recommended after this shot: ' + recommendation.message);
 });

@@ -15,7 +15,7 @@ function savedShot(id = 'shot-1') {
     {name: 'Fill', pump: 'flow', flow: 4, seconds: 5},
     {name: dynamic ? 'Infusing' : 'Extraction', pump: 'pressure', pressure: 9, seconds: 30, ...(dynamic ? {limiter: {value: 2, range: 1}} : {})},
   ]}, context: {beanBatchId: 'batch-1', beanId: 'bean-1', grinderId: 'grinder-1', grinderModel: 'E64 WS', grinderSetting: id === 'shot-3' ? '20' : '630', targetDoseWeight: 18, targetYield: 36, extras: {burrIdentity: 'stock', calibrationEpoch: 'epoch-1', basket: '58mm', grinderSettingUnit: id === 'shot-3' ? 'dial-mark' : 'deci-micrometre', beanType: 'Arabica', roastLevel: 'medium'}}};
-  return {id, bean: {id: 'bean-1', name: 'Fixture coffee', roaster: 'Owner', species: 'Arabica'}, beanBatch: {id: 'batch-1', beanId: 'bean-1', roastLevel: 'medium'}, timestamp: new Date(start).toISOString(), workflow, finalStopReason: 'targetWeight', measurements: Array.from({length: 32}, (_,n) => ({machine: {timestamp: new Date(start+n*1000).toISOString(), ...(id === 'shot-3' ? {} : {state: {state: 'espresso', substate: n === 0 ? 'preparingForShot' : n < 5 ? 'preinfusion' : n < 30 ? 'pouring' : 'pouringDone'}}), profileFrame: n < 5 ? 0 : 1, pressure: n < 5 ? 3 : 9, targetPressure: n < 5 ? 3 : 9, flow: n < 5 ? 4 : 1.8, targetFlow: n < 5 ? 4 : null, mixTemperature: 93, targetMixTemperature: 93, groupTemperature: 92.5, targetGroupTemperature: 93}, scale: {timestamp: new Date(start+n*1000).toISOString(), weight: n < 5 ? 0 : Math.min(36, (n-5)*1.44)}}))};
+  return {id, ...(id === 'shot-2' ? {annotations: {extras: {visualizerId: 'vis-shot-2'}}} : {}), bean: {id: 'bean-1', name: 'Fixture coffee', roaster: 'Owner', species: 'Arabica'}, beanBatch: {id: 'batch-1', beanId: 'bean-1', roastLevel: 'medium'}, timestamp: new Date(start).toISOString(), workflow, finalStopReason: 'targetWeight', measurements: Array.from({length: 32}, (_,n) => ({machine: {timestamp: new Date(start+n*1000).toISOString(), ...(id === 'shot-3' ? {} : {state: {state: 'espresso', substate: n === 0 ? 'preparingForShot' : n < 5 ? 'preinfusion' : n < 30 ? 'pouring' : 'pouringDone'}}), profileFrame: n < 5 ? 0 : 1, pressure: n < 5 ? 3 : 9, targetPressure: n < 5 ? 3 : 9, flow: n < 5 ? 4 : 1.8, targetFlow: n < 5 ? 4 : null, mixTemperature: 93, targetMixTemperature: 93, groupTemperature: 92.5, targetGroupTemperature: 93}, scale: {timestamp: new Date(start+n*1000).toISOString(), weight: n < 5 ? 0 : Math.min(36, (n-5)*1.44)}}))};
 }
 function newSession() {
   const shots = ['shot-1', 'shot-2', 'shot-3'].map(savedShot);
@@ -60,7 +60,7 @@ function newSession() {
 function reload(state) {
   state.plugin?.onUnload();
   let plugin;
-  const host = {log() {}, storage(command) {
+  const host = {log() {}, notify(notice) { (state.notices ||= []).push(clone(notice)); return 'notice-' + state.notices.length; }, storage(command) {
     if (command.type === 'read') setImmediate(() => plugin.onEvent({name: 'storageRead', payload: {key: command.key, value: clone(state.storage[command.key] || {})}}));
     if (command.type === 'write') {
       if (state.config.storageFail) return;
@@ -87,7 +87,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/__test/reset' || !state && url.pathname.startsWith('/api/')) { state?.sim?.stop(); id = randomUUID(); state = newSession(); sessions.set(id,state); res.setHeader('Set-Cookie', `dialin-test=${id}; Path=/; HttpOnly; SameSite=Lax`); }
     const send = (body, status = 200) => { res.writeHead(status, {'Content-Type': 'application/json'}); res.end(JSON.stringify(body)); };
     if (url.pathname === '/__test/reset') return send({id});
-    if (url.pathname === '/__test/config') { Object.assign(state.config, body); if (body.shots) state.shots = body.shots; if (body.workflow) state.workflow = body.workflow; return send({ok: true}); }
+    if (url.pathname === '/__test/config') { Object.assign(state.config, body); if (body.shots) state.shots = body.shots; if (body.grinders) state.grinders = body.grinders; if (body.workflow) state.workflow = body.workflow; return send({ok: true}); }
     if (url.pathname === '/__test/reload') { reload(state); return send({ok: true}); }
     if (url.pathname === '/__test/event') { state.plugin.onEvent({name: body.name, payload: body.payload}); return send({ok: true}); }
     if (url.pathname === '/__test/sim') {
@@ -102,11 +102,23 @@ const server = http.createServer(async (req, res) => {
       if (Number.isInteger(body.dd)) { await state.sim.setDd(body.dd); return send({ok: true, snapshot: state.sim.e64.snapshot()}); }
       return send({error: 'unsupported simulator request'}, 400);
     }
-    if (url.pathname === '/__test/state') return send({beans: state.beans, grinders: state.grinders, storage: state.storage, requests: state.requests, workflow: state.workflow, shots: state.shots, settingWrites: state.config.settingWrites || []});
+    if (url.pathname === '/__test/state') return send({beans: state.beans, grinders: state.grinders, storage: state.storage, requests: state.requests, workflow: state.workflow, shots: state.shots, settingWrites: state.config.settingWrites || [], hostSettingWrites: state.config.hostSettingWrites || [], settings: state.settings, notices: state.notices || []});
+    // Decaid's own plugin settings route wins over the plugin's endpoints: stored
+    // values only, a merge that rejects unknown keys, then a plugin reload.
+    if (url.pathname === '/api/v1/plugins/assisted-dialin.reaplugin/settings') {
+      if (req.method === 'GET') return send(state.settings);
+      if (state.config.protectedSettings) return send({error: 'extensions:manage token required'}, 401);
+      const known = Object.keys(require('../manifest.json').settings), unknown = Object.keys(body || {}).find(key => !known.includes(key));
+      if (unknown) return send({error: 'Unknown setting: ' + unknown}, 400);
+      (state.config.hostSettingWrites ||= []).push(body);
+      state.settings = {...state.settings, ...body};
+      reload(state);
+      return send(state.settings);
+    }
     if (url.pathname.startsWith('/api/v1/plugins/assisted-dialin.reaplugin/')) {
       const endpoint = url.pathname.split('/').at(-1);
       const reply = await state.plugin.handleHttpRequest({endpoint, method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams), body});
-      res.writeHead(reply.status, {'Content-Type': endpoint === 'ui' ? 'text/html; charset=utf-8' : 'application/json'}); return res.end(reply.body);
+      res.writeHead(reply.status, {'Content-Type': reply.headers?.['Content-Type'] || 'application/json'}); return res.end(reply.body);
     }
     if (url.pathname.startsWith('/api/')) { const reply = await state.fetch(url.href, {method: req.method, ...(raw ? {body: raw} : {})}); return send(await reply.json(), reply.status); }
     const filename = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/simulator/index.html' : url.pathname.endsWith('/') ? url.pathname + 'index.html' : url.pathname));

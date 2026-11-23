@@ -56,6 +56,12 @@ jobs:
       - run: python3 scripts/embed-reference-data.py --check
       - run: python3 scripts/embed-research-sharing.py --check
       - run: python3 scripts/embed-grinder-mechanics.py --check
+      - name: Check the vendored plugin-ui kit against its pinned commit
+        env:
+          KIT: https://raw.githubusercontent.com/MaxRink/streamline-js/f814285874bc2c7a6e8790fae5ce3762dffbf8bb/docs/plugin-ui
+        run: |
+          curl -fsSL "$KIT/vendor.mjs" -o "$RUNNER_TEMP/vendor.mjs"
+          node "$RUNNER_TEMP/vendor.mjs" check plugin.js "$KIT"
       - run: python3 scripts/update-coffee-catalog.py --check
       - run: node --check simulator/app.js && node --check simulator/engine.js
       - run: python3 scripts/build-simulator.py

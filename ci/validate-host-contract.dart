@@ -17,6 +17,7 @@ void main(List<String> args) {
       !permissions.contains('pluginStorage') ||
       !permissions.contains('events.shots') ||
       !permissions.contains('events.workflow') ||
+      !permissions.contains('notifications') ||
       !endpoints.map((entry) => entry['id']).toSet().containsAll({
         'ui',
         'shots',
@@ -24,7 +25,9 @@ void main(List<String> args) {
         'recommendation',
         'suggestion',
         'research',
-        'settings',
+        'setup',
+        'grinders',
+        'recommendations',
         'bean-context',
         'analysis',
       }) ||

@@ -213,7 +213,10 @@ test('shot update invalidates an in-flight history result before caching', async
   resolveFetch(response({items: [shot('old', '2.0')], total: 1}));
   assert.equal((await pending).status, 503);
   // The current workflow is read first so history can be filtered by its bean batch and grinder.
-  assert.deepEqual(h.fetchCalls.map((url) => new URL(url).pathname), ['/api/v1/workflow', '/api/v1/shots']);
+  // The workflow and its Decaid grinder are read first so history can be filtered by bean batch and grinder.
+  const paths = h.fetchCalls.map((url) => new URL(url).pathname);
+  assert.equal(paths[0], '/api/v1/workflow');
+  assert.equal(paths.filter((path) => path === '/api/v1/shots').length, 1);
   await call(h.plugin, 'recommendation', 'GET');
   // Shot events may also trigger a research capture read of the full shot.
   const history = h.fetchCalls.filter((url) => new URL(url).pathname === '/api/v1/shots');
