@@ -4254,7 +4254,7 @@ function createPlugin(host, services) {
       const epoch = sessionEpoch;
       if (attempt < 20) workflowRecommendationTimer = setTimeout(() => {
         workflowRecommendationTimer = null;
-        if (active && epoch === sessionEpoch) void syncWorkflowRecommendation(workflowRecommendation, attempt + 1).catch(() => {});
+        if (active && epoch === sessionEpoch) void syncWorkflowRecommendation(workflowRecommendation, attempt + 1).catch((error) => log("could not copy the recommendation into the workflow: " + error.message));
       }, Math.max(wait, 15000));
       return "deferred";
     }
@@ -6438,7 +6438,7 @@ if(typeof window!=='undefined'&&window.pu){pu.init();const setupLink=document.qu
         }
         return json(404, { error: "unknown endpoint or method" });
       } catch (error) {
-        log("request failed");
+        log(`${String(request.method || "")} ${endpoint} request failed (${error?.name || "Error"})`);
         return json(503, {
           error: "Assisted dial-in unavailable",
           code: "request_failed",

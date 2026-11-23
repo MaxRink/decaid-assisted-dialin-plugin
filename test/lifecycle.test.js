@@ -14,6 +14,7 @@ function deferred() {
 function fixture() {
   let plugin;
   const pending = [];
+  const logs = [];
   const context = vm.createContext({
     console,
     Date,
@@ -29,7 +30,7 @@ function fixture() {
   });
   vm.runInContext(`${source}\nthis.createPlugin = createPlugin;`, context);
   plugin = context.createPlugin({
-    log() {},
+    log(message) { logs.push(message); },
     storage(event) {
       if (event.type === 'read') {
         plugin.onEvent({name: 'storageRead', payload: {key: event.key, value: {}}});
@@ -37,7 +38,7 @@ function fixture() {
     },
   });
   plugin.onLoad({BeanBatchId: 'batch', GrinderId: 'grinder', ProfileId: 'profile'});
-  return {plugin, pending};
+  return {plugin, pending, logs};
 }
 
 function response(body, ok = true, status = 200) {
@@ -59,6 +60,16 @@ test('an in-flight recommendation is rejected when shot history changes', async 
   const result = await request;
   assert.equal(result.status, 503);
   assert.deepEqual(JSON.parse(result.body), {error: 'Assisted dial-in unavailable', code: 'request_failed'});
+});
+
+test('a failed request logs its endpoint without the error text', async () => {
+  const {plugin, pending, logs} = fixture();
+  const request = plugin.handleHttpRequest({endpoint: 'recommendation', method: 'GET'});
+  const first = await nextRequest(pending);
+  plugin.onEvent({name: 'shotUpdated', payload: {id: 'new-shot'}});
+  first.resolve(response([]));
+  assert.equal((await request).status, 503);
+  assert.deepEqual(logs.filter((message) => message.includes('request failed')), ['[dialin] GET recommendation request failed (Error)']);
 });
 
 test('an in-flight recommendation is rejected after unload', async () => {
