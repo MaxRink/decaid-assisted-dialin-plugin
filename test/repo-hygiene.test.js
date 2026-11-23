@@ -31,7 +31,7 @@ test("the simulator job uses the read-only research deploy key and says when it 
   const ci = workflows.find(([name]) => name === "ci.yml")[1];
   const job = ci.slice(ci.indexOf("  e64-simulator:"), ci.indexOf("  host-contract:"));
   assert.match(job, /repository: MaxRink\/mahlkoenig-e64ws-local-research\s+ssh-key: \$\{\{ secrets\.RESEARCH_REPO_SSH_KEY \}\}\s+path: research\s+persist-credentials: false/);
-  assert.match(job, /repository: MaxRink\/decaid-e64ws-plugin\s+ref: cf74463f50d9b4b46596b2638fbb0d5d21916052/);
+  assert.match(job, /repository: MaxRink\/decaid-e64ws-plugin\s+ref: 414de7b8125400a4087831b6cf71d5fc33f7d897/);
   assert.match(job, /repository: MaxRink\/decaid\s+ref: 314498021899c734227931dd34001590cabd34e5\s+ssh-key: \$\{\{ secrets\.DECAID_FORK_SSH_KEY \}\}\s+path: decaid-host\s+persist-credentials: false/);
   assert.match(job, /flutter-version: 3\.47\.9/);
   assert.match(job, /if: env\.HAS_RESEARCH_KEY != 'true'[\s\S]*::warning title=E64 simulator tests skipped::/);

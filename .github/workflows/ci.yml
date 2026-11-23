@@ -127,12 +127,12 @@ jobs:
           ssh-key: ${{ secrets.RESEARCH_REPO_SSH_KEY }}
           path: research
           persist-credentials: false
-      - name: Check out the E64 plugin (0.4.3)
+      - name: Check out the E64 plugin (0.4.4)
         if: env.HAS_RESEARCH_KEY == 'true'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: MaxRink/decaid-e64ws-plugin
-          ref: cf74463f50d9b4b46596b2638fbb0d5d21916052
+          ref: 414de7b8125400a4087831b6cf71d5fc33f7d897
           path: e64-plugin
           persist-credentials: false
       - name: Check out the Decaid fork with host certificate pinning
