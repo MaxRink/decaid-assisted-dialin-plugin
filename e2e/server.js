@@ -30,6 +30,17 @@ function newSession() {
     // With the E64 simulator bridge, grinder data originates from the simulator via the E64 plugin.
     if (state.sim && pathname === '/api/v1/grinder/info') return json(state.sim.e64.info());
     if (state.sim && pathname === '/api/v1/grinder/state') return state.sim.e64.snapshot() ? json(state.sim.e64.snapshot()) : json({error: 'No grinder snapshot'}, 503);
+    // Grinder plugin boundary (E64 0.5 contract, mocked until the plugin ships it):
+    // read-only owner setting and grind events, plus Decaid's standard setting route.
+    if (pathname === '/api/v1/plugins/mahlkoenig-e64.reaplugin/settings') return state.config.e64 ? json({AdjustmentOwner: state.config.e64.owner}) : json({error: 'not installed'}, 404);
+    if (pathname === '/api/v1/plugins/mahlkoenig-e64.reaplugin/grind-events') return state.config.e64 ? json({events: state.config.e64.events || []}) : json({error: 'not installed'}, 404);
+    if (pathname === '/api/v1/grinder/setting' && init.method === 'PUT') {
+      const body = JSON.parse(init.body);
+      (state.config.settingWrites ||= []).push(body);
+      const observation = state.config.grinderObservation || state.grinderObservation;
+      observation.snapshot = {...observation.snapshot, observedSetting: body.setting, timestamp: new Date().toISOString()};
+      return json({});
+    }
     if (pathname === '/api/v1/grinder/info') return json((state.config.grinderObservation || state.grinderObservation).info);
     if (pathname === '/api/v1/grinder/state') return json((state.config.grinderObservation || state.grinderObservation).snapshot);
     if (pathname === '/api/v1/shots') return json({items: state.shots.map(({id,timestamp,workflow}) => ({id,timestamp,workflow})), total: state.shots.length});
@@ -91,7 +102,7 @@ const server = http.createServer(async (req, res) => {
       if (Number.isInteger(body.dd)) { await state.sim.setDd(body.dd); return send({ok: true, snapshot: state.sim.e64.snapshot()}); }
       return send({error: 'unsupported simulator request'}, 400);
     }
-    if (url.pathname === '/__test/state') return send({beans: state.beans, grinders: state.grinders, storage: state.storage, requests: state.requests, workflow: state.workflow, shots: state.shots});
+    if (url.pathname === '/__test/state') return send({beans: state.beans, grinders: state.grinders, storage: state.storage, requests: state.requests, workflow: state.workflow, shots: state.shots, settingWrites: state.config.settingWrites || []});
     if (url.pathname.startsWith('/api/v1/plugins/assisted-dialin.reaplugin/')) {
       const endpoint = url.pathname.split('/').at(-1);
       const reply = await state.plugin.handleHttpRequest({endpoint, method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams), body});

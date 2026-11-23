@@ -128,6 +128,47 @@ The live dD is used in exactly two places, both labelled:
   `grinderSettingSource: "recorded-live-observation"`; the shot's own value and
   operator confirmations always win.
 
+### Grinder recipe, applying suggestions and the grinder's own GBS
+
+When the connected grinder comes from a grinder plugin (the host runtime ID
+`plugin:<plugin>:<driver>:<instance>`), the plugin also reads, with GET only:
+
+- **Grind events** (`GET /api/v1/plugins/<plugin>/grind-events?deviceId=…`). A
+  newly stored shot is linked to the completed grind that finished at most 5
+  minutes before it started (or up to 1 minute after), one shot per grind; failed
+  grinds are ignored. The grinder recipe, target, actual ground weight and grind
+  time are kept with the shot in `grinderObservations.v1`. Analysis and the shot
+  list show "Recipe: <type/mode> <amount>, ground <weight> g", and when a shot has
+  no weighed beans and no dose annotation, analysis uses the ground weight as
+  dose evidence labelled `grinder-reported ground weight`. The E64 0.5 event
+  shape is read (live target/result weight, motor time and displayed setting,
+  plus the `recipe` and `log` blocks the E64 plugin adds from the grinder's own
+  grind log, whose weight and duration are preferred); camelCase and snake_case
+  variants are also accepted. Events without a grind UUID (hosts that cannot yet
+  download the grind log) are keyed by their completion time, and a grind the
+  log marks unsuccessful is never linked.
+- **Who adjusts the dial**: the grinder plugin's `AdjustmentOwner` setting
+  (`off`, `grinder` or `decaid`) from Decaid's plugin settings route, or its
+  diagnostics `read=control`. Unknown means read-only.
+
+`GET grinder-control` reports the owner and whether the grinder declares a
+`grindSetting` control in Decaid's grinder info (numeric with bounds, or opaque).
+
+- **Owner `decaid`**: a numeric suggestion offers **Apply to grinder** on the
+  page. A second, explicit confirmation is required; the plugin then recomputes
+  the suggestion, refuses if it changed, converts it to the grinder's whole
+  display value and sends it through Decaid's standard
+  `PUT /api/v1/grinder/setting` route. It never applies anything automatically,
+  never calls the grinder plugin to change anything and never starts a grind.
+  `POST apply-setting` is accepted only from the plugin page. The suggested and
+  applied values, and whether the grinder accepted them, are recorded with the
+  suggestion's latest evidence shot.
+- **Owner `grinder`**: nothing is offered for applying. Each newly stored shot
+  (and each feedback save for it) records the assisted suggestion as it stood
+  then; `GET gbs-comparison` and the page's "Grinder GBS vs assisted dial-in"
+  view list it next to the dial the grinder's own GBS chose for the next shot.
+- **Owner `off` or unknown**: read-only; no apply and no comparison records.
+
 Recommendations and suggestions ask Decaid for history filtered by the current
 bean batch and grinder record (`GET /api/v1/shots?beanBatchId=&grinderId=`), so
 the bounded 250-shot scan covers comparable shots only.

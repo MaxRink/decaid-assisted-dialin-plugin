@@ -20,11 +20,20 @@ if [ ! -f "$DECAID_ROOT/pubspec.yaml" ]; then
 fi
 target="$DECAID_ROOT/test/plugins"
 test_copy="$target/dialin_e64_sim_test.dart"
-if [ -e "$test_copy" ]; then echo "$test_copy already exists; refusing to overwrite it" >&2; exit 1; fi
-cleanup() { rm -f "$test_copy"; }
+helper_copy="$target/dialin_e64_sim_helper.dart"
+for file in "$test_copy" "$helper_copy"; do
+  if [ -e "$file" ]; then echo "$file already exists; refusing to overwrite it" >&2; exit 1; fi
+done
+# The simulator launcher (E64Sim) is shared with the E64 plugin's own host test.
+if [ ! -f "$E64_PLUGIN_ROOT/ci/host_sim_test.dart" ]; then
+  if [ "${E64_SIM_OPTIONAL:-}" = 1 ]; then echo "SKIPPED: no E64 plugin checkout at $E64_PLUGIN_ROOT (E64_SIM_OPTIONAL=1)"; exit 0; fi
+  echo "E64 plugin ci/host_sim_test.dart not found in $E64_PLUGIN_ROOT (set E64_PLUGIN_ROOT)" >&2; exit 1
+fi
+cleanup() { rm -f "$test_copy" "$helper_copy"; }
 trap cleanup EXIT
 trap 'exit 1' INT TERM
 cp "$root/ci/sim_host_runtime_test.dart" "$test_copy"
+cp "$E64_PLUGIN_ROOT/ci/host_sim_test.dart" "$helper_copy"
 cd "$DECAID_ROOT"
 DIALIN_PLUGIN_ROOT="$root" E64_SIM_ROOT="$E64_SIM_ROOT" E64_PLUGIN_ROOT="$E64_PLUGIN_ROOT" \
   "$flutter" test test/plugins/dialin_e64_sim_test.dart

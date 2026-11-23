@@ -28,6 +28,11 @@ import 'package:reaprime/src/services/webserver_service.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_plus/shelf_plus.dart';
 
+// The E64 repository's simulator launcher (ci/host_sim_test.dart), copied next
+// to this file by scripts/run-sim-host-test.sh so both repositories start the
+// simulator the same way.
+import 'dialin_e64_sim_helper.dart' show E64Sim;
+
 // Self-contained: Decaid checkouts ship their own test helpers.
 class MemoryStore implements KeyValueStoreService {
   final Map<String, Map<String, Object>> values = {};
@@ -48,12 +53,6 @@ class MemoryStore implements KeyValueStoreService {
   Future<Map<String, Object>> getAll({String namespace = 'default'}) async => Map.of(values[namespace] ?? {});
 }
 
-Future<int> freePort() async {
-  final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-  final port = socket.port;
-  await socket.close();
-  return port;
-}
 
 Map<String, dynamic> workflow() => {
   'profile': {
@@ -87,9 +86,10 @@ final replayFixture = '$simRoot/tests/fixtures/grind-20261119-01.sanitized.jsonl
 /// One running chain: simulator, E64 plugin, grinder controller, Decaid REST
 /// on 127.0.0.1:8080 and the assisted dial-in plugin.
 class Chain {
-  Chain._(this.simControl, this.store, this.manager, this.grinders, this.current, this.shots, this.dialinId, this.e64Id, this.e64DeviceId);
+  Chain._(this.simControl, this.simRequest, this.store, this.manager, this.grinders, this.current, this.shots, this.dialinId, this.e64Id, this.e64DeviceId);
 
   final Future<void> Function(String route, Map<String, dynamic> body) simControl;
+  final Future<Map<String, dynamic>> Function(String route, [Map<String, dynamic>? body]) simRequest;
   final MemoryStore store;
   final PluginManager manager;
   final GrinderController grinders;
@@ -98,51 +98,15 @@ class Chain {
   final String dialinId, e64Id, e64DeviceId;
   var _sequence = 0;
 
-  static Future<Chain> start({List<String> simArgs = const []}) async {
-    // 1. A self-signed certificate for the simulator's WSS and REST listeners.
-    final temp = await Directory.systemTemp.createTemp('dialin-e64-sim-');
-    addTearDown(() => temp.delete(recursive: true));
-    final cert = '${temp.path}/cert.pem', key = '${temp.path}/key.pem';
-    final made = await Process.run('openssl', [
-      'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256',
-      '-nodes', '-days', '2', '-subj', '/CN=e64-sim', '-keyout', key, '-out', cert,
-    ]);
-    expect(made.exitCode, 0, reason: '${made.stderr}');
-    final fingerprint = await Process.run('openssl', ['x509', '-noout', '-fingerprint', '-sha256', '-in', cert]);
-    final pin = (fingerprint.stdout as String).trim().split('=').last;
-
-    // 2. The simulator.
-    final wsPort = await freePort(), httpPort = await freePort();
-    final python = env['E64_SIM_PYTHON'] ??
-        (File('$simRoot/.venv/bin/python').existsSync() ? '$simRoot/.venv/bin/python' : 'python3');
-    final sim = await Process.start(python, [
-      '-u', simScript, '--host', '127.0.0.1', '--port', '$wsPort', '--http-port', '$httpPort',
-      '--scale-port', '${await freePort()}', '--token', 'host-sim-token',
-      '--tls-cert', cert, '--tls-key', key, '--http-tls-cert', cert, '--http-tls-key', key,
-      ...simArgs,
-    ], workingDirectory: simRoot);
-    final output = StringBuffer();
-    sim.stdout.transform(utf8.decoder).listen(output.write);
-    sim.stderr.transform(utf8.decoder).listen(output.write);
-    addTearDown(() async {
-      sim.kill();
-      await sim.exitCode;
-    });
-    final ready = DateTime.now().add(const Duration(seconds: 15));
-    while (!output.toString().contains('E64 simulator:')) {
-      expect(DateTime.now().isBefore(ready), isTrue, reason: 'simulator did not start: $output');
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-    final control = HttpClient()..badCertificateCallback = (_, _, _) => true;
-    addTearDown(() => control.close(force: true));
-    Future<void> simControl(String route, Map<String, dynamic> body) async {
-      final request = await control.postUrl(Uri.parse('https://127.0.0.1:$httpPort$route'));
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode(body));
-      final response = await request.close();
-      await response.drain<void>();
-      expect(response.statusCode, 200, reason: route);
-    }
+  /// [replay] runs the simulator replaying a grind capture (`--replay`).
+  static Future<Chain> start({String? replay, bool control = false, String owner = 'off',
+      Map<String, dynamic> dialinSettings = const {'TargetTimeSec': 28}, Map<String, dynamic>? currentWorkflow}) async {
+    // The E64 repository's launcher: fresh certificate, pinned WSS and REST login.
+    final sim = await E64Sim.start(simRoot, extraArgs: [if (replay != null) ...['--replay', replay]]);
+    addTearDown(sim.stop);
+    final simRequest = sim.control;
+    final e64Settings = Map<String, dynamic>.of(sim.settings(control: control, owner: owner));
+    Future<void> simControl(String route, Map<String, dynamic> body) async => simRequest(route, body);
 
     // 3. The real host: the E64 plugin pins the certificate and mints a token
     //    through the simulator's REST login, then registers a grinder.
@@ -161,15 +125,7 @@ class Chain {
     await manager.loadPlugin(
       id: e64Manifest.id,
       manifest: e64Manifest,
-      settings: {
-        'InstancesJson': jsonEncode([
-          {'id': 'sim', 'name': 'E64 WS simulator', 'scheme': 'wss', 'host': '127.0.0.1', 'port': wsPort,
-            'restPort': httpPort, 'certSha256': pin, 'pollMs': 100},
-        ]),
-        'TokensJson': '{}',
-        'MintTokens': 'true',
-        'PasswordsJson': jsonEncode({'sim': {'host': '127.0.0.1', 'password': 'sim-password'}}),
-      },
+      settings: e64Settings,
       jsCode: await File('$e64Root/plugin.js').readAsString(),
     );
     final device = (await service.devices.where((devices) => devices.length == 1).first.timeout(const Duration(seconds: 5)))
@@ -179,7 +135,7 @@ class Chain {
 
     // 4. Decaid's REST API on the plugin's loopback port: the real grinder
     //    handler, plus fixed workflow/shot routes.
-    final current = workflow();
+    final current = currentWorkflow ?? workflow();
     final shots = <Map<String, dynamic>>[];
     final router = Router().plus;
     GrinderHandler(controller: grinders).addRoutes(router);
@@ -190,6 +146,21 @@ class Chain {
     router.get('/api/v1/shots/<id>', (Request _, String id) {
       final match = shots.where((shot) => shot['id'] == id);
       return match.isEmpty ? jsonResponse({'error': 'No such shot'}, 404) : jsonResponse(match.first);
+    });
+    router.get('/api/v1/bean-batches/<id>', (Request _, String id) => jsonResponse({'id': id, 'beanId': 'bean-sim'}));
+    router.get('/api/v1/beans/<id>', (Request _, String id) => jsonResponse({'id': id, 'name': 'Simulator beans'}));
+    // Decaid's plugin routes, as far as assisted dial-in reads them: stored
+    // non-secure settings and read-only plugin endpoints (GET only).
+    router.get('/api/v1/plugins/<id>/settings', (Request _, String id) => id == e64Manifest.id
+        ? jsonResponse({'AdjustmentOwner': e64Settings['AdjustmentOwner']}) : jsonResponse({'error': 'not found'}, 404));
+    var routed = 0;
+    router.get('/api/v1/plugins/<id>/<endpoint>', (Request request, String id, String endpoint) async {
+      final requestId = 'route-${++routed}';
+      final pending = manager.registerPendingHttp(id, requestId);
+      manager.dispatchEvent(id, 'httpRequest', {'requestId': requestId, 'endpoint': endpoint, 'method': 'GET',
+        'headers': <String, String>{}, 'body': null, 'query': request.url.queryParameters});
+      final response = await pending.timeout(const Duration(seconds: 10));
+      return Response(response['status'] as int? ?? 200, body: response['body'] as String?, headers: {'content-type': 'application/json'});
     });
     final HttpServer api;
     try {
@@ -206,25 +177,26 @@ class Chain {
     await manager.loadPlugin(
       id: dialinManifest.id,
       manifest: dialinManifest,
-      settings: const {'TargetTimeSec': 28},
+      settings: dialinSettings,
       jsCode: await File('$dialinRoot/plugin.js').readAsString(),
     );
-    return Chain._(simControl, store, manager, grinders, current, shots, dialinManifest.id, e64Manifest.id, device.deviceId);
+    return Chain._(simControl, simRequest, store, manager, grinders, current, shots, dialinManifest.id, e64Manifest.id, device.deviceId);
   }
 
   Future<void> observed(bool Function(GrinderSnapshot snapshot) test) =>
       grinders.snapshots.firstWhere(test).timeout(const Duration(seconds: 10));
 
-  Future<Map<String, dynamic>> call(String endpoint, {String method = 'GET', Object? body, String? plugin, Map<String, String> query = const {}}) async {
+  Future<Map<String, dynamic>> call(String endpoint, {String method = 'GET', Object? body, String? plugin, Map<String, String> query = const {},
+      Map<String, String> headers = const {}, int expectStatus = 200}) async {
     final id = 'sim-${++_sequence}';
     final target = plugin ?? dialinId;
     final pending = manager.registerPendingHttp(target, id);
     manager.dispatchEvent(target, 'httpRequest', {
-      'requestId': id, 'endpoint': endpoint, 'method': method, 'headers': <String, String>{},
+      'requestId': id, 'endpoint': endpoint, 'method': method, 'headers': headers,
       'body': body, 'query': query,
     });
     final response = await pending.timeout(const Duration(seconds: 10));
-    expect(response['status'], 200, reason: '$endpoint: ${response['body']}');
+    expect(response['status'], expectStatus, reason: '$endpoint: ${response['body']}');
     return jsonDecode(response['body'] as String) as Map<String, dynamic>;
   }
 
@@ -246,6 +218,27 @@ class Chain {
       expect(DateTime.now().isBefore(deadline), isTrue, reason: 'no live dial was recorded for $id');
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
+  }
+}
+
+// A current workflow in the grinder's display unit (micrometres), and three
+// comparable sour shots at display 500: one 5 µm step finer suggests 495.
+Map<String, dynamic> micronWorkflow({String? setting}) {
+  final value = workflow();
+  final context = value['context'] as Map<String, dynamic>;
+  (context['extras'] as Map<String, dynamic>)['grinderSettingUnit'] = 'micrometres';
+  if (setting != null) context['grinderSetting'] = setting;
+  return value;
+}
+const stepSettings = {'TargetTimeSec': 28, 'StepSize': 5, 'NumericFinerDelta': -1};
+const page = {'origin': 'http://127.0.0.1:8080', 'host': '127.0.0.1:8080'};
+Future<void> sourShotsAt500(Chain chain) async {
+  for (var hour = 1; hour <= 3; hour++) {
+    final id = 'evidence-$hour';
+    chain.shots.add({'id': id, 'timestamp': DateTime.now().toUtc().subtract(Duration(hours: hour)).toIso8601String(),
+      'workflow': micronWorkflow(setting: '500'), 'measurements': <dynamic>[]});
+    await chain.call('feedback', method: 'POST',
+        body: {'shotId': id, 'good': false, 'taste': 'sour', 'brewTimeSec': 22, 'brewTimeClock': 'pump'});
   }
 }
 
@@ -317,11 +310,69 @@ void main() {
   );
 
   test(
+    'owner decaid: a confirmed suggestion is applied through Decaid\'s setting route and moves the simulated dial',
+    () async {
+      expect(missing, isEmpty, reason: missing.join('; '));
+      final chain = await Chain.start(control: true, owner: 'decaid', dialinSettings: stepSettings, currentWorkflow: micronWorkflow());
+      expect(chain.e64DeviceId, 'plugin:mahlkoenig-e64.reaplugin:e64-control:sim');
+      await chain.observed((snapshot) => snapshot.observedSetting == '500');
+      await sourShotsAt500(chain);
+      final suggestion = await chain.call('suggestion');
+      expect(suggestion['currentSettingSource'], 'live-grinder-observation');
+      expect(suggestion['proposedSetting'], 495);
+      expect(suggestion['settingUnit'], 'micrometres');
+      final control = await chain.call('grinder-control');
+      expect(control['owner'], 'decaid');
+      expect(control['applyAvailable'], isTrue);
+      final request = {'proposedSetting': 495, 'settingUnit': 'micrometres'};
+      await chain.call('apply-setting', method: 'POST', body: request, headers: page, expectStatus: 409);
+      await chain.call('apply-setting', method: 'POST', body: {...request, 'confirmed': true}, expectStatus: 403);
+      expect(((await chain.simRequest('/sim/state'))['grinder'] as Map)['ddValueDum'], 5000, reason: 'nothing moves without confirmation from the page');
+      final applied = await chain.call('apply-setting', method: 'POST', body: {...request, 'confirmed': true}, headers: page);
+      expect(applied['setting'], '495');
+      await chain.observed((snapshot) => snapshot.observedSetting == '495');
+      expect(((await chain.simRequest('/sim/state'))['grinder'] as Map)['ddValueDum'], 4950);
+      final shots = (chain.store.values[chain.dialinId]!['grinderObservations.v1'] as Map)['shots'] as Map;
+      final record = (shots[(suggestion['sourceShotIds'] as List).first] as Map)['applied'] as Map;
+      expect(record['suggested'], {'value': 495, 'unit': 'micrometres'});
+      expect(record['applied'], {'value': 495, 'unit': 'grinder display'});
+      expect(record['accepted'], isTrue);
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
+    'owner grinder: the assisted suggestion is recorded and compared with the dial the grinder moves to',
+    () async {
+      expect(missing, isEmpty, reason: missing.join('; '));
+      final chain = await Chain.start(owner: 'grinder', dialinSettings: stepSettings, currentWorkflow: micronWorkflow());
+      await chain.observed((snapshot) => snapshot.observedSetting == '500');
+      await sourShotsAt500(chain);
+      expect((await chain.call('grinder-control'))['applyAvailable'], isFalse);
+      final first = await chain.storeShot('shadow-1');
+      expect(first['display'], 500);
+      expect((first['shadow'] as Map)['proposedSetting'], 495);
+      expect((first['shadow'] as Map)['direction'], 'finer');
+      // The grinder's own GBS moves the dial before the next shot.
+      await chain.simControl('/sim/action', {'suffix': 'SetAgsaTargetDdValue', 'data': {'targetDdValue': 4980}});
+      await chain.observed((snapshot) => snapshot.observedSetting == '498');
+      await chain.storeShot('shadow-2');
+      final rows = (await chain.call('gbs-comparison'))['rows'] as List;
+      final row = rows.cast<Map>().firstWhere((item) => item['shotId'] == 'shadow-1');
+      expect(row['dial'], {'value': 500, 'unit': 'grinder display'});
+      expect(row['grinderNext'], {'shotId': 'shadow-2', 'dial': {'value': 498, 'unit': 'grinder display'}, 'direction': 'smaller'});
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'the replayed 2026-11-19 grind drives the live grinder state and the dial recorded with its shot',
     () async {
       expect(missing, isEmpty, reason: missing.join('; '));
       expect(File(replayFixture).existsSync(), isTrue, reason: 'replay fixture not found at $replayFixture');
-      final chain = await Chain.start(simArgs: ['--replay', replayFixture]);
+      final chain = await Chain.start(replay: replayFixture);
 
       // Before the grind: idle at the captured dial, dD 819, which the E64 shows as 82.
       await chain.observed((snapshot) => snapshot.observedSetting == '82' && snapshot.state == GrinderState.idle);
@@ -340,12 +391,64 @@ void main() {
       // After the grind (GbwPostGrind, then Idle) the shot is stored and keeps the replayed dial.
       await chain.simControl('/sim/replay/seek', {'t': 36.0});
       await chain.observed((snapshot) => snapshot.state == GrinderState.idle);
-      expect((await chain.storeShot('replayed-shot'))['display'], 82);
+      final record = await chain.storeShot('replayed-shot');
+      expect(record['display'], 82);
+      // The E64 plugin reported the replayed grind; it is linked to the shot that followed it.
+      final linked = Map<String, dynamic>.from(record['grind'] as Map);
+      expect(linked['completedAt'], isNotNull);
+      // After the grind the E64 plugin downloads the grinder's own grind log, if
+      // the host's fetch can return binary data. Wait for that to settle.
+      Future<String?> logStatus() async =>
+          ((await chain.call('grind-events', plugin: chain.e64Id, query: {'deviceId': chain.e64DeviceId}))['log'] as Map?)?['status'] as String?;
+      var status = await logStatus();
+      final settled = DateTime.now().add(const Duration(seconds: 20));
+      while (!['ok', 'unsupported-host', 'failed'].contains(status) && DateTime.now().isBefore(settled)) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        status = await logStatus();
+      }
+      late Map grind;
+      if (status == 'unsupported-host') {
+        // Older hosts cannot return the log ZIP: only the live grind values exist.
+        grind = linked;
+        expect(grind['grindUuid'], isNull);
+        expect(grind['weightG'], 18.085);
+        expect(grind['durationS'], 7.554);
+        expect(grind['targets'], {'targetWeightG': 18});
+        expect((grind['recipe'] as Map).values.every((value) => value == null), isTrue);
+      } else {
+        // The log arrives after the shot was linked; reading the shot refreshes
+        // the same grind (same completion time) with its UUID, recipe and logged values.
+        expect(status, 'ok', reason: 'E64 grind log status');
+        var refreshed = linked;
+        final deadline = DateTime.now().add(const Duration(seconds: 20));
+        while (refreshed['grindUuid'] == null && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          refreshed = Map<String, dynamic>.from((await chain.call('analysis', method: 'POST', body: {'shotId': 'replayed-shot'}))['grind'] as Map);
+        }
+        grind = refreshed;
+        expect(grind['grindUuid'], isNotNull, reason: 'the grind log never reached the linked shot');
+        expect(grind['completedAt'], linked['completedAt'], reason: 'the refresh keeps the same grind');
+        final recipe = grind['recipe'] as Map;
+        expect(recipe['uuid'], isNotNull);
+        expect(recipe['mode'], isNotNull);
+        expect(recipe['amount'], isNotNull);
+        expect((grind['targets'] as Map)['targetWeightG'], 18);
+        expect(grind['weightG'], isNotNull);
+        final stored = (chain.store.values[chain.dialinId]!['grinderObservations.v1'] as Map)['shots'] as Map;
+        expect(((stored['replayed-shot'] as Map)['grind'] as Map)['grindUuid'], grind['grindUuid'], reason: 'the refresh is stored');
+      }
+      // ignore: avoid_print
+      print('replayed grind: E64 grind log $status, recipe ${grind['grindUuid'] == null ? 'not available' : grind['recipe']}');
       final analysis = await chain.call('analysis', method: 'POST', body: {'shotId': 'replayed-shot'});
       expect(analysis['context']['grinderSetting'], '820');
       expect(analysis['context']['grinderSettingPrecisionDd'], 5);
       expect(analysis['context']['grinderSettingSource'], 'recorded-live-observation');
       expect((analysis['recordedGrinderObservation'] as Map)['display'], 82);
+      expect(analysis['doseEvidence'], {'grams': grind['weightG'], 'source': 'grinder-reported ground weight', 'grindUuid': grind['grindUuid']});
+      // Owner "off" (read through Decaid's plugin settings route): no apply, no shadow.
+      final control = await chain.call('grinder-control');
+      expect(control['owner'], 'off');
+      expect(control['applyAvailable'], isFalse);
     },
     skip: skip,
     timeout: const Timeout(Duration(minutes: 2)),

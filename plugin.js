@@ -3085,6 +3085,8 @@ function createPlugin(host, services) {
     const generation = cacheGeneration;
     await loadStorage();
     await feedbackQueue;
+    await recordedShotObservations();
+    await refreshPendingGrinds([shotId], 1);
     const recordedObservations = await recordedShotObservations();
     const full = await fullShot(shotId);
     const mark = feedback[shotId]
@@ -3118,6 +3120,16 @@ function createPlugin(host, services) {
       feedback: mark,
       context: withRecordedSetting(historicalContext(full, mark), shotId, recordedObservations),
       recordedGrinderObservation: recordedObservations[shotId] || null,
+      grind: recordedObservations[shotId]?.grind || null,
+      // Best available dose: weighed beans, then the shot's own dose annotation,
+      // then the weight the grinder reports it ground for this shot.
+      doseEvidence: mark?.measuredBeanDose
+        ? { grams: mark.measuredBeanDose.weightG, source: "operator-confirmed bean weighing" }
+        : Number.isFinite(metrics.annotations?.actualDoseG)
+          ? { grams: metrics.annotations.actualDoseG, source: "shot dose annotation" }
+          : Number.isFinite(recordedObservations[shotId]?.grind?.weightG)
+            ? { grams: recordedObservations[shotId].grind.weightG, source: "grinder-reported ground weight", grindUuid: recordedObservations[shotId].grind.grindUuid }
+            : null,
       provenance:
         "Saved full shot and plugin-local operator feedback; a grinder setting observed live when the shot was stored is labelled as such",
     };
@@ -3553,17 +3565,76 @@ function createPlugin(host, services) {
       catch (_) { observationStore = "unavailable"; settleObservationWaiters(new Error("grinder observation storage unavailable")); }
     });
   }
+  // One record per shot: the live dial at shot time (display or legacy dD),
+  // the grind that preceded the shot, the shadow suggestion made while the
+  // grinder owned adjustments, and an applied suggestion. Every part is
+  // optional; `recordedAt` orders records for eviction.
+  const GRIND_TEXT = /^[A-Za-z0-9 ._:/+-]{1,64}$/;
+  const finiteOrNull = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  const isoOrNull = (value) => (typeof value === "string" && value.length <= 64 && Number.isFinite(Date.parse(value)) ? value : null);
+  function cleanGrind(item) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    // The grinder may not know a grind's UUID yet (E64 0.5 reports null).
+    const grindUuid = typeof item.grindUuid === "string" && /^[A-Za-z0-9-]{1,128}$/.test(item.grindUuid) ? item.grindUuid : null;
+    const completedAt = isoOrNull(item.completedAt);
+    if (!completedAt) return null;
+    const recipeIn = item.recipe && typeof item.recipe === "object" && !Array.isArray(item.recipe) ? item.recipe : {};
+    const text = (value) => (typeof value === "string" && GRIND_TEXT.test(value) ? value : null);
+    const recipe = {
+      index: Number.isSafeInteger(recipeIn.index) && recipeIn.index >= 0 ? recipeIn.index : null,
+      uuid: typeof recipeIn.uuid === "string" && /^[A-Za-z0-9-]{1,128}$/.test(recipeIn.uuid) ? recipeIn.uuid : null,
+      mode: text(recipeIn.mode),
+      type: text(recipeIn.type),
+      amount: finiteOrNull(recipeIn.amount),
+      coarseness: finiteOrNull(recipeIn.coarseness),
+    };
+    const targets = Object.create(null);
+    if (item.targets && typeof item.targets === "object" && !Array.isArray(item.targets))
+      for (const [key, value] of Object.entries(item.targets).slice(0, 8))
+        if (/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(key) && finiteOrNull(value) !== null) targets[key] = value;
+    return {
+      grindUuid, completedAt, recipe, targets,
+      // Absent means the grinder did not report a failure.
+      success: item.success !== false,
+      weightG: finiteOrNull(item.weightG), durationS: finiteOrNull(item.durationS), ddd: finiteOrNull(item.ddd),
+      setting: typeof item.setting === "string" && /^[A-Za-z0-9 .-]{1,16}$/.test(item.setting) ? item.setting : null,
+    };
+  }
+  function cleanShadow(item) {
+    if (!item || typeof item !== "object" || !isoOrNull(item.computedAt)) return null;
+    return {
+      computedAt: item.computedAt,
+      status: typeof item.status === "string" ? item.status.slice(0, 32) : null,
+      direction: ["finer", "coarser"].includes(item.direction) ? item.direction : null,
+      proposedSetting: finiteOrNull(item.proposedSetting),
+      settingUnit: textOrNull(item.settingUnit)?.slice(0, 64) || null,
+    };
+  }
+  function cleanApplied(item) {
+    if (!item || typeof item !== "object" || !isoOrNull(item.appliedAt)) return null;
+    const setting = (part) => part && typeof part === "object" && finiteOrNull(part.value) !== null
+      ? { value: part.value, unit: textOrNull(part.unit)?.slice(0, 64) || null } : null;
+    return { appliedAt: item.appliedAt, suggested: setting(item.suggested), applied: setting(item.applied), accepted: item.accepted === true };
+  }
   function restoreShotObservations(value) {
     const shots = value && typeof value === "object" && !Array.isArray(value) && value.shots;
     const restored = Object.create(null);
     if (shots && typeof shots === "object" && !Array.isArray(shots))
       for (const [id, item] of Object.entries(shots)) {
-        // Records hold either the display value (E64 plugin 0.4.4+) or the
+        if (!SHOT_ID.test(id) || !item || typeof item !== "object") continue;
+        const record = Object.create(null);
+        // The dial reading is the display value (E64 plugin 0.4.4+) or the
         // exact dD written by earlier versions; both stay readable.
-        const valid = (value) => Number.isSafeInteger(value) && value >= 0;
-        if (!SHOT_ID.test(id) || !item || typeof item.observedAt !== "string" || !Number.isFinite(Date.parse(item.observedAt))) continue;
-        if (valid(item.display) && item.ddValueDum === undefined) restored[id] = { display: item.display, observedAt: item.observedAt };
-        else if (valid(item.ddValueDum) && item.display === undefined) restored[id] = { ddValueDum: item.ddValueDum, observedAt: item.observedAt };
+        const valid = (number) => Number.isSafeInteger(number) && number >= 0;
+        const observedAt = isoOrNull(item.observedAt);
+        if (observedAt && valid(item.display) && item.ddValueDum === undefined) Object.assign(record, { display: item.display, observedAt });
+        else if (observedAt && valid(item.ddValueDum) && item.display === undefined) Object.assign(record, { ddValueDum: item.ddValueDum, observedAt });
+        const grind = cleanGrind(item.grind), shadow = cleanShadow(item.shadow), applied = cleanApplied(item.applied);
+        if (grind) record.grind = grind;
+        if (shadow) record.shadow = shadow;
+        if (applied) record.applied = applied;
+        const recordedAt = isoOrNull(item.recordedAt) || observedAt || grind?.completedAt || shadow?.computedAt || applied?.appliedAt;
+        if (Object.keys(record).length && recordedAt) restored[id] = Object.assign(record, { recordedAt });
       }
     return restored;
   }
@@ -3581,49 +3652,234 @@ function createPlugin(host, services) {
       catch (_) { observationWriteWaiters = observationWriteWaiters.filter((entry) => entry !== waiter); waiter.reject(new Error("grinder observation storage unavailable")); }
     });
   }
-  // Record the live dD for a just-stored shot: the shot must be recent (not an
-  // import of an old shot), use an E64-family grinder, and the observation
-  // must be fresh.
+  // Merges `parts` into a shot's record and persists, restoring on failure.
+  async function updateShotRecord(shotId, parts) {
+    await loadShotObservations();
+    const write = observationQueue.then(async () => {
+      const previous = shotObservations[shotId];
+      shotObservations[shotId] = Object.assign(Object.create(null), previous, parts, { recordedAt: new Date().toISOString() });
+      const evicted = trimFeedback(shotObservations, shotId, MAX_SHOT_OBSERVATIONS, "recordedAt");
+      try { await persistShotObservations(); }
+      catch (error) {
+        if (previous) shotObservations[shotId] = previous; else delete shotObservations[shotId];
+        evicted.forEach(([id, entry]) => { shotObservations[id] = entry; });
+        throw error;
+      }
+    });
+    observationQueue = write.catch(() => {});
+    return write;
+  }
+
+  // The grinder plugin behind the connected grinder, from the host runtime
+  // identity "plugin:<pluginId>:<driver>:<instance>". Read-only GETs only.
+  async function grinderPluginContext() {
+    const response = await apiRequest(`${API_BASE}/api/v1/grinder/info`);
+    if (!response.ok) return null;
+    const info = await response.json();
+    const match = /^plugin:([A-Za-z0-9._~-]+):([A-Za-z0-9._~-]+):(.+)$/.exec(String(info?.deviceId || ""));
+    return match ? { pluginId: match[1], instanceId: match[3], deviceId: info.deviceId, info } : null;
+  }
+  const OWNERS = ["off", "grinder", "decaid"];
+  // Who adjusts the dial, from the grinder plugin's AdjustmentOwner setting
+  // (a string, or a JSON map per instance) or its diagnostics connection
+  // read. null when the grinder plugin does not say.
+  async function adjustmentOwner(context) {
+    if (!context) return null;
+    const base = `${API_BASE}/api/v1/plugins/${encodeURIComponent(context.pluginId)}`;
+    const pick = (value) => {
+      if (OWNERS.includes(value)) return value;
+      if (typeof value === "string" && value.trim().startsWith("{")) { try { value = JSON.parse(value); } catch (_) { return null; } }
+      return value && typeof value === "object" && OWNERS.includes(value[context.instanceId]) ? value[context.instanceId] : null;
+    };
+    try {
+      const response = await apiRequest(`${base}/settings`);
+      const owner = response.ok ? pick((await response.json())?.AdjustmentOwner) : null;
+      if (owner) return owner;
+    } catch (_) {}
+    try {
+      const response = await apiRequest(`${base}/e64-diagnostics?deviceId=${encodeURIComponent(context.deviceId)}&read=control`);
+      const body = response.ok ? await response.json() : null;
+      return pick(body?.owner ?? body?.adjustmentOwner ?? body?.AdjustmentOwner);
+    } catch (_) { return null; }
+  }
+  // Completed grinds from the grinder plugin's read-only grind-events
+  // endpoint. Accepts camelCase or snake_case fields and flat or nested
+  // recipes; anything unrecognised is dropped.
+  async function grindEvents(context) {
+    return (await grindEventsResponse(context)).events;
+  }
+  // {events, logStatus}: logStatus is the grinder plugin's grind-log download
+  // state ("ok", "unsupported-host", ...), when it reports one.
+  async function grindEventsResponse(context) {
+    const none = { events: [], logStatus: null };
+    if (!context) return none;
+    try {
+      const response = await apiRequest(`${API_BASE}/api/v1/plugins/${encodeURIComponent(context.pluginId)}/grind-events?deviceId=${encodeURIComponent(context.deviceId)}`);
+      if (!response.ok) return none;
+      const body = await response.json();
+      const list = Array.isArray(body) ? body : Array.isArray(body?.events) ? body.events : Array.isArray(body?.items) ? body.items : [];
+      const logStatus = typeof body?.log?.status === "string" ? body.log.status.slice(0, 32) : null;
+      return { logStatus, events: list.slice(0, 200).map((raw) => {
+        if (!raw || typeof raw !== "object") return null;
+        const first = (source, ...keys) => keys.map((key) => source?.[key]).find((value) => value !== undefined && value !== null);
+        const number = (value) => (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value.trim()) ? Number(value) : value);
+        // E64 0.5: {grindUuid, completedAt, targetWeightGr, resultWeightGr,
+        // motorRunTimeMs, setting, log?: {grindWeightGr, grindDurationMs, setting,
+        // successful}, recipe?: {index, uuid, mode, type, amountGr, setting,
+        // brewTimeMs, brewWeightGr}}. log and recipe come from the grinder's own
+        // grind log and are absent until the host can download it.
+        const log = raw.log && typeof raw.log === "object" ? raw.log : {};
+        const recipe = raw.recipe && typeof raw.recipe === "object" ? raw.recipe : raw;
+        const targets = Object.fromEntries([
+          ["targetWeightG", raw.targetWeightGr],
+          ["brewWeightG", first(recipe, "brewWeightGr")],
+          ["brewTimeS", Number.isFinite(recipe.brewTimeMs) ? recipe.brewTimeMs / 1000 : undefined],
+        ].filter(([, value]) => Number.isFinite(value)));
+        const durationMs = first(log, "grindDurationMs") ?? raw.motorRunTimeMs;
+        return cleanGrind({
+          grindUuid: first(raw, "grindUuid", "grind_uuid"),
+          completedAt: first(raw, "completedAt", "completed_at", "hostCompletedAt", "observedAt"),
+          success: log.successful === false ? false : first(raw, "success"),
+          recipe: {
+            index: first(recipe, "index", "recipe_index", "recipeIndex"),
+            // A flat event's own "uuid" may be the grind's, so only nested recipes use it.
+            uuid: recipe === raw ? first(raw, "recipe_uuid", "recipeUuid") : first(recipe, "uuid", "recipe_uuid", "recipeUuid"),
+            mode: first(recipe, "mode", "recipe_mode", "recipeMode"),
+            type: first(recipe, "type", "recipe_type", "recipeType"),
+            amount: first(recipe, "amountGr", "amount", "recipe_amount", "recipeAmount"),
+            coarseness: number(recipe === raw ? first(raw, "coarseness", "recipe_coarseness", "recipeCoarseness") : first(recipe, "setting", "coarseness", "recipe_coarseness")),
+          },
+          targets: first(raw, "brewTargets", "brew_targets", "targets") ?? (Object.keys(targets).length ? targets : undefined),
+          weightG: first(log, "grindWeightGr") ?? first(raw, "grindWeightG", "grind_weight", "grindWeight", "weightG", "resultWeightGr"),
+          durationS: first(raw, "grindDurationS", "grind_duration", "grindDuration", "durationS") ??
+            (Number.isFinite(durationMs) ? durationMs / 1000 : undefined),
+          ddd: first(raw, "grindDdd", "grind_ddd", "ddd"),
+          setting: first(log, "setting") ?? first(raw, "setting"),
+        });
+      }).filter(Boolean) };
+    } catch (_) { return none; }
+  }
+  // A completed grind belongs to the shot that starts within a few minutes
+  // after it; each grind is linked to one shot only.
+  const GRIND_BEFORE_SHOT_MS = 5 * 60000, GRIND_AFTER_SHOT_MS = 60000;
+  function grindForShot(events, shot, shotId) {
+    const start = Date.parse(shot.timestamp);
+    // The completion time identifies a grind for good; its UUID may only
+    // arrive later, once the grinder plugin has read the grinder's own log.
+    const others = Object.entries(shotObservations).filter(([id]) => id !== shotId).map(([, record]) => record.grind).filter(Boolean);
+    const linkedAt = new Set(others.map((grind) => grind.completedAt));
+    const linkedUuid = new Set(others.map((grind) => grind.grindUuid).filter(Boolean));
+    return events
+      .filter((event) => event.success && !linkedAt.has(event.completedAt) && !(event.grindUuid && linkedUuid.has(event.grindUuid)))
+      .filter((event) => { const at = Date.parse(event.completedAt); return at >= start - GRIND_BEFORE_SHOT_MS && at <= start + GRIND_AFTER_SHOT_MS; })
+      .sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt))[0] || null;
+  }
+  // The suggestion as it stands now, kept for the grinder-vs-assisted comparison.
+  async function shadowSuggestion() {
+    try {
+      const result = await suggestion();
+      return cleanShadow({ computedAt: new Date().toISOString(), status: result.status, direction: result.direction,
+        proposedSetting: result.proposedSetting, settingUnit: result.settingUnit ?? null });
+    } catch (_) { return null; }
+  }
+
+  // For a just-stored shot: the live dial (fresh observation, E64-family
+  // grinder), the grind that preceded it, and while the grinder owns
+  // adjustments a shadow suggestion. The shot must be recent, so imports of
+  // old shots never receive today's state.
   async function recordShotObservation(shotId) {
     if (!active || !SHOT_ID.test(String(shotId || ""))) return;
     const epoch = sessionEpoch;
     // No connected or observing grinder is the normal case: stay silent.
-    let observation;
-    try { observation = await grinderObservation(); } catch (_) { return; }
+    let observation = null, context = null;
+    try { observation = await grinderObservation(); } catch (_) {}
+    try { context = await grinderPluginContext(); } catch (_) {}
+    if (!observation && !context) return;
     try {
-      if (observation.status !== "available" || !observation.reading || !observation.observedAt) return;
       const now = Date.now();
-      if (now - Date.parse(observation.observedAt) > OBSERVATION_MAX_AGE_MS) return;
       const shot = await fullShot(shotId);
       const age = now - Date.parse(shot.timestamp);
       if (!(age >= 0 && age <= SHOT_MAX_AGE_MS)) return;
-      if (!grinderDialTools.profileFor(contextOf(shot, false).grinderModel)?.algorithmScale) return;
       await loadShotObservations();
-      if (!active || epoch !== sessionEpoch) return;
-      const write = observationQueue.then(async () => {
-        const previous = shotObservations[shotId];
-        shotObservations[shotId] = observation.reading.kind === "display"
+      const parts = {};
+      if (observation?.status === "available" && observation.reading && observation.observedAt &&
+          now - Date.parse(observation.observedAt) <= OBSERVATION_MAX_AGE_MS &&
+          grinderDialTools.profileFor(contextOf(shot, false).grinderModel)?.algorithmScale)
+        Object.assign(parts, observation.reading.kind === "display"
           ? { display: observation.reading.value, observedAt: observation.observedAt }
-          : { ddValueDum: observation.reading.value, observedAt: observation.observedAt };
-        const evicted = trimFeedback(shotObservations, shotId, MAX_SHOT_OBSERVATIONS, "observedAt");
-        try { await persistShotObservations(); }
-        catch (error) {
-          if (previous) shotObservations[shotId] = previous; else delete shotObservations[shotId];
-          evicted.forEach(([id, entry]) => { shotObservations[id] = entry; });
-          throw error;
-        }
-      });
-      observationQueue = write.catch(() => {});
-      await write;
+          : { ddValueDum: observation.reading.value, observedAt: observation.observedAt });
+      const grind = grindForShot(await grindEvents(context), shot, shotId);
+      if (grind) parts.grind = grind;
+      if (await adjustmentOwner(context) === "grinder") {
+        const shadow = await shadowSuggestion();
+        if (shadow) parts.shadow = shadow;
+      }
+      if (!active || epoch !== sessionEpoch || !Object.keys(parts).length) return;
+      await updateShotRecord(shotId, parts);
+      if (grindPending(parts)) scheduleGrindRefresh(shotId);
     } catch (_) {
-      log("could not record the live grinder setting for a stored shot");
+      log("could not record the live grinder state for a stored shot");
     }
+  }
+  // The grinder plugin adds a grind's UUID, recipe and logged values after the
+  // grind, once it has downloaded the grinder's own log, so a shot linked
+  // before that is refreshed from the same grind (same completion time; never
+  // a different grind): after a few delays and when the shot is read.
+  const GRIND_REFRESH_DELAYS_MS = [5000, 20000, 60000];
+  const GRIND_REFRESH_MAX_AGE_MS = 60 * 60000;
+  const grindRefreshTimers = new Set();
+  function grindPending(record) {
+    return Boolean(record?.grind && !record.grind.grindUuid && Date.now() - Date.parse(record.grind.completedAt) <= GRIND_REFRESH_MAX_AGE_MS);
+  }
+  // "done", "pending" (may still arrive) or "unsupported" (this host cannot).
+  async function refreshGrind(shotId) {
+    await loadShotObservations();
+    const record = shotObservations[shotId];
+    if (!grindPending(record)) return "done";
+    const context = await grinderPluginContext().catch(() => null);
+    if (!context) return "pending";
+    const { events, logStatus } = await grindEventsResponse(context);
+    const same = events.find((event) => event.completedAt === record.grind.completedAt);
+    if (same && same.grindUuid) {
+      if (!active) return "done";
+      await updateShotRecord(shotId, { grind: same });
+      return "done";
+    }
+    return logStatus === "unsupported-host" ? "unsupported" : "pending";
+  }
+  function scheduleGrindRefresh(shotId, attempt = 0) {
+    if (!active || attempt >= GRIND_REFRESH_DELAYS_MS.length) return;
+    const epoch = sessionEpoch;
+    const timer = setTimeout(async () => {
+      grindRefreshTimers.delete(timer);
+      if (!active || epoch !== sessionEpoch) return;
+      const result = await refreshGrind(shotId).catch(() => "pending");
+      if (result === "pending") scheduleGrindRefresh(shotId, attempt + 1);
+    }, GRIND_REFRESH_DELAYS_MS[attempt]);
+    // Never keep a runtime alive just for this.
+    if (timer && typeof timer.unref === "function") timer.unref();
+    grindRefreshTimers.add(timer);
+  }
+  // Reads refresh a bounded number of shots still waiting for their grind log.
+  async function refreshPendingGrinds(shotIds, limit = 3) {
+    const pending = shotIds.filter((id) => grindPending(shotObservations[id])).slice(0, limit);
+    for (const id of pending) await refreshGrind(id).catch(() => {});
+  }
+  // After feedback, refresh the shadow suggestion of a recorded shot so it
+  // reflects that shot's taste, as the grinder's own learning does.
+  async function refreshShadow(shotId) {
+    try {
+      await loadShotObservations();
+      if (!shotObservations[shotId] || await adjustmentOwner(await grinderPluginContext()) !== "grinder") return;
+      const shadow = await shadowSuggestion();
+      if (shadow) await updateShotRecord(shotId, { shadow });
+    } catch (_) {}
   }
   // Fills a missing historical setting from the observation recorded with
   // that shot. Explicit shot values and operator confirmations win.
   function withRecordedSetting(context, shotId, recordedObservations) {
     const recordedItem = recordedObservations && recordedObservations[String(shotId)];
-    if (!recordedItem || context.grinderSetting !== null) return context;
+    if (!recordedItem || context.grinderSetting !== null || (recordedItem.display === undefined && recordedItem.ddValueDum === undefined)) return context;
     const reading = recordedItem.display !== undefined
       ? { kind: "display", value: recordedItem.display } : { kind: "ddValueDum", value: recordedItem.ddValueDum };
     const filled = readingSetting(context.grinderModel, reading, context.settingUnit);
@@ -3632,6 +3888,77 @@ function createPlugin(host, services) {
   async function recordedShotObservations() {
     try { await loadShotObservations(); return shotObservations; }
     catch (_) { return Object.create(null); }
+  }
+
+  // Applying a suggestion: only when the grinder plugin hands adjustments to
+  // Decaid, the connected grinder declares a numeric grindSetting control,
+  // and the request carries the owner's explicit confirmation. The value
+  // goes through Decaid's standard PUT /api/v1/grinder/setting route.
+  async function grinderControl() {
+    const context = await grinderPluginContext().catch(() => null);
+    const info = context?.info || null;
+    const descriptor = info?.controls?.grindSetting;
+    // Numeric controls carry bounds; an opaque control accepts any string, so
+    // only a whole non-negative display value is sent to it.
+    const numeric = descriptor && descriptor.kind === "numeric" && finiteOrNull(descriptor.min) !== null && finiteOrNull(descriptor.max) !== null
+      ? { kind: "numeric", min: descriptor.min, max: descriptor.max, step: finiteOrNull(descriptor.step) }
+      : descriptor && descriptor.kind === "opaque" ? { kind: "opaque", min: 0, max: Number.MAX_SAFE_INTEGER, step: 1 } : null;
+    const settable = Boolean(numeric && Array.isArray(info?.capabilities) && info.capabilities.includes("grindSetting"));
+    const owner = await adjustmentOwner(context);
+    return { owner, settable, grindSetting: numeric, applyAvailable: owner === "decaid" && settable,
+      shadowMode: owner === "grinder",
+      provenance: "Read from Decaid's grinder info and the grinder plugin's settings; nothing is changed by reading it." };
+  }
+  // The suggested value in the control's unit (the grinder display, µm).
+  function controlValue(model, value, unit) {
+    const kind = settingUnitKind(unit), scale = grinderDialTools.profileFor(model)?.algorithmScale;
+    if (kind === "um") return value;
+    if (kind === "dd" && scale) return value / scale;
+    return null;
+  }
+  async function applySetting(input) {
+    if (!input || input.confirmed !== true) throw new Error("Applying a setting needs the owner's explicit confirmation");
+    const control = await grinderControl();
+    if (control.owner !== "decaid") throw new Error("The grinder plugin does not hand dial adjustments to Decaid (AdjustmentOwner is not decaid)");
+    if (!control.settable) throw new Error("The connected grinder does not offer a grind setting control");
+    const current = await suggestion();
+    if (current.status !== "suggestion" || current.proposedSetting == null ||
+        current.proposedSetting !== input.proposedSetting || current.settingUnit !== input.settingUnit)
+      throw new Error("The suggestion changed; review the current suggestion before applying it");
+    const workflow = await currentWorkflow();
+    const value = controlValue(contextOf({ workflow }, true).grinderModel, current.proposedSetting, current.settingUnit);
+    const { min, max } = control.grindSetting;
+    if (value === null || !Number.isFinite(value) || value < min || value > max || !Number.isInteger(value))
+      throw new Error("The suggested setting cannot be expressed as a whole grinder display value within its range");
+    const response = await apiRequest(`${API_BASE}/api/v1/grinder/setting`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ setting: String(value) }) });
+    const accepted = Boolean(response && response.ok);
+    const record = cleanApplied({ appliedAt: new Date().toISOString(), accepted,
+      suggested: { value: current.proposedSetting, unit: current.settingUnit }, applied: { value, unit: "grinder display" } });
+    const shotId = current.sourceShotIds?.[0];
+    if (shotId) await updateShotRecord(shotId, { applied: record }).catch(() => log("could not record an applied setting"));
+    if (!accepted) throw new Error(`The grinder did not accept the setting (HTTP ${response?.status ?? "unknown"})`);
+    return { applied: true, setting: String(value), record, shotId: shotId || null };
+  }
+  // Per recorded shot: the dial used, the assisted suggestion made while the
+  // grinder owned adjustments, and the dial the grinder's GBS moved to for the
+  // next recorded shot.
+  async function gbsComparison() {
+    const records = await recordedShotObservations();
+    const dial = (record) => record.display !== undefined ? { value: record.display, unit: "grinder display" }
+      : record.ddValueDum !== undefined ? { value: record.ddValueDum, unit: "deci-micrometre" } : null;
+    const ordered = Object.entries(records).filter(([, record]) => dial(record))
+      .sort(([, a], [, b]) => Date.parse(a.observedAt) - Date.parse(b.observedAt));
+    const rows = ordered.map(([shotId, record], index) => {
+      const next = ordered[index + 1];
+      const used = dial(record), moved = next ? dial(next[1]) : null;
+      const grinderDirection = moved && moved.unit === used.unit
+        ? (moved.value === used.value ? "none" : moved.value < used.value ? "smaller" : "larger") : null;
+      return { shotId, observedAt: record.observedAt, dial: used, assisted: record.shadow || null,
+        grinderNext: next ? { shotId: next[0], dial: moved, direction: grinderDirection } : null };
+    }).filter((row) => row.assisted);
+    return { rows: rows.slice(-50),
+      provenance: "Assisted suggestions were computed while the grinder's own GBS owned adjustments; the grinder's next dial is the live display at the next recorded shot. Neither is a measured extraction outcome." };
   }
 
   function compare(current, candidate) {
@@ -4790,6 +5117,8 @@ function createPlugin(host, services) {
 </form>
 </section>
 <section id="compareStep" data-native-step="4"><h2>Your next setting</h2><p>Use your grinder’s actual numbers. Keep the dose and beverage weight unchanged while testing one small adjustment.</p><div id="nativeNextStep" role="status">First analyse a saved shot in step 3 and record how it tasted. Then ask for the next setting.</div><button id="nativeAdviceSuggest" type="button">Find my next setting from saved feedback</button>
+<div id="grinderAdjust" hidden><p id="grinderAdjustStatus" role="status" aria-live="polite"></p><button id="applyToGrinder" type="button" hidden>Apply to grinder</button> <button id="confirmApply" type="button" hidden>Confirm and set the grinder</button> <button id="cancelApply" type="button" hidden>Cancel</button></div>
+<details id="gbsComparison"><summary>Grinder GBS vs assisted dial-in</summary><p>While the grinder's own GBS adjusts the dial, each recorded shot keeps the assisted suggestion next to the dial the grinder chose for the next shot. Neither is a measured extraction result.</p><button id="loadGbsComparison" type="button">Show the comparison</button><ul id="gbsComparisonList"></ul></details>
 <details id="nativeAdviceManual"><summary>I can confirm my grinder’s dial and adjustment size</summary><p>This is a small manual experiment. Enter the numbers printed on your own grinder; do not enter research coordinates. Your saved shot must use a compatible pressure profile.</p>
 <form id="nativeAdviceForm"><label>My grinder<select id="nativeAdviceModel"><option value="e64ws">E64 WS (micrometres)</option><option value="df54">DF54</option><option value="df64_gen1">DF64 Gen 1</option><option value="df64_gen2">DF64 Gen 2</option></select></label><label><span id="nativeAdviceCurrentLabel">Current setting (µm)</span><input id="nativeAdviceCurrent" type="number" step="any" required></label><label><span id="nativeAdviceStepLabel">One small adjustment (µm)</span><input id="nativeAdviceStep" type="number" min="0.001" step="any" required></label><label>On my grinder, finer means<select id="nativeAdviceDirection" required><option value="">Choose after checking your grinder</option><option value="-1">Smaller numbers</option><option value="1">Larger numbers</option></select></label><label>How did you time this shot?<select id="nativeAdviceClock"><option value="pump">From pump start</option><option value="pouring">Machine pouring phase (after preinfusion)</option><option value="recording">Whole recording (includes preparation)</option></select></label><label>Measured shot time (seconds)<input id="nativeAdviceActual" type="number" min="0.1" max="600" step="0.1" required></label><label>My target, timed the same way (seconds)<input id="nativeAdviceTarget" type="number" min="0.1" max="600" step="0.1" required></label><label>What would you like to improve?<select id="nativeAdviceTaste"><option value="">No clear taste signal</option><option value="balanced">It tastes balanced</option><option value="too sour">Too sour / acidic</option><option value="too bitter">Too bitter / dry</option><option value="too astringent">Too astringent / harsh</option><option value="weak">Weak; cause uncertain</option><option value="channeling">Possible channeling; check preparation</option></select></label><label><input id="nativeAdviceConfirm" type="checkbox" required> This setting was used for this saved shot. I checked the adjustment size and finer direction, the target is timed the same way, and the shot completed my intended recipe</label><button type="submit">Calculate one small dial adjustment</button></form><p id="nativeAdviceResult" role="status"></p></details>
 <div class="expert-panel" hidden><h2>Compare all ten calculators</h2><p>Adaptive replay needs a confirmed timing clock and a saved research coordinate. Each supporting calculator has independent measurements; unavailable inputs stay visible. No result changes hardware.</p><div class="native-grid"><label>Measured time on selected clock (seconds)<input id="compare-actual" type="number" min="0.1" max="600" step="0.1" placeholder="Auto-filled only for a complete observed pump clock"></label><label>Target on the same clock (seconds)<input id="compare-target" type="number" min="1" max="600" step="0.1"></label><label>Measurement and target clock<select id="compare-clock"><option value="pump">Pump</option><option value="pouring">Pouring</option><option value="recording">Recording elapsed</option></select></label><label>Tolerance (seconds)<input id="compare-tolerance" type="number" min="0" max="60" step="0.1" value="1"></label></div><p>When the pump clock is unavailable, enter a measured time explicitly. Recording elapsed time includes preheating or settling and is not substituted.</p><div id="nativeSupplemental"></div><button id="compareAll" type="button">Compare all applicable algorithms</button><div id="comparisonRows" aria-live="polite"></div><details class="expert-panel"><summary>Advanced: replay research calculations</summary>
@@ -4877,6 +5206,8 @@ document.querySelector('#nativeAdviceModel')?.addEventListener('change',()=>{con
 adviceForm?.addEventListener('input',()=>{adviceGeneration++;if(adviceResult)adviceResult.textContent='Inputs changed. Calculate the next adjustment again.';});
 adviceForm?.addEventListener('submit',async event=>{event.preventDefault();const generation=++adviceGeneration,analysis=latestAnalysis;const button=adviceForm.querySelector('button');try{if(!analysis)throw new Error('Analyse your saved shot in step 3 first.');if(/error|disconnected|stopping.?backstop/i.test(String(analysis.metrics?.stopReason||'')))throw new Error('This shot ended with an interrupted machine stop. Keep the dial unchanged and record a completed shot before using time as grind evidence.');if(!['pressure','mixed_preinfusion_flow'].includes(analysis.metrics?.trace?.controlMode))throw new Error('This flow-controlled or unknown profile cannot support a time-based dial adjustment. Compare the actual flow trace and taste first; keep the dial unchanged.');const read=id=>document.querySelector('#nativeAdvice'+id);if(!read('Confirm').checked)throw new Error('Confirm your physical dial, adjustment size and completed recipe first.');const models={e64ws:'E64 WS',df54:'DF54',df64_gen1:'DF64 Gen 1',df64_gen2:'DF64 Gen 2'},normalize=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]/g,'');if(normalize(analysis.context?.grinderModel)!==normalize(models[read('Model').value]))throw new Error('The selected grinder must match this saved shot. Analyse a shot from your '+models[read('Model').value]+' before proposing a dial number.');if(['Current','Step','Actual','Target','Direction'].some(name=>!read(name).value.trim()))throw new Error('Enter each measured value and confirm the physical finer direction; an empty dial is not zero.');const current=Number(read('Current').value),step=Number(read('Step').value),actual=Number(read('Actual').value),target=Number(read('Target').value),sign=Number(read('Direction').value);if(![current,step,actual,target].every(Number.isFinite)||step<=0||actual<=0||actual>600||target<=0||target>600||![-1,1].includes(sign))throw new Error('Enter a current dial number, a positive small step, measured and target times, and the verified finer direction.');const unit=read('Model').value==='e64ws'?'µm':'marks',taste=read('Taste').value;const savedRaw=analysis.context?.grinderSetting,savedUnit=String(analysis.context?.settingUnit||'').toLowerCase(),savedValue=savedRaw!=null&&String(savedRaw).trim()!==''?Number(savedRaw):NaN;let savedNative=null;if(Number.isFinite(savedValue)){if(read('Model').value==='e64ws'&&savedUnit==='deci-micrometre')savedNative=savedValue/10;else if(read('Model').value==='e64ws'&&['micrometres','micrometre','micrometers','micrometer','µm','um'].includes(savedUnit))savedNative=savedValue;else if(read('Model').value!=='e64ws'&&['dial-mark','dial-marks','marks','owner marks','owner-calibrated marks'].includes(savedUnit))savedNative=savedValue;}if(savedNative!=null&&Math.abs(savedNative-current)>1e-7)throw new Error('This shot was recorded at '+savedNative+' '+unit+'. Enter the setting used for that shot, or analyse a shot at your current setting.');if(!taste){adviceResult.textContent='Keep '+current+' '+unit+' for now. Taste the shot and choose what needs improving before requesting an exact adjustment.';return;}if(['weak','channeling'].includes(taste)){adviceResult.textContent='Keep '+current+' '+unit+' for now. Check dose, distribution and the actual flow trace; this taste observation does not identify a reliable dial change.';return;}button.disabled=true;const response=await grinderJson(await fetch(endpoint('research'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'manual',input:{profile:read('Model').value,currentDial:current,...(read('Model').value==='e64ws'?{settingUnit:'micrometres',stepNative:step}:{stepMarks:step}),numericFinerDelta:sign,targetTimeSec:target,actualTimeSec:actual,flavor:taste}})}));if(generation!==adviceGeneration||analysis!==latestAnalysis)return;const result=response.result;if(Number.isFinite(result.proposedDial))adviceResult.textContent='Try '+result.proposedDial+' '+unit+' next (currently '+current+'; '+step+' '+(unit==='marks'?'mark'+(step===1?'':'s'):unit)+' '+result.direction+'). Keep dose and beverage weight unchanged. Brew, taste and record the next shot before another adjustment. This is an owner-confirmed experiment, not a measured grind-response prediction.';else adviceResult.textContent='Keep '+current+' '+unit+' for now. '+(result.reasons||[]).join(' ');}catch(error){if(generation===adviceGeneration&&adviceResult)adviceResult.textContent=error.message;}finally{if(button)button.disabled=false;}});
 
+// "Recipe: espresso/GbW 18, ground 18.07 g" from the grind linked to a shot.
+const recipeLine=grind=>{if(!grind||typeof grind!=='object')return '';const recipe=grind.recipe||{};const kind=[recipe.type,recipe.mode].filter(Boolean).join('/');const amountValue=Number.isFinite(recipe.amount)?recipe.amount:grind.targets?.targetWeightG;const amount=Number.isFinite(amountValue)?' '+String(amountValue):'';const ground=Number.isFinite(grind.weightG)?', ground '+String(grind.weightG)+' g':'';return kind||amount||ground?'Recipe: '+(kind||'grinder recipe')+amount+ground:'';};
 const renderTraceGraph=body=>{const holder=document.querySelector('#traceGraph'),content=document.querySelector('#traceGraphBody');if(!holder||!content)return;holder.hidden=!body?.metrics?.trace?.points?.length;if(!holder.hidden)uiTools.renderTrace(content,body.metrics);};
 // A setting read live from the connected grinder is always disclosed with the suggestion.
 const liveSettingNote=(name,body)=>name==='suggestion'&&body?.currentSettingSource==='live-grinder-observation'&&body.liveGrinderObservation?'\\n\\nCurrent setting read live from the connected grinder: '+String(body.liveGrinderObservation.setting)+(body.liveGrinderObservation.observedAt?' at '+String(body.liveGrinderObservation.observedAt):'')+'.'+(body.currentSettingPrecisionDd?' The grinder display rounds to whole micrometres (±'+String(body.currentSettingPrecisionDd)+' dD).':'')+' Confirm it on the grinder before changing anything.':'';
@@ -4888,16 +5219,16 @@ const renderBody=({endpoint:name,body})=>{
   if(name==='suggestion'){const evidenceCount=body.evidenceCount??(body.sourceShotIds||[]).length;if(body.status!=='suggestion'&&body.status!=='provisional'&&body.status!=='established')return 'No safe adjustment\\n'+(body.reason||'The evidence is incomplete or conflicting.');const provisional=body.status==='provisional'||(body.status==='suggestion'&&evidenceCount<3);const heading=provisional?'Early manual next step':'Manual adjustment suggestion';const caution=provisional?'One or two comparable shots are only an early signal. Confirm the next brew and keep collecting evidence.':'Repeated comparable shots support this direction; confirm it manually before changing the grinder.';const reference=body.dialReference&&typeof body.dialReference==='object'?body.dialReference:null;const unit=(reference&&(reference.displayUnit||reference.unit))||body.settingUnit||'';const cn=reference&&reference.nativeStatus==='available'&&reference.currentNative;const pn=reference&&reference.nativeStatus==='available'&&reference.proposedNative;const research=reference&&reference.coordinateOnly;const current=cn?formatDialValue(cn.value,cn.unit):body.currentSetting==null?'unavailable':formatDialValue(body.currentSetting,unit);const proposed=pn?formatDialValue(pn.value,pn.unit)+(pn.achievable===false?' (between physical steps; choose a neighboring step)':''):body.proposedSetting==null?'confirm manually':formatDialValue(body.proposedSetting,unit);const currentLabel=cn?'Current physical dial':research?'Current research coordinate':'Recorded setting';const proposedLabel=pn?'Proposed physical dial':research?'Proposed research coordinate':'Proposed recorded setting';return heading+'\\nDirection: '+(body.direction||'confirm manually')+'\\n'+currentLabel+': '+current+'\\n'+proposedLabel+': '+proposed+'\\nEvidence shots: '+evidenceCount+'\\n\\n'+caution+'\\n'+(body.reason||'');}
   if(name==='references'){const sources=body.sources||[];return 'Reviewed recipe and grinder references\\n'+sources.map(source=>(source.title||source.publisher||'Reference')+'\\n'+(safeReferenceUrl(source.url)||'')+'\\n'+(source.scope?'Scope: '+(typeof source.scope==='object'?humanFacts(source.scope):source.scope):'')+'\\n'+(source.facts?'Facts: '+humanFacts(source.facts):'')+'\\n'+(Array.isArray(source.notes)?'Notes: '+source.notes.join(' '):'')).join('\\n\\n')+'\\n\\n'+(body.provenance||'');}
   if(name==='bean-context'){const bean=body.bean||{},batch=body.batch||{};if(body.status!=='available')return 'Bean context unavailable\\n'+(body.missingData||[]).join(', ');const nameLine=[bean.name,bean.roaster].filter(Boolean).join(' — ')||'Unknown bean';const species=bean.species?'\\nSpecies: '+bean.species:'';return 'Current bean catalog\\n'+nameLine+species+(bean.variety?'\\nVariety: '+(Array.isArray(bean.variety)?bean.variety.join(', '):bean.variety):'')+'\\nProcessing: '+(bean.processing||'unknown')+'\\nOrigin: '+[bean.country,bean.region].filter(Boolean).join(', ')+'\\nRoast: '+(batch.roastLevel||'unknown')+(batch.roastDate?' ('+batch.roastDate+')':'')+'\\n\\n'+(body.provenance||'');}
-  if(name==='analysis'){const metrics=body.metrics||{},machine=metrics.machine||{},scale=metrics.scale||{};const mae=part=>Number.isFinite(part?.timeWeightedMae)?part.timeWeightedMae.toFixed(2):'unavailable';const feedback=body.feedback?(body.feedback.good?'good':'not marked good')+(body.feedback.flavour&&body.feedback.flavour.overall?', '+body.feedback.flavour.overall:''):'none';const measured=body.measuredBeanDose||metrics.measuredBeanDose;const measuredText=measured?'\\nBeans weighed for this shot: '+measured.weightG+' g ('+measured.deviceId+', '+measured.connectionRole+')':'\\nBeans weighed for this shot: none recorded';const warnings=(metrics.warnings||[]).concat(scale.warnings||[]);const warningText=warnings.length?'\\nWarnings: '+warnings.join(' | '):'';return 'Saved brew analysis: '+body.shotId+'\\nRecording elapsed (includes preheat/settling): '+(metrics.elapsedSec??'unavailable')+' s\\nAverage pressure difference from target: '+mae(machine.pressure)+' bar\\nAverage flow difference from target: '+mae(machine.flow)+' ml/s\\nAverage mix temperature difference from target: '+mae(machine.mixTemperature)+' °C\\nAverage group temperature difference from target: '+mae(machine.groupTemperature)+' °C\\nScale yield: '+(scale.finalMeasuredWeightG??'unavailable')+' g\\nScale flow: '+(scale.brewFlowGPerSec??'unavailable')+' g/s'+measuredText+'\\nMeasured bean ratio: '+((metrics.annotations&&metrics.annotations.actualYieldToMeasuredBeanDoseRatio)??'unavailable')+warningText+'\\n\\nThese are descriptive differences from recorded targets; they do not diagnose extraction.\\nFeedback: '+feedback+'\\n'+(body.provenance||'');}
+  if(name==='analysis'){const metrics=body.metrics||{},machine=metrics.machine||{},scale=metrics.scale||{};const mae=part=>Number.isFinite(part?.timeWeightedMae)?part.timeWeightedMae.toFixed(2):'unavailable';const feedback=body.feedback?(body.feedback.good?'good':'not marked good')+(body.feedback.flavour&&body.feedback.flavour.overall?', '+body.feedback.flavour.overall:''):'none';const measured=body.measuredBeanDose||metrics.measuredBeanDose;const measuredText=measured?'\\nBeans weighed for this shot: '+measured.weightG+' g ('+measured.deviceId+', '+measured.connectionRole+')':'\\nBeans weighed for this shot: none recorded';const warnings=(metrics.warnings||[]).concat(scale.warnings||[]);const warningText=warnings.length?'\\nWarnings: '+warnings.join(' | '):'';const grindText=recipeLine(body.grind)?'\\n'+recipeLine(body.grind):'';const doseText=body.doseEvidence?'\\nDose evidence: '+String(body.doseEvidence.grams)+' g ('+String(body.doseEvidence.source)+')':'';return 'Saved brew analysis: '+body.shotId+grindText+doseText+'\\nRecording elapsed (includes preheat/settling): '+(metrics.elapsedSec??'unavailable')+' s\\nAverage pressure difference from target: '+mae(machine.pressure)+' bar\\nAverage flow difference from target: '+mae(machine.flow)+' ml/s\\nAverage mix temperature difference from target: '+mae(machine.mixTemperature)+' °C\\nAverage group temperature difference from target: '+mae(machine.groupTemperature)+' °C\\nScale yield: '+(scale.finalMeasuredWeightG??'unavailable')+' g\\nScale flow: '+(scale.brewFlowGPerSec??'unavailable')+' g/s'+measuredText+'\\nMeasured bean ratio: '+((metrics.annotations&&metrics.annotations.actualYieldToMeasuredBeanDoseRatio)??'unavailable')+warningText+'\\n\\nThese are descriptive differences from recorded targets; they do not diagnose extraction.\\nFeedback: '+feedback+'\\n'+(body.provenance||'');}
   if(name==='feedback')return body.saved?'Feedback saved for shot '+body.shotId+'.':(body.reason||body.error||'Feedback was not saved.');
   return body.provenance?body.provenance+'\\n\\n'+JSON.stringify(body,null,2):JSON.stringify(body,null,2);
 };
 const feedbackFieldNames=['notes','taste','brewTimeSec','brewTimeClock','beanType','roastLevel','burrIdentity','calibrationEpoch','basket','settingUnit','beanBatchId','grinderId','grinderModel','dose','yield','overall','descriptors','acidity','bitterness','sweetness','body','astringency','brewTemperatureC','tastingTemperatureC','sinceBrewMin','beanScaleId','beanScaleRole','beanWeight','beanCapturedAt','beanSampleTimestamp'];
 const clearFeedbackFields=()=>{const form=document.querySelector('#feedback');if(!form)return;feedbackFieldNames.forEach(name=>{const field=form.elements?.namedItem?.(name)||form.querySelector?.('[name="'+name+'"]');if(field)field.value='';});const good=form.elements?.namedItem?.('manualStopConfirmed')||form.querySelector?.('[name="manualStopConfirmed"]');if(good)good.checked=false;const confirmed=form.elements?.namedItem?.('confirmBeanMeasurement')||form.querySelector?.('[name="confirmBeanMeasurement"]');if(confirmed)confirmed.checked=false;if(typeof beanTimeHints!=='undefined'){delete beanTimeHints.beanCapturedAt;delete beanTimeHints.beanSampleTimestamp;}};
 const hydrateFeedback=body=>{const form=document.querySelector('#feedback');if(!form)return;clearFeedbackFields();const saved=body?.feedback;selectedFeedbackBaseline=saved?JSON.parse(JSON.stringify(saved)):null;if(body?.shotId)selectedShotId=String(body.shotId);const put=(name,value)=>{const field=form.elements?.namedItem?.(name)||form.querySelector?.('[name=\"'+name+'\"]');if(field&&value!==undefined&&value!==null)field.value=String(value);};put('shotId',body?.shotId||selectedShotId);if(!saved)return;put('notes',saved.notes||'');put('taste',saved.taste||'');put('brewTimeSec',saved.brewTimeSec);put('brewTimeClock',saved.brewTimeClock||'pump');put('brewTemperatureC',saved.flavour?.brewTemperatureC);put('tastingTemperatureC',saved.flavour?.tastingTemperatureC);put('sinceBrewMin',saved.flavour?.sinceBrewMin);put('overall',saved.flavour?.overall||'');put('descriptors',Array.isArray(saved.flavour?.descriptors)?saved.flavour.descriptors.join(', '):'');['acidity','bitterness','sweetness','body','astringency'].forEach(key=>put(key,saved.flavour?.[key]));Object.entries(saved.confirmedContext||{}).forEach(([key,value])=>put(key,value));const stop=form.elements?.namedItem?.('manualStopConfirmed')||form.querySelector?.('[name=\"manualStopConfirmed\"]');if(stop)stop.checked=saved.manualStopConfirmed===true;const measured=saved.measuredBeanDose;if(measured){put('beanScaleId',measured.deviceId);put('beanScaleRole',measured.connectionRole||'auxiliary');put('beanWeight',measured.weightG);const captured=form.elements?.namedItem?.('beanCapturedAt')||form.querySelector?.('[name=\"beanCapturedAt\"]');const sample=form.elements?.namedItem?.('beanSampleTimestamp')||form.querySelector?.('[name=\"beanSampleTimestamp\"]');if(typeof prefillBeanTime==='function'){if(captured)prefillBeanTime('beanCapturedAt',captured,measured.capturedAt);if(sample&&measured.sampleTimestamp)prefillBeanTime('beanSampleTimestamp',sample,measured.sampleTimestamp);}else{put('beanCapturedAt',measured.capturedAt);put('beanSampleTimestamp',measured.sampleTimestamp);}const confirm=form.elements?.namedItem?.('confirmBeanMeasurement')||form.querySelector?.('[name=\"confirmBeanMeasurement\"]');if(confirm)confirm.checked=measured.userConfirmed===true;}};
-const show=async(name,init,label)=>{const generation=++requestState.generation;out.textContent=label||'Loading...';try{const r=await fetch(endpoint(name),init);const body=await r.json();if(!r.ok){if(generation===requestState.generation)out.textContent=name==='feedback'?'Feedback was not saved. '+(body.error||'The request failed.')+' Reload the plugin if storage is unavailable, then retry.':body.error||'The request could not be completed.';return body;}if(generation===requestState.generation){out.textContent=render({endpoint:name,body});renderReferenceDetails(body.reviewedReferences);renderDialReference(body);if(name==='feedback'){adviceGeneration++;if(advice)advice.textContent='Feedback saved. Ask for the next setting using this updated taste assessment.';if(adviceResult)adviceResult.textContent='';}if(['suggestion','recommendation'].includes(name))renderBeginnerAdvice(body);if(name==='analysis'){latestAnalysis=body;hydrateFeedback(body);renderTraceGraph(body);updateCompareClock();updateAdviceClock();const recipe=document.querySelector('#nativeRecipeContext');if(recipe)recipe.textContent='Saved dose '+(body.context?.dose??'unknown')+' g; target yield '+(body.context?.yield??'unknown')+' g. Actual control mode: '+(body.metrics?.trace?.controlMode||'unknown')+'. Profile references below do not alter this saved evidence.';}if(['recommendation','suggestion','analysis'].includes(name))showNativeWizardStep(3);}return body;}catch(e){e.generation=generation;fail('Could not load this information. Try again.',generation);throw e;}};
+const show=async(name,init,label)=>{const generation=++requestState.generation;out.textContent=label||'Loading...';try{const r=await fetch(endpoint(name),init);const body=await r.json();if(!r.ok){if(generation===requestState.generation)out.textContent=name==='feedback'?'Feedback was not saved. '+(body.error||'The request failed.')+' Reload the plugin if storage is unavailable, then retry.':body.error||'The request could not be completed.';return body;}if(generation===requestState.generation){out.textContent=render({endpoint:name,body});renderReferenceDetails(body.reviewedReferences);renderDialReference(body);if(name==='feedback'){adviceGeneration++;if(advice)advice.textContent='Feedback saved. Ask for the next setting using this updated taste assessment.';if(adviceResult)adviceResult.textContent='';}if(['suggestion','recommendation'].includes(name))renderBeginnerAdvice(body);if(name==='suggestion')void offerApply(body);if(name==='analysis'){latestAnalysis=body;hydrateFeedback(body);renderTraceGraph(body);updateCompareClock();updateAdviceClock();const recipe=document.querySelector('#nativeRecipeContext');if(recipe)recipe.textContent='Saved dose '+(body.context?.dose??'unknown')+' g; target yield '+(body.context?.yield??'unknown')+' g. Actual control mode: '+(body.metrics?.trace?.controlMode||'unknown')+'. Profile references below do not alter this saved evidence.';}if(['recommendation','suggestion','analysis'].includes(name))showNativeWizardStep(3);}return body;}catch(e){e.generation=generation;fail('Could not load this information. Try again.',generation);throw e;}};
 let selectedShotId=null,selectedFeedbackBaseline=null,feedbackHydrationGeneration=0,feedbackReady=true,feedbackHydrationTarget=null,feedbackHydrationPromise=null;const setShotId=(id,load=true)=>{const input=document.querySelector('#analysis input[name="shotId"]');const feedback=document.querySelector('#feedback input[name="shotId"]');if(selectedShotId&&id&&selectedShotId!==id){clearFeedbackFields();selectedFeedbackBaseline=null;}selectedShotId=id||selectedShotId;if(input&&id)input.value=id;if(feedback&&id)feedback.value=id;if(load&&id){if(feedbackHydrationTarget===id&&feedbackHydrationPromise)return feedbackHydrationPromise;const token=++feedbackHydrationGeneration;feedbackHydrationTarget=id;const priorAnalysis=latestAnalysis;let ready=false;feedbackReady=false;const buttons=typeof document.querySelectorAll==='function'?document.querySelectorAll('#feedback button'):[];buttons.forEach(button=>button.disabled=true);const loadPromise=show('analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shotId:id})},'Loading saved feedback...').then(body=>{if(body?.error)throw new Error(body.error);if(selectedShotId!==id||latestAnalysis===priorAnalysis)throw new Error('The selected shot changed while loading. Retry the analysis.');ready=true;return body;}).catch(e=>{if(token===feedbackHydrationGeneration)fail('Could not load saved feedback. '+(e.message||'Try again.'));}).finally(()=>{if(token===feedbackHydrationGeneration){feedbackReady=ready;buttons.forEach(button=>button.disabled=!ready||feedbackBusy);}});feedbackHydrationPromise=loadPromise;return loadPromise;}};
-const refreshShots=async()=>{const generation=++requestState.generation;out.textContent='Loading recent shots...';try{const r=await fetch(endpoint('shots'));const body=await r.json();if(!r.ok)throw new Error('request failed');if(generation!==requestState.generation)return;const select=document.querySelector('#shotSelect');if(select&&typeof document.createElement==='function'){select.textContent='';(body.items||[]).forEach(shot=>{const option=document.createElement('option');option.value=String(shot.id);option.textContent=String(shot.id)+' — '+(shot.timestamp||'undated');select.appendChild(option);});if(body.items?.length)setShotId(String(body.items[0].id));}out.textContent='Loaded '+(body.items||[]).length+' recent shots. Choose one for analysis or feedback.';}catch(e){fail('Could not load recent shots. Try again.',generation);}};
+const refreshShots=async()=>{const generation=++requestState.generation;out.textContent='Loading recent shots...';try{const r=await fetch(endpoint('shots'));const body=await r.json();if(!r.ok)throw new Error('request failed');if(generation!==requestState.generation)return;const select=document.querySelector('#shotSelect');if(select&&typeof document.createElement==='function'){select.textContent='';(body.items||[]).forEach(shot=>{const option=document.createElement('option');option.value=String(shot.id);option.textContent=String(shot.id)+' — '+(shot.timestamp||'undated')+(recipeLine(shot.grind)?' — '+recipeLine(shot.grind):'');select.appendChild(option);});if(body.items?.length)setShotId(String(body.items[0].id));}out.textContent='Loaded '+(body.items||[]).length+' recent shots. Choose one for analysis or feedback.';}catch(e){fail('Could not load recent shots. Try again.',generation);}};
 document.querySelector('#recommend').onclick=async()=>{try{await show('recommendation',undefined,'Loading recommendation...')}catch(e){failRequest(e,'Could not load recommendation. Try again.')}};
 document.querySelector('#suggestion').onclick=async()=>{try{await show('suggestion',undefined,'Calculating suggestion...')}catch(e){failRequest(e,'Could not calculate suggestion. Try again.')}};
 document.querySelector('#beans').onclick=async()=>{try{await show('bean-context',undefined,'Loading bean context...')}catch(e){failRequest(e,'Could not load current bean context. Try again.')}};
@@ -4932,6 +5263,18 @@ try{const query=new URLSearchParams(typeof location!=='undefined'&&location.sear
 // Decaid's return convention: a skin-local path resolves against the skin server, whose port comes from webui/server/status. Absolute same-host URLs remain accepted.
 if(returnLink&&returnValue&&returnValue[0]==='/'&&returnValue[1]!=='/'&&returnValue.charCodeAt(1)!==92){fetch(coreBase+'/webui/server/status').then(response=>response.ok?response.json():null).then(status=>{if(!status||status.serving!==true||!Number.isInteger(status.port))return;const skin=new URL(typeof location!=='undefined'?location.href:'http://127.0.0.1/');skin.port=String(status.port);const target=new URL(returnValue,skin.origin);if(target.origin===skin.origin&&!target.username&&!target.password){returnLink.href=target.href;returnLink.hidden=false;}}).catch(()=>{});}
 else if(returnLink&&returnValue){const here=typeof location!=='undefined'?new URL(location.href):new URL('http://127.0.0.1/');const target=new URL(returnValue,here.href);if((target.protocol===here.protocol&&(target.protocol==='http:'||target.protocol==='https:'))&&!target.username&&!target.password&&target.hostname===here.hostname&&target.pathname.startsWith('/')){returnLink.href=target.href;returnLink.hidden=false;}}}catch(e){}
+// Applying a suggestion to the grinder: offered only when the grinder plugin
+// hands adjustments to Decaid and the grinder has a numeric setting control;
+// always behind a separate confirmation, never automatic.
+const applyState={pending:null};
+const applyEls=()=>({panel:document.querySelector('#grinderAdjust'),status:document.querySelector('#grinderAdjustStatus'),apply:document.querySelector('#applyToGrinder'),confirm:document.querySelector('#confirmApply'),cancel:document.querySelector('#cancelApply')});
+const resetApply=()=>{const el=applyEls();applyState.pending=null;if(el.apply)el.apply.hidden=true;if(el.confirm)el.confirm.hidden=true;if(el.cancel)el.cancel.hidden=true;};
+const offerApply=async body=>{const el=applyEls();resetApply();if(!el.panel)return;el.panel.hidden=true;if(!body||body.status!=='suggestion'||!Number.isFinite(body.proposedSetting))return;try{const response=await fetch(endpoint('grinder-control'));const control=await response.json();if(!response.ok)return;if(control.shadowMode){el.panel.hidden=false;if(el.status)el.status.textContent='The grinder adjusts its own dial (GBS); this suggestion is recorded for comparison only.';return;}if(!control.applyAvailable)return;applyState.pending={proposedSetting:body.proposedSetting,settingUnit:body.settingUnit};el.panel.hidden=false;if(el.status)el.status.textContent='Suggested setting: '+String(body.proposedSetting)+' '+String(body.settingUnit||'')+'. Nothing changes on the grinder until you confirm.';if(el.apply)el.apply.hidden=false;}catch(_){}};
+document.querySelector('#applyToGrinder')?.addEventListener('click',()=>{const el=applyEls();if(!applyState.pending)return;if(el.status)el.status.textContent='Set the grinder to the suggested '+String(applyState.pending.proposedSetting)+' '+String(applyState.pending.settingUnit||'')+'? Check the grinder is idle and the setting is what you want.';if(el.apply)el.apply.hidden=true;if(el.confirm)el.confirm.hidden=false;if(el.cancel)el.cancel.hidden=false;});
+document.querySelector('#cancelApply')?.addEventListener('click',()=>{const el=applyEls();const pending=applyState.pending;resetApply();if(pending){applyState.pending=pending;if(el.apply)el.apply.hidden=false;}if(el.status)el.status.textContent='Not applied. The grinder was not changed.';});
+document.querySelector('#confirmApply')?.addEventListener('click',async()=>{const el=applyEls();const pending=applyState.pending;if(!pending)return;if(el.confirm)el.confirm.disabled=true;try{const response=await fetch(endpoint('apply-setting'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...pending,confirmed:true})});const body=await response.json();resetApply();if(el.status)el.status.textContent=response.ok?'Applied: the grinder was asked to set '+String(body.setting)+' (suggested '+String(pending.proposedSetting)+' '+String(pending.settingUnit||'')+'). Confirm on the grinder display.':'Not applied: '+String(body.error||'the request failed')+'.';}catch(_){resetApply();if(el.status)el.status.textContent='Not applied: the request failed.';}finally{if(el.confirm)el.confirm.disabled=false;}});
+document.querySelector('#loadGbsComparison')?.addEventListener('click',async()=>{const list=document.querySelector('#gbsComparisonList');if(!list)return;list.textContent='';try{const response=await fetch(endpoint('gbs-comparison'));const body=await response.json();if(!response.ok)throw new Error(body.error||'Comparison unavailable');if(!body.rows?.length){const item=document.createElement('li');item.textContent='No shots recorded while the grinder owned adjustments yet.';list.appendChild(item);return;}body.rows.forEach(row=>{const item=document.createElement('li');const assisted=row.assisted?.direction?row.assisted.direction+(Number.isFinite(row.assisted.proposedSetting)?' to '+String(row.assisted.proposedSetting)+' '+String(row.assisted.settingUnit||''):''):'no change suggested';const grinder=row.grinderNext?.dial?String(row.grinderNext.dial.value)+(row.grinderNext.direction==='none'?' (unchanged)':''):'not yet known';item.textContent='Shot '+String(row.shotId)+': dial '+String(row.dial?.value)+' — assisted: '+assisted+' — grinder GBS next: '+grinder;list.appendChild(item);});}catch(error){const item=document.createElement('li');item.textContent=error.message||'Comparison unavailable.';list.appendChild(item);}});
+
 // Final UI guards: the simple view starts collapsed, and a failed/new analysis
 // cannot leave a previous shot's graph or comparison eligible for reuse.
 if(typeof document.querySelectorAll==='function')document.querySelectorAll('.expert-panel').forEach(panel=>{panel.hidden=true;});
@@ -4963,7 +5306,7 @@ if(researchPanel){
 
   return {
     id: ID,
-    version: "0.6.4",
+    version: "0.7.0",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;
@@ -5023,6 +5366,8 @@ if(researchPanel){
         .splice(0)
         .forEach((waiter) => waiter.reject(new Error("plugin unloaded")));
       observationStore = "unavailable";
+      grindRefreshTimers.forEach((timer) => clearTimeout(timer));
+      grindRefreshTimers.clear();
       settleObservationWaiters(new Error("plugin unloaded"));
       observationWriteWaiters.splice(0).forEach((waiter) => waiter.reject(new Error("plugin unloaded")));
     },
@@ -5159,8 +5504,29 @@ if(researchPanel){
           try { return json(200, await grinderProfilesEndpoint(request)); }
           catch (error) { return json(400, { error: error.message, code: "invalid_grinder_profile" }); }
         }
-        if (endpoint === "shots" && request.method === "GET")
-          return json(200, { ...(await fetchShots()), maxPages: MAX_PAGES });
+        if (endpoint === "shots" && request.method === "GET") {
+          const history = await fetchShots();
+          await recordedShotObservations();
+          await refreshPendingGrinds(history.items.map((shot) => String(shot.id)));
+          const records = await recordedShotObservations();
+          // Each listed shot carries the grinder recipe and ground weight linked to it, if any.
+          const items = history.items.map((shot) => {
+            const grind = records[String(shot.id)]?.grind;
+            return grind ? { ...shot, grind: { recipe: grind.recipe, weightG: grind.weightG, durationS: grind.durationS } } : shot;
+          });
+          return json(200, { ...history, items, maxPages: MAX_PAGES });
+        }
+        if (endpoint === "grinder-control" && request.method === "GET")
+          return json(200, await grinderControl());
+        if (endpoint === "gbs-comparison" && request.method === "GET")
+          return json(200, await gbsComparison());
+        if (endpoint === "apply-setting" && request.method === "POST") {
+          // Moving the physical dial is an owner decision made on the plugin page.
+          if (requestHeader(request, "origin") === undefined || crossSite(request))
+            return json(403, { error: "Apply a setting from the plugin page.", code: "plugin_page_required" });
+          try { return json(200, await applySetting(bodyOf(request))); }
+          catch (error) { return json(409, { error: error.message, code: "apply_refused" }); }
+        }
         if (endpoint === "recommendation" && request.method === "GET")
           return json(200, await recommendation());
         if (endpoint === "suggestion" && request.method === "GET")
@@ -5285,6 +5651,7 @@ if(researchPanel){
           if (!active || requestSession !== sessionEpoch)
             throw new Error("plugin unloaded");
           void captureResearchShot(shotId);
+          void refreshShadow(shotId);
           return json(200, { saved: true, shotId });
         }
         return json(404, { error: "unknown endpoint or method" });

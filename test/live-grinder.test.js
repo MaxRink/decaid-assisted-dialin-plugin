@@ -163,7 +163,7 @@ test('shot records keep the display value, and records written with exact dD sti
   const h = load({workflow: e64Workflow(), shots: [fresh], observation: {observedSetting: '83'}});
   h.plugin.onEvent({name: 'shotStored', payload: {id: 'fresh-shot'}});
   await settle();
-  assert.deepEqual(Object.keys(h.storage.get('grinderObservations.v1').shots['fresh-shot']).sort(), ['display', 'observedAt']);
+  assert.deepEqual(Object.keys(h.storage.get('grinderObservations.v1').shots['fresh-shot']).sort(), ['display', 'observedAt', 'recordedAt']);
   const analysis = await h.get('analysis', 'POST', {shotId: 'fresh-shot'});
   assert.equal(analysis.context.grinderSetting, '83');
   assert.equal(analysis.context.settingUnit, 'micrometres');

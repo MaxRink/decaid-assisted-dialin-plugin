@@ -170,7 +170,7 @@ async function uiFixture(fetchImpl, { rich = false, location } = {}) {
   research.fields = {
     state: html.match(/<textarea[^>]*name="state"[^>]*>([\s\S]*?)<\/textarea>/)[1],
   };
-  const sharingElements = Object.fromEntries(["researchSharing", "researchLocal", "researchEndpoint", "researchHostLimits", "researchEnable", "researchDisable", "researchRetry", "researchExport", "researchDelete", "researchStatus", "researchExportData"].map(id => [id, new Element(id)]));
+  const sharingElements = Object.fromEntries(["researchSharing", "researchLocal", "researchEndpoint", "researchHostLimits", "researchEnable", "researchDisable", "researchRetry", "researchExport", "researchDelete", "researchStatus", "researchExportData", "grinderAdjust", "grinderAdjustStatus", "applyToGrinder", "confirmApply", "cancelApply", "gbsComparison", "loadGbsComparison", "gbsComparisonList"].map(id => [id, new Element(id)]));
   context.document = {
     querySelector(selector) {
       return {
@@ -570,6 +570,59 @@ test("brew metrics and bean context UI use their public endpoints", async () => 
   assert.equal(requests[0].init, undefined);
   assert.equal(requests[1].url, "analysis");
   assert.equal(JSON.parse(requests[1].init.body).shotId, "shot-1");
+});
+
+test("shot analysis shows the linked grinder recipe and labels grinder weight as dose evidence", async () => {
+  const ui = await uiFixture(async () => response({ shotId: "shot-1", metrics: {},
+    grind: { grindUuid: "g", recipe: { type: "espresso", mode: "GbW", amount: 18 }, weightG: 18.07, durationS: 8.3 },
+    doseEvidence: { grams: 18.07, source: "grinder-reported ground weight" } }));
+  await ui.analysis.onsubmit({ preventDefault() {}, target: ui.analysis });
+  assert.match(ui.output.textContent, /Recipe: espresso\/GbW 18, ground 18\.07 g/);
+  assert.match(ui.output.textContent, /Dose evidence: 18\.07 g \(grinder-reported ground weight\)/);
+});
+
+test("Apply to grinder needs a second, explicit confirmation and is only offered when Decaid owns adjustments", async () => {
+  const requests = [];
+  let control = { owner: "decaid", settable: true, applyAvailable: true, shadowMode: false };
+  const ui = await uiFixture(async (url, init = {}) => {
+    requests.push({ url, init });
+    if (url === "grinder-control") return response(control);
+    if (url === "apply-setting") return response({ applied: true, setting: "82" });
+    return response({ status: "suggestion", direction: "finer", proposedSetting: 820, settingUnit: "deci-micrometre", evidenceCount: 3, sourceShotIds: ["a"] });
+  });
+  const el = ui.sharingElements;
+  await ui.suggestion.onclick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(el.applyToGrinder.hidden, false);
+  assert.equal(requests.some((r) => r.url === "apply-setting"), false, "nothing is applied by suggesting");
+  await el.applyToGrinder.click();
+  assert.equal(el.confirmApply.hidden, false);
+  assert.equal(requests.some((r) => r.url === "apply-setting"), false, "the first click only asks for confirmation");
+  await el.cancelApply.click();
+  assert.match(el.grinderAdjustStatus.textContent, /Not applied/);
+  await el.applyToGrinder.click();
+  await el.confirmApply.click();
+  const applied = requests.filter((r) => r.url === "apply-setting");
+  assert.equal(applied.length, 1);
+  assert.deepEqual(JSON.parse(applied[0].init.body), { proposedSetting: 820, settingUnit: "deci-micrometre", confirmed: true });
+  assert.match(el.grinderAdjustStatus.textContent, /Applied: the grinder was asked to set 82 \(suggested 820 deci-micrometre\)/);
+
+  control = { owner: "grinder", settable: true, applyAvailable: false, shadowMode: true };
+  await ui.suggestion.onclick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(el.applyToGrinder.hidden, true);
+  assert.match(el.grinderAdjustStatus.textContent, /recorded for comparison only/);
+});
+
+test("the GBS comparison lists the assisted suggestion beside the grinder's next dial", async () => {
+  const ui = await uiFixture(async (url) => url === "gbs-comparison"
+    ? response({ rows: [{ shotId: "s1", dial: { value: 83 }, assisted: { direction: "finer", proposedSetting: 820, settingUnit: "deci-micrometre" },
+      grinderNext: { shotId: "s2", dial: { value: 81 }, direction: "smaller" } }] })
+    : response({}));
+  const el = ui.sharingElements;
+  await el.loadGbsComparison.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(el.gbsComparisonList.children[0].textContent, "Shot s1: dial 83 — assisted: finer to 820 deci-micrometre — grinder GBS next: 81");
 });
 
 test("bean weighing is sent only after explicit confirmation", async () => {
