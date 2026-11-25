@@ -1165,3 +1165,31 @@ test("legacy P64 micro-tick steps are cleared before decimal-number migration", 
   assert.equal(restored.elements.get("simple-confirm-dial").checked, false);
   assert.match(restored.elements.get("simple-step-preset").textContent, /different or unspecified dial unit/);
 });
+
+test("a failed upload stays visible in the research status after the action message is gone", async () => {
+  const ui = uiFixture(); await settleResearch();
+  const endpoint = "https://collector.example/v1/events";
+  const token = "a".repeat(64);
+  const fallback = ui.context.fetch;
+  ui.context.fetch = async (url, init = {}) => {
+    if (!String(url).includes("collector.example")) return fallback(url, init);
+    const body = JSON.parse(init.body);
+    if (body.enrol === true) return { ok: true, json: async () => ({ token }) };
+    throw new Error("connect to " + endpoint + " failed for token " + token);
+  };
+  ui.elements.get("research-sharing-endpoint").value = endpoint;
+  await ui.elements.get("research-sharing-apply").click();
+  ui.elements.get("research-sharing-consent").checked = true;
+  await ui.elements.get("research-sharing-consent").dispatch("change");
+  recordResearchFixture(ui); await settleResearch();
+  assert.match(ui.elements.get("research-sharing-status").textContent, /1 queued/);
+  await ui.elements.get("research-sharing-send").click();
+  // A later render carries no action message, so the failure must come from
+  // status().uploadError or a stalled upload would look silent again.
+  ui.elements.get("research-local-enabled").checked = true;
+  await ui.elements.get("research-local-enabled").dispatch("change");
+  const status = ui.elements.get("research-sharing-status").textContent;
+  assert.match(status, /<redacted>/, "the scrubbed transport failure is rendered");
+  assert.doesNotMatch(status, /collector\.example/);
+  assert.equal(status.includes(token), false);
+});

@@ -1,19 +1,22 @@
 const {defineConfig, devices} = require('@playwright/test');
 const path = require('node:path');
+const {runId, pruneStaleRuns} = require('./e2e/run-artifacts');
 const baseURL = 'http://127.0.0.1:' + (process.env.DIALIN_TEST_PORT || 9017);
-// Playwright deletes a run's output directory when it starts and deletes each
-// worker's .playwright-artifacts-<n> directory when that worker exits. Two
-// invocations sharing the default `test-results` path therefore delete the
-// traces, videos and screenshots the other one is still writing, and the
-// victim reports "ENOENT: no such file or directory" against its own
-// .playwright-artifacts directory. Every invocation now owns its artifact
-// directory; DIALIN_E2E_OUTPUT_DIR pins the path when a stable location is
-// wanted (CI keeps uploading test-results/, which contains every run).
-const runId = process.env.DIALIN_E2E_RUN_ID || String(process.pid);
-const outputDir = process.env.DIALIN_E2E_OUTPUT_DIR || path.join('test-results', 'run-' + runId);
+// One artifact directory per invocation, shared by the main process and the
+// workers it spawns (see e2e/run-artifacts.js). A shared directory lets one run
+// delete the traces, videos and screenshots another run is still writing.
+const inheritedRunId = Boolean(process.env.DIALIN_E2E_RUN_ID);
+const run = runId();
+const outputDir = process.env.DIALIN_E2E_OUTPUT_DIR || path.join('test-results', 'run-' + run);
 // The HTML report may not live inside outputDir, so it gets its own folder
 // under the same run id instead of a shared playwright-report/ tree.
-const reportDir = process.env.DIALIN_E2E_REPORT_DIR || path.join('playwright-report', 'run-' + runId);
+const reportDir = process.env.DIALIN_E2E_REPORT_DIR || path.join('playwright-report', 'run-' + run);
+// Only the process that created the id owns the run; workers inherit it and
+// must never sweep the directories their own run is writing into.
+if (!inheritedRunId) {
+  if (!process.env.DIALIN_E2E_OUTPUT_DIR) pruneStaleRuns('test-results', 'run-' + run);
+  if (!process.env.DIALIN_E2E_REPORT_DIR) pruneStaleRuns('playwright-report', 'run-' + run);
+}
 module.exports = defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.js',

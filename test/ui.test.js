@@ -893,6 +893,22 @@ test("native micron display uses converted values rather than the raw dD", async
 });
 
 
+test("a transport failure reaches the panel even when only the upload entry is set", async () => {
+  // status().error is a storage failure; a stalled or rejected upload is
+  // reported in uploadError and must be shown, not just left in the JSON.
+  const state = {localEnabled:true,sharing:true,endpoint:"https://collector.example/v1/events",localCount:2,queuedCount:1,error:null,
+    uploadError:"Research upload timed out after 30 seconds; queued records stay local for a later retry"};
+  const ui = await uiFixture(async (url, init = {}) => {
+    if (url === "sharing") return response(state);
+    return response({records:[]});
+  });
+  const el = ui.sharingElements;
+  await el.researchRetry.click();
+  assert.match(el.researchStatus.textContent, /pending uploads/);
+  assert.match(el.researchStatus.textContent, /timed out after 30 seconds/, "the transport failure is visible");
+  assert.match(el.researchStatus.textContent, /queued records stay local/);
+});
+
 test("research controls save explicit choices and show offline errors without posting from the browser to a collector", async () => {
   const calls = [];
   let state = {localEnabled:true,sharing:false,endpoint:null,localCount:2,queuedCount:0};

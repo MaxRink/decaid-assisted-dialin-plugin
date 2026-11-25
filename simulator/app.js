@@ -50,7 +50,10 @@
     $("research-sharing-consent").disabled = !researchEndpoint || Boolean(state.error);
     $("research-sharing-send").disabled = !state.sharing || !state.queuedCount || Boolean(state.error);
     text($("research-sharing-status"), message || (state.error ? "Research storage is unavailable. Remote sharing is off. " + state.error :
-      "Local archive " + (state.localEnabled ? "on" : "off") + ": " + state.localCount + " record(s). Remote sharing " + (state.sharing ? "on" : "off") + "; " + state.queuedCount + " queued. " + (researchEndpoint ? "Nothing is sent until you choose Send queued records." : "No collector is configured.")));
+      "Local archive " + (state.localEnabled ? "on" : "off") + ": " + state.localCount + " record(s). Remote sharing " + (state.sharing ? "on" : "off") + "; " + state.queuedCount + " queued. " + (researchEndpoint ? "Nothing is sent until you choose Send queued records." : "No collector is configured.")) +
+      // A transport failure is reported even when the browser posts no new action,
+      // so a stalled upload is visible instead of silently queued.
+      (state.error || !state.uploadError ? "" : " " + state.uploadError + "."));
     text($("research-sharing-destination"), researchEndpoint ? "Collector: " + researchEndpoint : "");
   }
   async function researchAction(action, message) {

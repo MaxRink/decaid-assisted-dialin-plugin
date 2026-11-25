@@ -83,7 +83,11 @@ test('duplicate events coalesce and corrected feedback replaces the pending reco
 test('offline queue survives reload; opting out clears queue but keeps local records',async t=>{
   const stored=new Map();const f=fixture(t,{stored,send:async()=>{throw new Error('offline');}});await enable(f);
   f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);
-  const failed=await f.request('POST',{operation:'retry'});assert.equal(failed.body.queuedCount,1);assert.match(failed.body.error,/upload failed/);
+  const failed=await f.request('POST',{operation:'retry'});assert.equal(failed.body.queuedCount,1);
+  // The panel reports the specific transport reason instead of a generic line,
+  // and neither the reason nor the status leaks the destination or its token.
+  assert.match(failed.body.error,/offline/);assert.match(failed.body.uploadError,/offline/);
+  assert.doesNotMatch(failed.body.error,/https?:|collector\.example/);assert.equal(failed.body.error.includes('e'.repeat(64)),false);
   f.plugin.onUnload();const reloaded=fixture(t,{stored});assert.equal((await reloaded.request()).body.queuedCount,1);
   const off=await reloaded.request('POST',{sharing:false});assert.equal(off.body.sharing,false);assert.equal(off.body.queuedCount,0);assert.equal(off.body.localCount,1);
   await reloaded.request('POST',{operation:'retry'});assert.equal(reloaded.posts.length,0);
