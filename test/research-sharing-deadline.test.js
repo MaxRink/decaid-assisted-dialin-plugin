@@ -177,6 +177,14 @@ test('a wedged storage adapter is not reported as a transport timeout', { timeou
   assert.equal(reloads, 1, 'the storage adapter is what stalled');
   assert.deepEqual(timers.scheduled(), [], 'no transport deadline is armed for storage work');
   assert.equal(sends, 0, 'the transport was never called');
+  // Documented limitation: status() refreshes under the same storage lock, so a
+  // wedged adapter blocks it until it acknowledges or rejects. The deadline
+  // does not pretend otherwise.
+  const observed = await Promise.race([
+    client.status().then(() => 'resolved', () => 'rejected'),
+    new Promise(resolve => setTimeout(() => resolve('blocked'), 20)),
+  ]);
+  assert.equal(observed, 'blocked', 'status() waits on the wedged adapter, as documented');
   reload.resolve(saved);
   const result = await sending;
   assert.equal(result.sent, 1);

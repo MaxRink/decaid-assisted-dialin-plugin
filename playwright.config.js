@@ -1,25 +1,21 @@
 const {defineConfig, devices} = require('@playwright/test');
 const path = require('node:path');
-const {runId, pruneStaleRuns} = require('./e2e/run-artifacts');
+const {runId} = require('./e2e/run-artifacts');
 const baseURL = 'http://127.0.0.1:' + (process.env.DIALIN_TEST_PORT || 9017);
 // One artifact directory per invocation, shared by the main process and the
 // workers it spawns (see e2e/run-artifacts.js). A shared directory lets one run
 // delete the traces, videos and screenshots another run is still writing.
-const inheritedRunId = Boolean(process.env.DIALIN_E2E_RUN_ID);
 const run = runId();
 const outputDir = process.env.DIALIN_E2E_OUTPUT_DIR || path.join('test-results', 'run-' + run);
 // The HTML report may not live inside outputDir, so it gets its own folder
 // under the same run id instead of a shared playwright-report/ tree.
 const reportDir = process.env.DIALIN_E2E_REPORT_DIR || path.join('playwright-report', 'run-' + run);
-// Only the process that created the id owns the run; workers inherit it and
-// must never sweep the directories their own run is writing into.
-if (!inheritedRunId) {
-  if (!process.env.DIALIN_E2E_OUTPUT_DIR) pruneStaleRuns('test-results', 'run-' + run);
-  if (!process.env.DIALIN_E2E_REPORT_DIR) pruneStaleRuns('playwright-report', 'run-' + run);
-}
 module.exports = defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.js',
+  // Pruning lives in the global setup, not here: loading this file from a unit
+  // test must not touch the artifact tree.
+  globalSetup: path.join(__dirname, 'e2e/global-setup.js'),
   outputDir,
   timeout: 45000,
   expect: {timeout: 10000},

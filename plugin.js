@@ -6101,7 +6101,10 @@ if(researchPanel){
     const result=await response.json();if(!response.ok)throw new Error(result.error||'Research settings unavailable');
     document.querySelector('#researchLocal').checked=result.localEnabled===true;
     document.querySelector('#researchEndpoint').value=result.endpoint||'';
-    researchStatus.textContent=(result.sharing?'Remote sharing enabled. ':'Remote sharing off. ')+result.localCount+' local records; '+result.queuedCount+' pending uploads.'+(result.error?' '+result.error:'')+(result.uploadError?' '+result.uploadError+'.':'');return result;
+    // researchStatus() already folds the last upload failure into its error
+    // field, so the same sentence must not be printed twice.
+    const researchFailure=(result.error||result.uploadError||'').trim();
+    researchStatus.textContent=(result.sharing?'Remote sharing enabled. ':'Remote sharing off. ')+result.localCount+' local records; '+result.queuedCount+' pending uploads.'+(researchFailure?' '+researchFailure+(researchFailure.endsWith('.')?'':'.'):'');return result;
   };
   const researchAction=async(method,body)=>{try{await researchRequest(method,body);}catch(error){researchStatus.textContent=error.message;}};
   researchPanel.addEventListener('toggle',()=>{if(researchPanel.open)void researchAction('GET');});

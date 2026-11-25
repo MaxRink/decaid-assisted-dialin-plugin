@@ -896,8 +896,9 @@ test("native micron display uses converted values rather than the raw dD", async
 test("a transport failure reaches the panel even when only the upload entry is set", async () => {
   // status().error is a storage failure; a stalled or rejected upload is
   // reported in uploadError and must be shown, not just left in the JSON.
-  const state = {localEnabled:true,sharing:true,endpoint:"https://collector.example/v1/events",localCount:2,queuedCount:1,error:null,
-    uploadError:"Research upload timed out after 30 seconds; queued records stay local for a later retry"};
+  const message = "Research upload timed out after 30 seconds; queued records stay local for a later retry";
+  let state = {localEnabled:true,sharing:true,endpoint:"https://collector.example/v1/events",localCount:2,queuedCount:1,error:null,
+    uploadError:message};
   const ui = await uiFixture(async (url, init = {}) => {
     if (url === "sharing") return response(state);
     return response({records:[]});
@@ -907,6 +908,12 @@ test("a transport failure reaches the panel even when only the upload entry is s
   assert.match(el.researchStatus.textContent, /pending uploads/);
   assert.match(el.researchStatus.textContent, /timed out after 30 seconds/, "the transport failure is visible");
   assert.match(el.researchStatus.textContent, /queued records stay local/);
+  // researchStatus() folds the same sentence into its error field; the panel
+  // must print the failure once, not twice.
+  state = {...state, error: message};
+  await el.researchRetry.click();
+  assert.equal(el.researchStatus.textContent.split("timed out after 30 seconds").length - 1, 1,
+    "the failure is rendered exactly once");
 });
 
 test("research controls save explicit choices and show offline errors without posting from the browser to a collector", async () => {

@@ -6,17 +6,21 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { runId, processAlive, pruneStaleRuns } = require('../e2e/run-artifacts');
 const root = path.resolve(__dirname, '..');
+// A preset DIALIN_E2E_RUN_ID must survive: the config uses it verbatim.
+const presetRunId = process.env.DIALIN_E2E_RUN_ID || null;
+const artifactRunId = presetRunId || String(process.pid);
 const config = require('../playwright.config.js');
+const escape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test('a worker process resolves the same artifact directory as its parent', () => {
   // Playwright evaluates the config once in the main process and again in every
   // worker it spawns; both must write into one directory.
-  assert.equal(process.env.DIALIN_E2E_RUN_ID, String(process.pid), 'the first evaluation owns the run id');
+  assert.equal(process.env.DIALIN_E2E_RUN_ID, artifactRunId, 'one id for the whole invocation');
   const workerOutput = execFileSync(process.execPath,
     ['-e', 'process.stdout.write(String(require("./playwright.config.js").outputDir))'],
     { cwd: root, env: { ...process.env }, encoding: 'utf8' });
   assert.equal(workerOutput, config.outputDir, 'a spawned worker uses the parent run id');
-  assert.match(config.outputDir, new RegExp('run-' + process.pid + '$'));
+  assert.match(config.outputDir, new RegExp('run-' + escape(artifactRunId) + '$'));
 });
 
 test('the run report and its traces share one directory', () => {
@@ -25,7 +29,22 @@ test('the run report and its traces share one directory', () => {
     'results.json sits next to the failure traces of the same run');
   const html = config.reporter.find(entry => entry[0] === 'html')[1];
   assert.equal(html.outputFolder.startsWith(config.outputDir), false, 'the HTML report stays outside outputDir');
-  assert.match(html.outputFolder, new RegExp('run-' + process.pid + '$'));
+  assert.match(html.outputFolder, new RegExp('run-' + escape(artifactRunId) + '$'));
+});
+
+test('loading the config from a test never touches the artifact tree', () => {
+  // Pruning belongs to e2e/global-setup.js; requiring the config (which a unit
+  // test does) must stay read-only, or `npm test` would delete run artifacts.
+  const source = fs.readFileSync(path.join(root, 'playwright.config.js'), 'utf8');
+  assert.doesNotMatch(source, /pruneStaleRuns|rmSync/, 'pruning is not part of the config a test loads');
+  assert.match(fs.readFileSync(path.join(root, 'e2e/global-setup.js'), 'utf8'), /pruneStaleRuns/,
+    'the global setup is where pruning happens');
+  const tree = path.join(root, 'test-results');
+  const listing = () => (fs.existsSync(tree) ? fs.readdirSync(tree).sort() : null);
+  const before = listing();
+  execFileSync(process.execPath, ['-e', 'require("./playwright.config.js")'],
+    { cwd: root, env: { ...process.env }, encoding: 'utf8' });
+  assert.deepEqual(listing(), before, 'a config load leaves existing run directories alone');
 });
 
 test('an explicit run id is used verbatim', () => {
