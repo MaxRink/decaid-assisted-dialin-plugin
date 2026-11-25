@@ -27,10 +27,10 @@ function clock() {
   };
 }
 function setup(extra = {}) {
-  const timers = clock(), sent = [], aborted = [];
+  const timers = clock(), sent = [];
   const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
     uploadDeadlineMs: 50, timer: timers.timer, cancelTimer: timers.cancelTimer,
-    send: (_url, init) => { sent.push(init); aborted.push(() => init.signal && init.signal.aborted); return { ok: true, json: async () => ({ accepted: 1 }) }; },
+    send: (_url, init) => { sent.push(init); return { ok: true, json: async () => ({ accepted: 1 }) }; },
     ...extra });
   return { client, timers, sent };
 }
