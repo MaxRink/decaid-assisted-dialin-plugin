@@ -3,6 +3,8 @@
 function createResearchSharing() {
   "use strict";
   const VERSION = 1, POLICY = 1, MAX_LOCAL = 200, MAX_QUEUE = 100, MAX_BATCH = 25;
+  // An upload that never settles must not pin the outgoing queue forever.
+  const UPLOAD_DEADLINE_MS = 30000;
   const enums = {
     source: ["website", "plugin"], mode: ["measured", "manual", "practice", "replay"],
     kind: ["shot", "feedback", "advice", "setting_change", "flow_summary"],
@@ -191,7 +193,30 @@ function createResearchSharing() {
         throw new Error("Invalid local research entry");
       return { key: localKey(value.key), revision: value.revision, record: validateRecord(value.record) };
     };
-    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, abort = null, storageError = null;
+    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, abort = null, storageError = null, uploadError = null;
+    // Timers are optional runtime adapters, like URL and AbortController: a
+    // QuickJS host or a test may inject its own scheduler instead of the
+    // globals, and a runtime without timers keeps the un-deadlined behaviour.
+    const timerFor = (callback, ms) => typeof adapters.timer === "function" ? adapters.timer(callback, ms)
+      : typeof setTimeout === "function" ? setTimeout(callback, ms) : null;
+    const cancelTimerFor = handle => {
+      if (handle == null) return;
+      if (typeof adapters.cancelTimer === "function") { adapters.cancelTimer(handle); return; }
+      if (typeof clearTimeout === "function") clearTimeout(handle);
+    };
+    const uploadDeadlineMs = Number.isSafeInteger(adapters.uploadDeadlineMs) && adapters.uploadDeadlineMs > 0
+      ? adapters.uploadDeadlineMs : UPLOAD_DEADLINE_MS;
+    const deadlineLabel = () => {
+      const whole = uploadDeadlineMs >= 1000;
+      const value = whole ? Math.round(uploadDeadlineMs / 1000) : uploadDeadlineMs;
+      const unit = whole ? " second" : " millisecond";
+      return value + unit + (value === 1 ? "" : "s");
+    };
+    // The collector endpoint and its installation token are secrets. Owner
+    // facing status text and messages are scrubbed before they leave here.
+    const redact = message => String(message == null ? "" : message)
+      .replace(/https:\/\/[^\s"'<>]+/gi, "<endpoint>")
+      .replace(/\b[a-f0-9]{64}\b/gi, "<token>");
     const decode = value => {
       if (value == null) return;
       if (!object(value) || value.schemaVersion !== VERSION || value.policyVersion !== POLICY ||
@@ -236,13 +261,14 @@ function createResearchSharing() {
       catch (_) { permitted = false; abort?.(); storageError = "Research storage could not be saved; sharing is disabled"; throw new Error(storageError); }
     }
     const status = () => ({ localEnabled: state.localEnabled, sharing: permitted && state.sharing && !storageError, endpoint: state.endpoint,
-      localCount: state.records.length, queuedCount: permitted ? state.queue.length : 0, error: storageError, policyVersion: POLICY });
+      localCount: state.records.length, queuedCount: permitted ? state.queue.length : 0, error: storageError,
+      uploadError: storageError ? null : uploadError, policyVersion: POLICY });
     async function setSharing(enabled, target) {
       if (typeof enabled !== "boolean") throw new Error("Explicit sharing choice required");
       const targetEndpoint = enabled && target != null && target !== "" ? endpoint(target) : null;
       // Revoke immediately, before waiting for disk or an earlier network request.
       const requestGeneration = ++generation;
-      pendingConsent = requestGeneration; permitted = false; abort?.();
+      pendingConsent = requestGeneration; permitted = false; abort?.(); uploadError = null;
       return serial(async () => {
         if (requestGeneration !== generation) return status();
         await save({ ...state, sharing: enabled, endpoint: targetEndpoint, queue: [], fingerprints: [] }, true);
@@ -314,6 +340,36 @@ function createResearchSharing() {
           .concat([{ endpoint: request.endpoint, token: receipt.token }]).slice(-MAX_TOKENS) });
       });
     }
+    // A transport that never settles would otherwise pin `inflight` and the
+    // queue forever. Race the attempt against a deadline: abort it where the
+    // runtime has AbortController and reject so the caller sees a failure and
+    // a later flush can retry.
+    function withUploadDeadline(pending) {
+      let handle = null, settled = false;
+      const finish = () => { if (handle != null) { cancelTimerFor(handle); handle = null; } };
+      return new Promise((resolve, reject) => {
+        const deadline = () => {
+          if (settled) return;
+          settled = true;
+          finish();
+          // Nothing is in flight from the caller's point of view any more, so
+          // drop the abort hook before a later opt-out can reuse it.
+          const cancel = abort; abort = null;
+          try { if (typeof cancel === "function") cancel(); } catch (_) { /* abort is best effort */ }
+          uploadError = "Research upload timed out after " + deadlineLabel() +
+            "; queued records stay local for a later retry";
+          reject(new Error(uploadError));
+        };
+        handle = timerFor(deadline, uploadDeadlineMs);
+        pending.then(value => {
+          if (settled) return;
+          settled = true; finish(); resolve(value);
+        }, error => {
+          if (settled) return;
+          settled = true; finish(); reject(error);
+        });
+      });
+    }
     async function flush() {
       if (inflight) return inflight;
       const operation = async () => {
@@ -351,12 +407,20 @@ function createResearchSharing() {
             const acknowledged = new Set(batch.entries.map(identity));
             const queue = state.queue.filter(item => !acknowledged.has(identity(item)));
             if (queue.length !== state.queue.length) await save({ ...state, queue });
+            uploadError = null;
             return { sent: batch.entries.length, ...status() };
           });
         } finally { abort = null; }
       };
-      inflight = operation();
-      try { return await inflight; } finally { inflight = null; }
+      inflight = withUploadDeadline(operation());
+      try { return await inflight; }
+      catch (error) {
+        // Transport errors may quote the endpoint or the token. Status is owner
+        // facing, so it only ever carries the scrubbed text.
+        if (uploadError == null) uploadError = redact(error && error.message != null ? error.message : error) || "Research upload failed";
+        throw error;
+      }
+      finally { inflight = null; }
     }
     function setLocalCollection(enabled) {
       if (typeof enabled !== "boolean") throw new Error("Explicit local collection choice required");
@@ -364,7 +428,7 @@ function createResearchSharing() {
     }
     function clear() {
       const requestGeneration = ++generation;
-      pendingConsent = requestGeneration; permitted = false; abort?.();
+      pendingConsent = requestGeneration; permitted = false; abort?.(); uploadError = null;
       return serial(async () => {
         await save({ ...fresh(), localEnabled: state.localEnabled }, true);
         if (requestGeneration === generation) pendingConsent = null;

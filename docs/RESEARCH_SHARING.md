@@ -16,7 +16,7 @@ The destination is unset by default. This repository supplies a collector and de
 | Stop local collection | — | Stops adding to the archive; existing archived records remain until deleted. |
 | Delete all local research | — | Deletes archive, queue, and transport ledger; disables sharing. It does not erase the app's original saved shots or copies already received elsewhere. |
 
-The outgoing queue holds at most 100 observations. Once full, new observations can still enter the local archive, but are not added to that queue; queued corrections can still replace their earlier values. Upload failure preserves the queue. The website requires an explicit retry; the opted-in plugin retries automatically while running. Read or write failure is visible and disables runtime sending. A failed storage write cannot guarantee the changed preference will survive a restart; resolve the storage error before relying on persistence.
+The outgoing queue holds at most 100 observations. Once full, new observations can still enter the local archive, but are not added to that queue; queued corrections can still replace their earlier values. Upload failure preserves the queue. An upload that does not settle is abandoned at a 30 second deadline: the request is aborted where the runtime offers `AbortController`, the in-flight promise settles, and the next flush retries the same queued records. The website requires an explicit retry; the opted-in plugin retries automatically while running. Read or write failure is visible and disables runtime sending; a transport failure is reported separately in `status().uploadError` and never disables sharing. A failed storage write cannot guarantee the changed preference will survive a restart; resolve the storage error before relying on persistence.
 
 When local collection is off but sharing is on, a bounded local-only ledger of up to 200 keys, revisions and non-security content fingerprints suppresses duplicate uploads after reload. Neither those local keys nor fingerprints leave the device. With both controls off, new captures persist neither records nor a fingerprint ledger. Turning sharing off deletes its ledger. Older archived records are removed only by Delete all or normal bounded-archive eviction.
 
@@ -68,7 +68,7 @@ await client.setSharing(false); // clears queue, leaves archive
 await client.clear(); // deletes all local research and revokes sharing
 ```
 
-Also available: `status()`, `append(record)`, `sanitizeRecord(record)`, strict `validateRecord`/`validateBatch`, `validateEndpoint`, `randomId`, and documented limits. `capture(record, key)` replaces a matching local/queued observation; unchanged content is a no-op, including after a successful upload/reload. The local key may be any nonempty string of at most 256 characters and is never included in an export/upload. Caller-supplied observation identities are ignored by capture.
+`status()` reports `error` for storage problems and `uploadError` for the last transport attempt; neither field quotes the collector endpoint or its installation token. Also available: `status()`, `append(record)`, `sanitizeRecord(record)`, strict `validateRecord`/`validateBatch`, `validateEndpoint`, `randomId`, and documented limits. `capture(record, key)` replaces a matching local/queued observation; unchanged content is a no-op, including after a successful upload/reload. The local key may be any nonempty string of at most 256 characters and is never included in an export/upload. Caller-supplied observation identities are ignored by capture.
 
 Storage adapters must acknowledge durable success or reject. Consent policy/schema mismatches and corrupt persisted state fail closed. `setSharing` clears the queue and transport ledger on each call; integration controls should invoke it only for a real consent/endpoint change. A changed endpoint requires a new explicit choice. It never starts sending by itself. A valid destination uses HTTPS, no credentials, query, or fragment; there is no built-in destination.
 
@@ -143,7 +143,7 @@ To delete received research, stop the collector and remove only its explicitly i
 
 ## Verification and scope
 
-Run `node --test test/research-sharing.test.js test/research-collector.test.js`. Tests cover minimization, all catalog model coordinates, consent/storage failures, bounded queues, corrections/races, retry/restart idempotence, exact origins, request/storage limits, private permissions, retention, and real local HTTP ingestion. The existing `npm test` includes these files automatically.
+Run `node --test test/research-sharing.test.js test/research-sharing-deadline.test.js test/research-collector.test.js`. Tests cover minimization, all catalog model coordinates, consent/storage failures, bounded queues, corrections/races, upload deadlines and message redaction, retry/restart idempotence, exact origins, request/storage limits, private permissions, retention, and real local HTTP ingestion. The existing `npm test` includes these files automatically.
 
 This implementation has been exercised with local HTTP integration tests. The deployment configuration is provided for your server; this change does not provision DNS, issue production certificates, start a public collector, or verify an external host. Browser/native integration tests belong to their respective app/runtime suites.
 
