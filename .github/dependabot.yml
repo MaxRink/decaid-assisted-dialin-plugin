@@ -34,14 +34,35 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Prometheus and Grafana are one optional monitoring stack; a dashboard set
+    # that only renders on one of the two is a half-upgraded stack, so they
+    # move together and are proven together by ci/monitoring-smoke.sh.
+    groups:
+      monitoring-images:
+        patterns: ['*']
 
   - package-ecosystem: docker
     directory: /collector/caddy
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # The Go builder and the Caddy runtime image have to agree about the Caddy
+    # version and the toolchain, and the runtime supplies files the custom
+    # binary is dropped into.
+    groups:
+      caddy-images:
+        patterns: ['*']
   - package-ecosystem: gomod
     directory: /collector/caddy
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Caddy is built as a custom binary from this module graph, and go.mod is
+    # deliberately locked (see collector/caddy/README.md). One grouped PR per
+    # week is reviewed together because several of these modules are indirect:
+    # moving one alone produces a binary nobody scanned. Splitting them is what
+    # produced twenty closed-unmerged PRs; docs/DEPENDENCY_AUDIT.md records the
+    # audit that replaced them.
+    groups:
+      caddy-go-modules:
+        patterns: ['*']
