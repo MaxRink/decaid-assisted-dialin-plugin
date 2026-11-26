@@ -10,7 +10,7 @@ const destinations = [
   ['Correct grinder facts or research evidence', assisted, 'source-correction.yml'],
   ['Correct a coffee catalogue or recipe entry', assisted, 'coffee-catalog-correction.yml'],
   ['Skale connection or scale readings', 'MaxRink/decaid-skale-plugin', 'bug-report.yml'],
-  ['E64 WS connection or grinder controls', 'MaxRink/decaid-e64ws-plugin', 'bug-report.yml'],
+  ['E64 WS connection or grinder controls', 'MaxRink/decaid-mahlkoenig-websocket-grinder-plugin', 'bug-report.yml'],
   ['Decaid host or saved-shot problems', 'decentespresso/decaid', null],
   ['Streamline navigation or display problems', 'decentespresso/streamline-js', null],
 ];

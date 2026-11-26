@@ -38,7 +38,7 @@ metadata assumptions this plugin's comparison and abstention rules depend on.
 - The sample is one used device, not a population default.
 
 The full read-only report, including the sanitized database evidence, is in
-`mahlkoenig-e64ws-local-research/docs/LIVE_VALIDATION_2026-11-18.md`.
+`mahlkoenig-grinder-research/docs/LIVE_VALIDATION_2026-11-18.md`.
 
 ## E64 token / password note
 

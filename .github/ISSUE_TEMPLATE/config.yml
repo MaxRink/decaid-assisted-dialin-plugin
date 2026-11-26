@@ -13,7 +13,7 @@ contact_links:
   url: https://github.com/MaxRink/decaid-skale-plugin/issues/new/choose
   about: Report Skale connection, protocol and fake-GATT reproduction problems.
 - name: E64 WS device and grinder mock reports
-  url: https://github.com/MaxRink/decaid-e64ws-plugin/issues/new/choose
+  url: https://github.com/MaxRink/decaid-mahlkoenig-websocket-grinder-plugin/issues/new/choose
   about: Report grinder connection, protocol, dose and mock-device problems.
 - name: Recovered firmware research and source corrections
   url: https://github.com/MaxRink/decaid-assisted-dialin-plugin/issues/new?template=source-correction.yml

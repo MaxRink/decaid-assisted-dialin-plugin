@@ -30,7 +30,7 @@ native host responses and mobile layout.
 These are hardware-free fixtures. They do not prove physical grinder
 performance, real Decaid account data, or a physical E64 connection. The E64
 VM integration is recorded separately in
-`MaxRink/decaid-e64ws-plugin/docs/VM_TESTING.md`.
+`MaxRink/decaid-mahlkoenig-websocket-grinder-plugin/docs/VM_TESTING.md`.
 
 ## Commands
 

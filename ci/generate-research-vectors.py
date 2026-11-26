@@ -180,7 +180,7 @@ def main() -> None:
     ]
     fixture = {
         "provenance": {
-            "researchRepo": "MaxRink/mahlkoenig-e64ws-local-research",
+            "researchRepo": "MaxRink/mahlkoenig-grinder-research",
             "firmwareBuild": "HEM-HSG-HMI-S01 V01.16-24",
             "status": "static instruction-cross-checked recovery; no live grinder validation",
         },
