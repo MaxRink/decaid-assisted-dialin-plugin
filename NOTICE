@@ -3,8 +3,8 @@ Decaid is Copyright (C) Decent Espresso contributors and is distributed under
 the GNU General Public License. See https://github.com/decentespresso/decaid.
 
 The research-derived algorithm descriptions and evidence are attributed to
-MaxRink/mahlkoenig-e64ws-local-research:
-https://github.com/MaxRink/mahlkoenig-e64ws-local-research
+MaxRink/mahlkoenig-grinder-research:
+https://github.com/MaxRink/mahlkoenig-grinder-research
 
 The plugin contains an independent implementation of documented normal
 finite-input behavior. No research source code or prose is redistributed here.

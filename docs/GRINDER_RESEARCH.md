@@ -96,7 +96,7 @@ are not public enough to reuse as algorithms:
 > newest grind row. This supports the plugin's timestamp-integrity abstention
 > and its refusal to infer GBS history from absent metadata. It is one device
 > sample, not a population claim. See [LIVE_VALIDATION.md](LIVE_VALIDATION.md)
-> and `mahlkoenig-e64ws-local-research/docs/LIVE_VALIDATION_2026-11-18.md`.
+> and `mahlkoenig-grinder-research/docs/LIVE_VALIDATION_2026-11-18.md`.
 
 - **Fiorenzato ADAPT:** the manufacturer says its wired grinder/flow-meter
   system learns a recipe and displays a grind adjustment suggestion after three

@@ -129,7 +129,7 @@ jobs:
         if: env.HAS_RESEARCH_KEY == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: MaxRink/mahlkoenig-e64ws-local-research
+          repository: MaxRink/mahlkoenig-grinder-research
           ssh-key: ${{ secrets.RESEARCH_REPO_SSH_KEY }}
           path: research
           persist-credentials: false
@@ -137,7 +137,7 @@ jobs:
         if: env.HAS_RESEARCH_KEY == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: MaxRink/decaid-e64ws-plugin
+          repository: MaxRink/decaid-mahlkoenig-websocket-grinder-plugin
           ref: c3e363d7cd4f396f3a2b19c9e4e361e58199a26f
           path: e64-plugin
           persist-credentials: false
@@ -171,7 +171,7 @@ jobs:
           python3 -m pip install -r research/tools/requirements.txt
           npm ci
           npx playwright install --with-deps chromium
-          echo "Simulator MaxRink/mahlkoenig-e64ws-local-research@$(git -C research rev-parse HEAD), E64 plugin @$(git -C e64-plugin rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Simulator MaxRink/mahlkoenig-grinder-research@$(git -C research rev-parse HEAD), E64 plugin @$(git -C e64-plugin rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Install host dependencies
         if: env.HAS_RESEARCH_KEY == 'true' && env.HAS_FORK_KEY == 'true'
         working-directory: decaid-host

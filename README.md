@@ -413,7 +413,7 @@ other assisted dial-in systems. These guides and graphs are included in the ZIP.
 
 `POST /api/v1/plugins/assisted-dialin.reaplugin/research` is an offline replay
 boundary for the algorithms recovered in
-[MaxRink/mahlkoenig-e64ws-local-research](https://github.com/MaxRink/mahlkoenig-e64ws-local-research).
+[MaxRink/mahlkoenig-grinder-research](https://github.com/MaxRink/mahlkoenig-grinder-research).
 The request includes `operation`, `firmwareBuild`,
 `coordinateUnit: "deci-micrometre"`, `input`, and an optional version-1
 `stateEnvelope` scoped by grinder, bean batch, burr identity, calibration epoch
@@ -517,7 +517,7 @@ The CI host contract tracks upstream Decaid `main` (verified against `df177b75` 
 
 The plugin follows the public Decaid plugin API and is distributed under GPL-3.0-or-later.
 Research formulas and evidence are attributed to
-[MaxRink/mahlkoenig-e64ws-local-research](https://github.com/MaxRink/mahlkoenig-e64ws-local-research)
+[MaxRink/mahlkoenig-grinder-research](https://github.com/MaxRink/mahlkoenig-grinder-research)
 and are marked as static, build-specific research rather than vendor source.
 
 The effective-DD calculation interpolates the caller-selected baseline toward `grindDdDum * 0.1` using the recovered factor `b`. The residue updates independently using `a`. The research does not establish which caller field supplies that second baseline: this calculator requires it explicitly and does not claim automatic firmware state coupling. Baseline/residue inputs use micrometres; result uses deci-micrometres.
