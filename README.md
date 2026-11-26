@@ -494,6 +494,18 @@ these browser checks complement the pinned QuickJS host tests. CI retains
 browser reports and failure traces. Neither fixture proves physical grinder
 performance.
 
+Every `npm run test:e2e` invocation owns one artifact directory: traces,
+videos, screenshots, per-test output and `results.json` go to
+`test-results/run-<id>/`, and the HTML report to `playwright-report/run-<id>/`.
+The id is the main process's pid, inherited by the workers it spawns, so a
+failed test's trace sits in the same directory as that run's `results.json`.
+Playwright deletes an output directory when a run starts and each worker's
+`.playwright-artifacts-<n>` directory when that worker exits, so a shared
+`test-results/` lets a second run in the same checkout delete artifacts the
+first one is still writing. Directories left by finished runs are pruned when a
+run starts; set `DIALIN_E2E_OUTPUT_DIR`, `DIALIN_E2E_REPORT_DIR` or
+`DIALIN_E2E_RUN_ID` when a stable path is required.
+
 `npm run test:sim:host` and `npm run test:sim:e2e` use the E64 WS simulator from
 the private research repository (`E64_SIM_ROOT`, default
 `../mahlkoenig-e64ws-local-research`) and the E64 plugin (`E64_PLUGIN_ROOT`,
