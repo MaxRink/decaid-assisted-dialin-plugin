@@ -34,14 +34,45 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Prometheus and Grafana are one optional monitoring stack; a dashboard set
+    # that only renders on one of the two is a half-upgraded stack, so they
+    # move together and are proven together by ci/monitoring-smoke.sh.
+    # Minor and patch only, matching the actions and development groups above:
+    # a Grafana 14 must arrive as its own PR rather than inside the pair.
+    groups:
+      monitoring-images:
+        patterns: ['*']
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: /collector/caddy
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # The Go builder and the Caddy runtime image have to agree about the Caddy
+    # version and the toolchain, and the runtime supplies files the custom
+    # binary is dropped into. Minor and patch only: a Caddy 3.x is a rewrite of
+    # what the binary links against and must not ride along with a Go patch.
+    groups:
+      caddy-images:
+        patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: gomod
     directory: /collector/caddy
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Caddy is built as a custom binary from this module graph, and go.mod is
+    # deliberately locked (see collector/caddy/README.md). One grouped PR per
+    # week is reviewed together because several of these modules are indirect:
+    # moving one alone produces a binary nobody scanned. Nine of the 25
+    # closed-unmerged Dependabot PRs in this repository touched this directory;
+    # docs/DEPENDENCY_AUDIT.md lists all 25 by number and says what became of
+    # each.
+    # Minor and patch only. This pattern matches the direct require line plus
+    # roughly 200 indirect modules, so a major Go module must not be swept into
+    # that diff unseen - it arrives as its own PR instead.
+    groups:
+      caddy-go-modules:
+        patterns: ['*']
+        update-types: [minor, patch]
