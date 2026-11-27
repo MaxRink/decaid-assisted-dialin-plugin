@@ -6198,7 +6198,7 @@ if(typeof window!=='undefined'&&window.pu){pu.init();const setupLink=document.qu
 
   return {
     id: ID,
-    version: "0.8.2",
+    version: "0.8.3",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;
