@@ -212,18 +212,95 @@ test('a non-Error rejection still produces a readable message', async () => {
   assert.equal((await client.status()).uploadError, 'Research upload failed');
 });
 
-test('the deadline label is exact', { timeout: 5000 }, async () => {
-  for (const [ms, expected] of [[500, '500 milliseconds'], [1000, '1 second'], [1500, '1.5 seconds'], [30000, '30 seconds']]) {
-    const timers = clock();
-    const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
-      uploadDeadlineMs: ms, timer: timers.timer, cancelTimer: timers.cancelTimer, send: () => new Promise(() => {}) });
-    await ready(client);
-    const sending = client.flush().catch(error => error);
-    await tick(); await tick();
-    timers.advance();
-    const failure = await sending;
-    assert.match(failure.message, new RegExp('timed out after ' + expected.replace('.', '\\.') + ';'));
+test('the default deadline is 30 seconds and the message says so', { timeout: 5000 }, async () => {
+  const timers = clock();
+  const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
+    timer: timers.timer, cancelTimer: timers.cancelTimer, send: () => new Promise(() => {}) });
+  await ready(client);
+  const sending = client.flush().catch(error => error);
+  await tick(); await tick();
+  assert.deepEqual(timers.scheduled(), [30000]);
+  timers.advance();
+  assert.match((await sending).message, /timed out after 30 seconds;/);
+});
+
+// Opting out or deleting everything while an upload is in flight must not
+// leave that upload's failure behind: the queue it refers to is gone.
+for (const [name, revoke] of [['opt-out', client => client.setSharing(false)], ['Delete all', client => client.clear()]]) {
+  for (const honoursAbort of [true, false]) {
+    test(name + ' during an in-flight upload leaves uploadError null (' + (honoursAbort ? 'transport aborts' : 'signal ignored, as in the plugin') + ')', { timeout: 5000 }, async () => {
+      const timers = clock();
+      const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
+        uploadDeadlineMs: 50, timer: timers.timer, cancelTimer: timers.cancelTimer,
+        send: (_url, init) => new Promise((_, reject) => {
+          if (honoursAbort) init.signal.addEventListener('abort', () => reject(new Error('This operation was aborted')));
+        }) });
+      await ready(client);
+      const sending = client.flush().catch(error => error);
+      await tick(); await tick();
+      await revoke(client);
+      timers.advance(); // the abandoned request's deadline, if it is still armed
+      assert.ok((await sending) instanceof Error, 'the interrupted flush still settles');
+      for (let i = 0; i < 6; i += 1) await tick();
+      const after = await client.status();
+      assert.equal(after.sharing, false);
+      assert.equal(after.queuedCount, 0);
+      assert.equal(after.uploadError, null, 'no stale failure is reported after the user revoked sharing');
+    });
   }
+}
+
+test('a later failure replaces an earlier one', { timeout: 5000 }, async () => {
+  const timers = clock();
+  let hang = true;
+  const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
+    uploadDeadlineMs: 50, timer: timers.timer, cancelTimer: timers.cancelTimer,
+    send: () => hang ? new Promise(() => {}) : { ok: false, json: async () => ({}) } });
+  await ready(client);
+  const sending = client.flush().catch(error => error);
+  await tick(); await tick();
+  timers.advance();
+  await sending;
+  assert.match((await client.status()).uploadError, /timed out/);
+  hang = false;
+  await assert.rejects(client.flush(), /not acknowledged/);
+  assert.equal((await client.status()).uploadError, 'Research upload was not acknowledged');
+});
+
+test('a response body that never arrives is covered by the deadline', { timeout: 5000 }, async () => {
+  const timers = clock();
+  let stall = true;
+  const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
+    uploadDeadlineMs: 50, timer: timers.timer, cancelTimer: timers.cancelTimer,
+    send: () => ({ ok: true, json: () => stall ? new Promise(() => {}) : Promise.resolve({ accepted: 1 }) }) });
+  await ready(client);
+  const sending = client.flush();
+  await tick(); await tick();
+  assert.deepEqual(timers.scheduled(), [50], 'the deadline is still armed while the body is pending');
+  timers.advance();
+  await assert.rejects(sending, /timed out/);
+  stall = false;
+  assert.equal((await client.flush()).sent, 1, 'inflight cleared, so the retry goes through');
+});
+
+test('abandon() cancels the request, disarms the deadline and stops sending', { timeout: 5000 }, async () => {
+  const timers = clock();
+  let signal = null, calls = 0;
+  const client = schema.createClient({ load: async () => enrolledState(), save: async () => {},
+    uploadDeadlineMs: 50, timer: timers.timer, cancelTimer: timers.cancelTimer,
+    send: (_url, init) => { calls += 1; signal = init.signal; return new Promise(() => {}); } });
+  await ready(client);
+  const sending = client.flush();
+  await tick(); await tick();
+  assert.equal(timers.pending(), 1);
+  client.abandon();
+  await assert.rejects(sending, /abandoned/);
+  assert.equal(signal.aborted, true, 'the request is aborted');
+  assert.equal(timers.pending(), 0, 'no deadline timer outlives abandon()');
+  const after = await client.status();
+  assert.equal(after.uploadError, null);
+  assert.equal((await client.flush()).sent, 0, 'an abandoned client sends nothing more');
+  assert.equal(calls, 1);
 });
 
 test('a throwing scheduler adapter cannot resurrect the stall', { timeout: 5000 }, async () => {

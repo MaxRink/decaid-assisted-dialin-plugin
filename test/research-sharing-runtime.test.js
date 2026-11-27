@@ -15,10 +15,10 @@ const shot = {id: 'PRIVATE-SHOT', timestamp: '2026-10-12T09:11:22.000Z', notes: 
     profile: {title: 'PRIVATE-PROFILE', steps: [{pump: 'pressure', pressure: 9}]}},
   measurements: timedMeasurements('2026-10-12T09:11:22.000Z', 25), annotations: {actualDoseWeight: 18}};
 const enrolment = reply({token: 'e'.repeat(64)});
-function fixture(t, {stored = new Map(), send = async (_, init) => reply({accepted: JSON.parse(init.body).records.length}), delayWrite = false, delayRead = false, readShot = async () => reply(clone(shot))} = {}) {
+function fixture(t, {stored = new Map(), send = async (_, init) => reply({accepted: JSON.parse(init.body).records.length}), delayWrite = false, delayRead = false, readShot = async () => reply(clone(shot)), timers = {setTimeout, clearTimeout}} = {}) {
   let plugin;
   const posts = [], writes = [], pendingWrites = [], pendingReads = [];
-  const context = vm.createContext({console, Date, JSON, Math, Promise, setTimeout, clearTimeout});
+  const context = vm.createContext({console, Date, JSON, Math, Promise, ...timers});
   vm.runInContext(sharedSource + '\n' + source + '\nthis.make = createPlugin;', context);
   plugin = context.make({log() {}, storage(command) {
     if (command.type === 'read') {
@@ -91,6 +91,22 @@ test('offline queue survives reload; opting out clears queue but keeps local rec
   f.plugin.onUnload();const reloaded=fixture(t,{stored});assert.equal((await reloaded.request()).body.queuedCount,1);
   const off=await reloaded.request('POST',{sharing:false});assert.equal(off.body.sharing,false);assert.equal(off.body.queuedCount,0);assert.equal(off.body.localCount,1);
   await reloaded.request('POST',{operation:'retry'});assert.equal(reloaded.posts.length,0);
+});
+test('unloading during a stalled upload leaves no upload deadline armed',async t=>{
+  // Track the 30 s timers: the upload deadline and the retry timer share that
+  // length, and unload must clear both.
+  const armed=new Map();
+  const timers={setTimeout:(callback,ms,...rest)=>{const handle=setTimeout(callback,ms,...rest);if(ms===30000)armed.set(handle,ms);return handle;},
+    clearTimeout:handle=>{armed.delete(handle);clearTimeout(handle);}};
+  const f=fixture(t,{send:()=>new Promise(()=>{}),timers});await enable(f);
+  f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);
+  const retry=f.request('POST',{operation:'retry'});
+  for(let i=0;i<30&&!f.posts.length;i++)await tick();
+  assert.equal(f.posts.length,1,'the upload is in flight');
+  assert.ok(armed.size>=1,'the upload armed its deadline');
+  f.plugin.onUnload();
+  assert.equal(armed.size,0,'no 30 s timer outlives unload');
+  assert.equal((await retry).status,200,'the interrupted retry settles instead of waiting for the deadline');
 });
 test('local opt-out stops capture and deleting all removes the archive',async t=>{
   const f=fixture(t);f.plugin.onEvent({name:'shotStored',payload:{id:shot.id}});await captured(f);

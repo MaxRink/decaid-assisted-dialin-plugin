@@ -2185,7 +2185,7 @@ function createResearchSharing() {
         throw new Error("Invalid local research entry");
       return { key: localKey(value.key), revision: value.revision, record: validateRecord(value.record) };
     };
-    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, hook = null, storageError = null, uploadError = null;
+    let state = fresh(), generation = 0, permitted = false, pendingConsent = null, chain = Promise.resolve(), inflight = null, abort = null, stopDeadline = null, storageError = null, uploadError = null;
     // Timers are optional runtime adapters, like URL and AbortController: a
     // QuickJS host or a test may inject its own scheduler instead of the
     // globals, and a runtime without timers keeps the parent's behaviour, in
@@ -2203,29 +2203,13 @@ function createResearchSharing() {
     };
     const uploadDeadlineMs = Number.isSafeInteger(adapters.uploadDeadlineMs) && adapters.uploadDeadlineMs > 0
       ? adapters.uploadDeadlineMs : UPLOAD_DEADLINE_MS;
-    const deadlineLabel = () => {
-      if (uploadDeadlineMs % 1000 === 0)
-        return uploadDeadlineMs / 1000 + " second" + (uploadDeadlineMs === 1000 ? "" : "s");
-      if (uploadDeadlineMs > 1000) return Math.round(uploadDeadlineMs / 10) / 100 + " seconds";
-      return uploadDeadlineMs + " millisecond" + (uploadDeadlineMs === 1 ? "" : "s");
-    };
-    // A request owns the single abort slot while it is in flight, so an
-    // abandoned attempt that answers later cannot clear a newer request's
-    // controller (which would leave a live upload that an opt-out cannot
-    // cancel).
-    const registerHook = (owner, controller) => {
-      hook = { owner, cancel: () => controller?.abort() };
-    };
-    const clearHook = owner => { if (hook && hook.owner === owner) hook = null; };
-    const releaseHook = owner => {
-      if (!hook || hook.owner !== owner) return;
-      const cancel = hook.cancel; hook = null;
-      try { cancel(); } catch (_) { /* abort is best effort */ }
-    };
+    const timeoutMessage = "Research upload timed out after " + uploadDeadlineMs / 1000 +
+      " seconds; queued records stay local for a later retry";
+    // `inflight` admits one attempt at a time, and each attempt clears `abort`
+    // before it settles, so a single slot always belongs to the live request.
     const cancelInFlight = () => {
-      const current = hook; hook = null;
-      if (!current) return;
-      try { current.cancel(); } catch (_) { /* abort is best effort */ }
+      const current = abort; abort = null;
+      try { current?.(); } catch (_) { /* abort is best effort */ }
     };
     // Messages are scrubbed by provenance: the configured destination and the
     // tokens this client actually holds are removed wherever they appear, so a
@@ -2358,71 +2342,65 @@ function createResearchSharing() {
     const tokenFor = target => state.collectorTokens.find(item => item.endpoint === target)?.token;
     const POST_OPTIONS = { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "no-store" };
     // Ask the collector for an installation token before the first upload.
-    async function enrol(owner) {
+    async function enrol() {
       // Already enrolled: skip the lock entirely (the upload re-checks under it).
       if (state.endpoint && tokenFor(state.endpoint)) return;
       const request = await serial(() => {
         if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint || tokenFor(state.endpoint)) return null;
         if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
         const controller = typeof AbortController === "function" ? new AbortController() : null;
-        registerHook(owner, controller);
+        abort = () => controller?.abort();
         const response = adapters.send(state.endpoint, { ...POST_OPTIONS, headers: { "Content-Type": "application/json" }, signal: controller?.signal,
           body: JSON.stringify({ schemaVersion: VERSION, policyVersion: POLICY, enrol: true }) });
         return { generation, endpoint: state.endpoint, response: Promise.resolve(response).then(value => ({ value }), error => ({ error })) };
       });
       if (!request) return;
       try {
-        const result = await withTransportDeadline(request.response, owner);
-        if (result.error) throw result.error;
-        if (!result.value || !result.value.ok || result.value.redirected) throw new Error("Research collector enrolment failed");
-        const receipt = await result.value.json();
+        const receipt = await receive(request.response, "Research collector enrolment failed");
         if (!receipt || !validToken(receipt.token)) throw new Error("Invalid research collector enrolment");
         await serial(async () => {
           if (request.generation !== generation || state.endpoint !== request.endpoint || tokenFor(request.endpoint)) return;
           await save({ ...state, collectorTokens: state.collectorTokens.filter(item => item.endpoint !== request.endpoint)
             .concat([{ endpoint: request.endpoint, token: receipt.token }]).slice(-MAX_TOKENS) });
         });
-      } finally { clearHook(owner); }
+      } finally { abort = null; }
     }
     // A transport request that never settles would otherwise pin `inflight`
-    // and the queue forever, so each request is raced against the deadline:
-    // it is aborted where the runtime has AbortController, the rejection names
-    // the transport, and `inflight` clears so the next flush retries the same
-    // queued records. Storage work is deliberately not wrapped: adapters must
-    // acknowledge or reject (the shipped plugin adapter times out after five
-    // seconds), and calling a wedged disk a transport timeout would be a lie.
-    function withTransportDeadline(pending, owner) {
-      let handle = null, settled = false;
-      const clear = () => { const current = handle; handle = null; if (current != null) cancelTimerFor(current); };
+    // and the queue forever, so each request, including its response body, is
+    // raced against the deadline: it is aborted where the runtime has
+    // AbortController, and `inflight` clears so the next flush retries the
+    // same queued records. Storage work is deliberately not wrapped: adapters
+    // must acknowledge or reject (the shipped plugin adapter times out after
+    // five seconds), and calling a wedged disk a transport timeout would be a lie.
+    function withTransportDeadline(pending) {
       return new Promise((resolve, reject) => {
-        const expire = () => {
-          if (settled) return;
-          settled = true;
-          clear();
-          // Only this attempt's request is cancelled; a newer upload keeps its
-          // own controller for the opt-out path.
-          releaseHook(owner);
-          uploadError = "Research upload timed out after " + deadlineLabel() +
-            "; queued records stay local for a later retry";
-          reject(new Error(uploadError));
+        let handle = null, done = false;
+        const settle = (finish, value) => {
+          if (done) return;
+          done = true;
+          if (stopDeadline === stop) stopDeadline = null;
+          cancelTimerFor(handle); finish(value);
         };
-        handle = timerFor(expire, uploadDeadlineMs);
-        pending.then(value => {
-          if (settled) return;
-          settled = true; clear(); resolve(value);
-        }, error => {
-          if (settled) return;
-          settled = true; clear(); reject(error);
-        });
+        // abandon() ends the wait without a timeout and disarms the timer.
+        const stop = () => settle(reject, new Error("Research upload abandoned"));
+        stopDeadline = stop;
+        handle = timerFor(() => { handle = null; cancelInFlight(); settle(reject, new Error(timeoutMessage)); }, uploadDeadlineMs);
+        pending.then(value => settle(resolve, value), error => settle(reject, error));
       });
     }
+    // The acknowledged JSON body of a transport response, under one deadline.
+    const receive = (pending, failure) => withTransportDeadline(pending.then(result => {
+      if (result.error) throw result.error;
+      if (!result.value || !result.value.ok || result.value.redirected) throw new Error(failure);
+      return result.value.json();
+    }));
     async function flush() {
       if (inflight) return inflight;
+      // An opt-out, deletion or abandon() during this attempt makes its
+      // failure stale: it must not be reported against the new choice.
+      const attempt = generation;
       const operation = async () => {
-        // One owner object per attempt: the abort slot is released only by the
-        // attempt that still holds it.
-        const owner = {};
-        await enrol(owner);
+        await enrol();
         const batch = await serial(() => {
           if (!permitted || !state.sharing || storageError || !state.queue.length || !state.endpoint) return null;
           if (typeof adapters.send !== "function") throw new Error("Research transport unavailable");
@@ -2434,7 +2412,7 @@ function createResearchSharing() {
             entries.push(item);
           }
           const controller = typeof AbortController === "function" ? new AbortController() : null;
-          registerHook(owner, controller);
+          abort = () => controller?.abort();
           // Start the request before releasing the storage lock. Awaiting it must
           // not block another tab's deletion, opt-out, or new observation.
           const response = adapters.send(state.endpoint, { ...POST_OPTIONS,
@@ -2444,11 +2422,7 @@ function createResearchSharing() {
         });
         if (!batch) return { sent: 0, ...status() };
         try {
-          const result = await withTransportDeadline(batch.response, owner);
-          if (result.error) throw result.error;
-          const response = result.value;
-          if (!response || !response.ok || response.redirected) throw new Error("Research upload was not acknowledged");
-          const receipt = await response.json();
+          const receipt = await receive(batch.response, "Research upload was not acknowledged");
           if (!receipt || receipt.accepted !== batch.entries.length) throw new Error("Invalid research upload acknowledgment");
           return await serial(async () => {
             if (batch.generation !== generation || !permitted || state.endpoint !== batch.endpoint) return { sent: 0, ...status() };
@@ -2459,7 +2433,7 @@ function createResearchSharing() {
             uploadError = null;
             return { sent: batch.entries.length, ...status() };
           });
-        } finally { clearHook(owner); }
+        } finally { abort = null; }
       };
       inflight = operation();
       try { return await inflight; }
@@ -2468,7 +2442,7 @@ function createResearchSharing() {
         // status field and the rejection are caller facing, so they carry only
         // the scrubbed text.
         const message = redact(messageOf(error)) || "Research upload failed";
-        if (uploadError == null) uploadError = message;
+        if (attempt === generation) uploadError = message;
         throw new Error(message);
       }
       finally { inflight = null; }
@@ -2487,7 +2461,12 @@ function createResearchSharing() {
         return status();
       });
     }
-    return { ready: ready.then(status), status: () => serial(status).catch(error => { if (storageError) return status(); throw error; }), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
+    // The owner is going away (plugin unload): revoke sending for good and
+    // cancel the request and its deadline so no timer outlives the owner.
+    function abandon() {
+      pendingConsent = ++generation; permitted = false; cancelInFlight(); stopDeadline?.();
+    }
+    return { ready: ready.then(status), abandon, status: () => serial(status).catch(error => { if (storageError) return status(); throw error; }), capture, append: input => capture(input), setSharing, setLocalCollection, flush, clear,
       exportLocal: () => serial(() => ({ schemaVersion: VERSION, policyVersion: POLICY, records: state.records.map(item => clone(item.record)) })) };
   }
   return { schemaVersion: VERSION, policyVersion: POLICY, limits: { local: MAX_LOCAL, queue: MAX_QUEUE, batch: MAX_BATCH },
@@ -6219,7 +6198,7 @@ if(typeof window!=='undefined'&&window.pu){pu.init();const setupLink=document.qu
 
   return {
     id: ID,
-    version: "0.8.2",
+    version: "0.8.3",
     onLoad(nextSettings) {
       sessionEpoch += 1;
       cacheGeneration += 1;
@@ -6256,6 +6235,7 @@ if(typeof window!=='undefined'&&window.pu){pu.init();const setupLink=document.qu
       observationQueue = Promise.resolve();
       startStorage();
       if (services.researchSharing || typeof createResearchSharing === "function") {
+        researchClient?.abandon?.();
         researchClient = null; researchError = null; researchRetry = 30000; researchBusy = false;
         researchSeries = { current: null, shots: [] };
         void startResearch().ready.then(() => scheduleResearch()).catch(() => {});
@@ -6265,6 +6245,8 @@ if(typeof window!=='undefined'&&window.pu){pu.init();const setupLink=document.qu
       researchGeneration++;
       researchCaptures.clear();
       stopResearchTimer();
+      // Cancels an in-flight upload and its deadline timer.
+      researchClient?.abandon?.();
       researchWaiter?.reject(new Error("plugin unloaded"));
       sessionEpoch += 1;
       active = false;
